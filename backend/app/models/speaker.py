@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import Computed, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -16,6 +17,10 @@ class Speaker(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
 
     __tablename__ = "speakers"
+    __table_args__ = (
+        # GIN index powering project search on speaker names.
+        Index("ix_speakers_search_vector", "search_vector", postgresql_using="gin"),
+    )
 
     video_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("videos.id", ondelete="CASCADE"), index=True
@@ -28,3 +33,9 @@ class Speaker(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     provider_identifier: Mapped[str | None]
     name: Mapped[str | None]
     color: Mapped[str | None]
+    # Full-text vector over the (renamable) speaker name, maintained by Postgres
+    # as a stored generated column. Coalesced so an un-named speaker indexes empty.
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', coalesce(name, ''))", persisted=True),
+    )

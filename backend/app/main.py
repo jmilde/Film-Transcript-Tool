@@ -5,6 +5,7 @@ from app.api.routes import (
     folders,
     jobs,
     projects,
+    search,
     speakers,
     tokens,
     transcripts,
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app.include_router(speakers.router)
     app.include_router(tokens.router)
     app.include_router(comments.router)
+    app.include_router(search.router)
 
     return app
 

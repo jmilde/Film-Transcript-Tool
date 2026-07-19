@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import Computed, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, CreatedAtMixin, OwnedMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -16,6 +17,10 @@ class Comment(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     """
 
     __tablename__ = "comments"
+    __table_args__ = (
+        # GIN index powering project search on comment text.
+        Index("ix_comments_search_vector", "search_vector", postgresql_using="gin"),
+    )
 
     transcript_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("transcripts.id", ondelete="CASCADE"), index=True
@@ -27,6 +32,12 @@ class Comment(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     )
     text: Mapped[str]
     resolved: Mapped[bool] = mapped_column(default=False)
+    # Full-text vector over the comment text, maintained by Postgres as a stored
+    # generated column.
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', text)", persisted=True),
+    )
 
 
 class CommentRange(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):

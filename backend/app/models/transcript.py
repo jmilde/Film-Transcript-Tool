@@ -3,8 +3,8 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Enum, ForeignKey, Numeric
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Computed, Enum, ForeignKey, Index, Numeric
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, OwnedMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -71,6 +71,15 @@ class TranscriptToken(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     """
 
     __tablename__ = "transcript_tokens"
+    __table_args__ = (
+        # GIN index over the full-text vector powers project search on transcript
+        # text. Deleted tokens stay indexed; the query filters `is_deleted`.
+        Index(
+            "ix_transcript_tokens_search_vector",
+            "search_vector",
+            postgresql_using="gin",
+        ),
+    )
 
     transcript_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("transcripts.id", ondelete="CASCADE"), index=True
@@ -90,3 +99,13 @@ class TranscriptToken(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     # Fractional ordering within the segment; NUMERIC lets merge/split insert
     # replacement tokens between existing positions without renumbering.
     position: Mapped[Decimal] = mapped_column(Numeric)
+    # Full-text vector over the displayed text (edited overlays original),
+    # maintained by Postgres as a stored generated column so it always tracks
+    # edits without application code. English config is fixed for stemming.
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english', coalesce(edited_text, original_text))",
+            persisted=True,
+        ),
+    )
