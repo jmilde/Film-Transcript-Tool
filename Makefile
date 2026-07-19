@@ -8,9 +8,11 @@
 
 BACKEND := backend
 UV := cd $(BACKEND) && uv
+FRONTEND := frontend
 
 .DEFAULT_GOAL := help
-.PHONY: help install test test-all test-integration lint lint-fix format format-check typecheck check check-all
+.PHONY: help install test test-all test-integration lint lint-fix format format-check typecheck check check-all \
+	openapi fe-install fe-dev fe-build fe-lint fe-test fe-check
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -46,3 +48,26 @@ typecheck: ## Run the strict type checker (mypy)
 check: lint format-check typecheck test ## Full offline quality gate: lint + format + types + tests (no integration)
 
 check-all: lint format-check typecheck test-all ## Full quality gate INCLUDING live integration tests
+
+# --- Frontend (needs Node 20+; with nvm run `nvm use` in frontend/ first) ---
+
+openapi: ## Regenerate the frontend typed API client from the backend OpenAPI schema
+	cd $(FRONTEND) && npm run gen:api
+
+fe-install: ## Install frontend dependencies
+	cd $(FRONTEND) && npm install
+
+fe-dev: ## Run the frontend dev server (Vite)
+	cd $(FRONTEND) && npm run dev
+
+fe-build: ## Build the frontend for production
+	cd $(FRONTEND) && npm run build
+
+fe-lint: ## Lint the frontend (oxlint)
+	cd $(FRONTEND) && npm run lint
+
+fe-test: ## Run the frontend test suite (vitest)
+	cd $(FRONTEND) && npm run test
+
+fe-check: ## Full frontend gate: lint + typecheck + test + build
+	cd $(FRONTEND) && npm run lint && npm run typecheck && npm run test && npm run build

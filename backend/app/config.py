@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     deepgram_api_key: str
     deepl_api_key: str
     storage_root: str
+    # Browser origins allowed to call the API (the frontend dev server by
+    # default). Override via CORS_ALLOW_ORIGINS as a JSON array.
+    cors_allow_origins: list[str] = ["http://localhost:5173"]
 
 
 @lru_cache

@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     comments,
@@ -12,11 +13,23 @@ from app.api.routes import (
     transcripts,
     videos,
 )
+from app.config import get_settings
 from app.core.errors import register_error_handlers
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Film Transcript Tool API")
+
+    # The browser frontend is served from a different origin (the Vite dev server
+    # in development), so it needs CORS to call the API and read responses.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=get_settings().cors_allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     register_error_handlers(app)
 
     @app.get("/health")

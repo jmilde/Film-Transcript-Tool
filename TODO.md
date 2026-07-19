@@ -106,11 +106,54 @@ Plan change: v1 uses **Argos Translate** (offline neural models, free, self-cont
 - [x] Tests first (mirroring source): `tests/services/test_translation.py` (interpolation even/single/zero/zero-span; collect uses displayed text + excludes deleted; builds independent translation with interpolated token times; reuses source speakers; source untouched; blank translation segment skipped), `tests/translation/test_argos.py` (batch maps over texts, unavailable-pair raises, wraps underlying failures, `_get_translation` None when a language is missing — all offline via monkeypatch — **plus a live `integration` es→en test** that downloads the real model), `tests/worker/handlers/test_translate.py` (fake provider → creates translation, original untouched, idempotency skip, `run_once` → completed, missing-fields/no-language raise), `tests/api/routes/test_transcripts.py` (enqueues job, worker then yields an es translation alongside the en original, non-member 403)
 - [x] Verify: `make check` green (28 new offline tests, mypy --strict + ruff clean); **live Argos es→en verified** (`make` integration marker: real model downloaded, "Hola, ¿cómo estás?" → English containing "how"/"you"); no migration (Phase 10 reuses Transcript/Segment/Token). NOTE: Argos pulls a heavy transitive stack (torch/stanza/spacy/onnxruntime) — a swap to DeepL (a thin HTTP client) would shed almost all of it
 
-## Phase 11 — Frontend placeholder
-- [ ] Vite React-TS + Tailwind + TanStack Query + React Router scaffold in `frontend/`
-- [ ] Typed API client generated from `/openapi.json` via openapi-typescript
-- [ ] Minimal project-list view with Supabase JS sign-in
-- [ ] Verify: `npm run build` clean, manual click-through
+## Phase 11 — Frontend (full video-review workspace)
+
+Scope change: not a placeholder — build the whole `docs/800_frontend.md` workspace as an incremental **F0–F10** track (design record: `/Users/jan/.claude/plans/twinkling-twirling-muffin.md`). Locked decisions: **Node 20 LTS** toolchain → **Vite 7 + Tailwind v4 (`@tailwindcss/vite`) + React 19 + React Router 7 + TanStack Query v5**; typed API client via **openapi-typescript + openapi-fetch**; **email+password** Supabase sign-in; **zustand** for UI state; **Vitest + React Testing Library + MSW** for tests.
+
+Rules that apply to every F-phase: fully typed (no `any` on API boundaries — all responses flow through generated `schema.d.ts`); **server state (TanStack Query) is kept strictly separate from local UI state (zustand)** per `docs/300_architecture.md`; the frontend talks only to the backend API, never the DB/storage. Each phase ends green on `cd frontend && npm run build && npm run lint && npm run test` plus a manual click-through; any backend addition in a phase goes through `make check` first (tests-first). Two backend gaps get closed here: **CORS** (F0) and **media streaming + media-auth** (F2).
+
+### F0 — Scaffold & infra (supersedes the old "placeholder")
+Toolchain note: used **Node 22 LTS** (via nvm `.nvmrc`), which the `npm create vite` scaffold pairs with **Vite 8 + oxlint** (newer than the planned Vite 7 + ESLint — kept as-is). TypeScript pinned to **5.9** (openapi-typescript peers `^5.x`; the scaffold's TS 6 conflicted).
+- [x] `frontend/` Vite 8 + React 19 + TS 5.9 + Tailwind v4 (`@tailwindcss/vite`, zero-config) scaffold; oxlint + Prettier (`.prettierignore` excludes generated schema); Vitest + RTL + jsdom + MSW; env wiring (`VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) via `src/env.ts` + `.env.example`; `.nvmrc`; gitignore `node_modules`/`dist`/`.env`/`openapi.json`
+- [x] Typed client: `scripts/gen-api.sh` (`npm run gen:api`) dumps `app.openapi()` from the factory (no running server) → `openapi-typescript` → `src/api/schema.d.ts`; `openapi-fetch` client (`src/api/client.ts`) with an `onRequest` middleware attaching the Supabase bearer token. **Gotcha fixed:** pass `fetch: (req) => globalThis.fetch(req)` so MSW's interceptor is honored (openapi-fetch otherwise captures the original fetch at construction). Root Makefile: `openapi` + `fe-install`/`fe-dev`/`fe-build`/`fe-lint`/`fe-test`/`fe-check`
+- [x] Supabase client (`src/auth/supabase.ts`), `AuthProvider` + `context.ts` (`useAuth`, `onAuthStateChange` subscription; split so Fast Refresh is happy), email/password `SignIn` page, `RequireAuth` guard; Query + Router (React Router 7 `createBrowserRouter`) + Auth providers in `main.tsx`; `AppShell` (nav + sign-out + `Outlet`). Zustand installed for later UI state
+- [x] **Backend: CORS** — `CORSMiddleware` in `app/main.py:create_app()`, origins from a new `cors_allow_origins` setting (default `["http://localhost:5173"]`, JSON-array env override); `.env.example` updated; `tests/api/test_cors.py` (preflight allow, simple-request header, unknown-origin rejected); `make check` green (191 passed)
+- [x] Verify: `npm run test` (2) + `typecheck` + `lint` + `build` all clean; `Projects` page renders empty-state / lists via the typed client (MSW-tested). Live sign-in click-through pending real `.env` (Supabase URL/key) — code path complete
+
+### F1 — Project view (docs §5)
+- [ ] Projects list + create; nested folder-tree navigation (`parent_folder_id`); video list; create folder
+- [ ] Video upload (multipart → `POST /folders/{id}/videos`) with processing status via `GET /jobs/{id}` polling; route `/projects/:projectId`
+- [ ] Tests (hooks + components via MSW) + click-through
+
+### F2 — Workspace shell + video player (docs §6, §7)
+- [ ] **Backend: media streaming** — `GET /videos/{id}/proxy` (Range-aware `FileResponse` over `storage.path_for`, PROXY→ORIGINAL fallback) + `GET /videos/{id}/waveform` (peaks JSON); reuse `require_video_access`/`get_storage`; 206/bytes + non-member 403 tests; `make check`
+- [ ] **Backend: media-auth** — resolve `<video src>` bearer-header gap; recommended: short-lived signed `?token=` from `GET /videos/{id}/media-token` (HMAC video_id+exp), validated on the media routes (confirm approach before building)
+- [ ] Resizable two-pane layout (`react-resizable-panels`); HTML5 player behind a thin abstraction (play/pause/seek/volume/fullscreen, time/duration) over `/videos/{id}/proxy`; optional canvas waveform from `/videos/{id}/waveform`; route `/videos/:videoId`
+
+### F3 — Transcript viewer + playback sync (docs §8, §9)
+- [ ] Render segments/speakers/tokens (display text = edited∨original, deleted already excluded by API); highlight active token from playback time; auto-follow scroll toggle
+
+### F4 — Transcript selection + actions (docs §10)
+- [ ] Drag-select token ranges; show selected text + in/out timecodes; play-selection; copy
+
+### F5 — Transcript editing (docs §12)
+- [ ] Single-token edit (`PATCH /tokens/{id}`), delete (soft), merge (`POST /tokens/merge`), split (`POST /tokens/{id}/split`) with optimistic update + query invalidation; Ctrl/Cmd+S save UX
+
+### F6 — Comments (docs §13)
+- [ ] Threads anchored to ranges: create (`POST /transcripts/{id}/comments`), list with computed in/out timecodes, reply (`POST /comments/{id}/replies`), resolve (`PATCH /comments/{id}`)
+
+### F7 — Search (docs §14)
+- [ ] Project search box (`GET /projects/{id}/search?q=`) with context preview; select result → open video, seek, highlight range; Ctrl/Cmd+F
+
+### F8 — Translation + dual transcript view (docs §11)
+- [ ] Request translation (`POST /transcripts/{id}/translate` job + poll); dual-pane original | translation, both synced to the video
+
+### F9 — Export UI (docs §15)
+- [ ] Pick format → `POST /transcripts/{id}/exports` → poll `GET /exports/{id}` (ready) → download `GET /exports/{id}/content`
+
+### F10 — Keyboard controls & polish (docs §16)
+- [ ] Space (play/pause), Ctrl/Cmd+F (search), Ctrl/Cmd+S (save); desktop-responsive layout; consistent loading/empty/error states
+- [ ] Verify (end-to-end vs real backend + seeded Supabase user): sign in → create project/folder, upload+process a video → open workspace, play/seek proxy → synced transcript, edit a token → add a comment → search+jump → translate + dual view → export + download
 
 ## Phase 12 — Docker Compose
 - [ ] `Dockerfile.backend` (installs ffmpeg), shared by backend+worker (CMD override)
