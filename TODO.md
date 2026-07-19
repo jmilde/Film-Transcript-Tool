@@ -121,9 +121,10 @@ Toolchain note: used **Node 22 LTS** (via nvm `.nvmrc`), which the `npm create v
 - [x] Verify: `npm run test` (2) + `typecheck` + `lint` + `build` all clean; `Projects` page renders empty-state / lists via the typed client (MSW-tested). Live sign-in click-through pending real `.env` (Supabase URL/key) — code path complete
 
 ### F1 — Project view (docs §5)
-- [ ] Projects list + create; nested folder-tree navigation (`parent_folder_id`); video list; create folder
-- [ ] Video upload (multipart → `POST /folders/{id}/videos`) with processing status via `GET /jobs/{id}` polling; route `/projects/:projectId`
-- [ ] Tests (hooks + components via MSW) + click-through
+- [x] **Backend: list root folders** — `GET /projects/{project_id}/folders` (top-level folders, the tree's entry point; videos always live in a folder so the root holds only folders); member-scoped, name-ordered; `make check` green (193 passed)
+- [x] Projects list + create; nested folder-tree navigation (`parent_folder_id`, lazy per-node expand via `GET /folders/{id}`); video list; create folder (root + subfolder) — route `/projects/:projectId`
+- [x] Video upload (multipart → `POST /folders/{id}/videos`) with live processing status: poll `GET /videos/{id}` (all jobs) while any pending/running, deriving Processing/Ready/Failed. (Note: `GET /jobs/{id}` hook + `useJob` polling also provided, but video-detail polling reflects the whole chained pipeline, not just the first stage)
+- [x] Tests (ProjectView via MSW: folder tree + select-loads-videos) + full frontend gate green (typecheck, lint, 4 tests, build, format)
 
 ### F2 — Workspace shell + video player (docs §6, §7)
 - [ ] **Backend: media streaming** — `GET /videos/{id}/proxy` (Range-aware `FileResponse` over `storage.path_for`, PROXY→ORIGINAL fallback) + `GET /videos/{id}/waveform` (peaks JSON); reuse `require_video_access`/`get_storage`; 206/bytes + non-member 403 tests; `make check`

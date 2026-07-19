@@ -64,7 +64,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Root Folders
+         * @description Top-level folders of a project (the folder tree's entry point).
+         *
+         *     Videos always live inside a folder, so a project's root contains only
+         *     folders; deeper levels are fetched per-folder via ``GET /folders/{id}``.
+         */
+        get: operations["list_root_folders_projects__project_id__folders_get"];
         put?: never;
         /** Create Folder */
         post: operations["create_folder_projects__project_id__folders_post"];
@@ -1114,6 +1121,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_root_folders_projects__project_id__folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderRead"][];
                 };
             };
             /** @description Validation Error */

@@ -65,6 +65,32 @@ def test_list_folder_contents(auth_client: TestClient) -> None:
     assert body["videos"] == []
 
 
+def test_list_root_folders(auth_client: TestClient) -> None:
+    pid = _make_project(auth_client)
+    _make_folder(auth_client, pid, "Beta")
+    a = _make_folder(auth_client, pid, "Alpha")
+    _make_folder(auth_client, pid, "Nested", parent=a)  # not a root folder
+
+    resp = auth_client.get(f"/projects/{pid}/folders")
+
+    assert resp.status_code == 200
+    # Only top-level folders, ordered by name.
+    assert [f["name"] for f in resp.json()] == ["Alpha", "Beta"]
+    assert all(f["parent_folder_id"] is None for f in resp.json())
+
+
+def test_list_root_folders_non_member_forbidden(
+    auth_client: TestClient,
+    app_client: Callable[[User], TestClient],
+    other_user: User,
+) -> None:
+    pid = _make_project(auth_client)
+
+    resp = app_client(other_user).get(f"/projects/{pid}/folders")
+
+    assert resp.status_code == 403
+
+
 def test_rename_folder(auth_client: TestClient) -> None:
     pid = _make_project(auth_client)
     rid = _make_folder(auth_client, pid, "A")

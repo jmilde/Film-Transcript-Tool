@@ -11,6 +11,16 @@ export function useProjects() {
   })
 }
 
+export function useProject(projectId: string) {
+  return useQuery({
+    queryKey: ['project', projectId],
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/projects/{project_id}', { params: { path: { project_id: projectId } } }),
+      ),
+  })
+}
+
 export function useCreateProject() {
   const client = useQueryClient()
   return useMutation({

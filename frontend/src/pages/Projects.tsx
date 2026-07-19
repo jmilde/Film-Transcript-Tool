@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { useCreateProject, useProjects } from '../api/hooks/useProjects'
 
 export function Projects() {
@@ -44,7 +45,12 @@ export function Projects() {
         <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
           {projects.map((project) => (
             <li key={project.id} className="px-4 py-3">
-              <span className="font-medium text-slate-800">{project.name}</span>
+              <Link
+                to={`/projects/${project.id}`}
+                className="font-medium text-slate-800 hover:text-slate-950 hover:underline"
+              >
+                {project.name}
+              </Link>
               {project.description && (
                 <span className="ml-2 text-sm text-slate-500">{project.description}</span>
               )}

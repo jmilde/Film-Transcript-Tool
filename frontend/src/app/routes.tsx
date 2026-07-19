@@ -3,6 +3,7 @@ import { RequireAuth } from '../auth/RequireAuth'
 import { AppShell } from '../components/AppShell'
 import { SignIn } from '../pages/SignIn'
 import { Projects } from '../pages/Projects'
+import { ProjectView } from '../pages/ProjectView'
 
 export const router = createBrowserRouter([
   { path: '/signin', element: <SignIn /> },
@@ -11,7 +12,10 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <AppShell />,
-        children: [{ index: true, element: <Projects /> }],
+        children: [
+          { index: true, element: <Projects /> },
+          { path: 'projects/:projectId', element: <ProjectView /> },
+        ],
       },
     ],
   },

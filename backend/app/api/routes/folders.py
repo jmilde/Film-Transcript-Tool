@@ -47,6 +47,27 @@ def create_folder(
     return folder
 
 
+@router.get("/projects/{project_id}/folders", response_model=list[FolderRead])
+def list_root_folders(
+    project: Project = Depends(require_project_member),
+    db: Session = Depends(get_db),
+) -> list[Folder]:
+    """Top-level folders of a project (the folder tree's entry point).
+
+    Videos always live inside a folder, so a project's root contains only
+    folders; deeper levels are fetched per-folder via ``GET /folders/{id}``.
+    """
+    return list(
+        db.execute(
+            select(Folder)
+            .where(Folder.project_id == project.id, Folder.parent_folder_id.is_(None))
+            .order_by(Folder.name)
+        )
+        .scalars()
+        .all()
+    )
+
+
 @router.get("/folders/{folder_id}", response_model=FolderContents)
 def get_folder(
     folder: Folder = Depends(require_folder_access),
