@@ -11,7 +11,7 @@ Three rules apply to every phase, not just some:
 
 Confirmed decisions: backend-first; real Supabase (Postgres + Auth) from day one, no stubs; single repo `/backend` + `/frontend`, worker is a process inside `backend`, not a separate package; real FFmpeg + real Deepgram from the start; folder/video delete **cascades**; translation provider is **DeepL**.
 
-Schema additions beyond the literal docs (flagged in the plan, not silent): `projects.archived_at`, `transcript_tokens.position`, `transcripts.provider_raw_response`, `processing_jobs.result`.
+Schema additions beyond the literal docs (flagged in the plan, not silent): `projects.archived_at`, `transcript_tokens.position`, `transcripts.provider_raw_response`, `processing_jobs.result`. Plus a **denormalized `project_id` on every access-controlled row** (`videos`, `processing_jobs`, and later `transcripts`/`transcript_tokens`/`comments`/`exports`/`speakers`) so authorization is a single membership lookup instead of a tree walk — see `backend/CLAUDE.md`.
 
 Search uses Postgres full-text search (`tsvector` generated columns + GIN indexes) rather than an external search service — `tsvector` stores a preprocessed, stemmed, indexable form of the text so `@@ plainto_tsquery(...)` lookups are fast and rankable via `ts_rank`, with Postgres maintaining it automatically (`GENERATED ALWAYS AS ... STORED`), no app-side sync code.
 

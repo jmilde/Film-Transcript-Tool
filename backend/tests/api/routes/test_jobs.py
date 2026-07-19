@@ -27,6 +27,7 @@ def _seed_job(
     db_session.flush()
     video = Video(
         folder_id=folder.id,
+        project_id=project.id,
         name="V",
         original_filename="v.mp4",
         created_by=user.id,
@@ -36,6 +37,7 @@ def _seed_job(
     db_session.flush()
     job = ProcessingJob(
         video_id=video.id,
+        project_id=project.id,
         type=JobType.EXTRACT_METADATA,
         status=status,
         error_message=error_message,

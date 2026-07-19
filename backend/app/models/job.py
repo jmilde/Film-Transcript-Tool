@@ -42,6 +42,11 @@ class ProcessingJob(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     video_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("videos.id", ondelete="CASCADE"), index=True
     )
+    # Denormalized owning project for O(1) authorization (nullable to match
+    # video_id — a project-less job cannot be authorized and reads as 404).
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     type: Mapped[JobType] = mapped_column(
         Enum(JobType, native_enum=False, values_callable=lambda e: [m.value for m in e])
     )

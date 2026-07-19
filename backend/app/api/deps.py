@@ -65,9 +65,7 @@ def require_video_access(
     video = db.get(Video, video_id)
     if video is None:
         raise NotFoundError("Video not found")
-    folder = db.get(Folder, video.folder_id)
-    assert folder is not None  # FK guarantees the parent folder exists
-    _require_membership(db, folder.project_id, user.id)
+    _require_membership(db, video.project_id, user.id)
     return video
 
 
@@ -77,11 +75,7 @@ def require_job_access(
     user: User = Depends(get_current_user),
 ) -> ProcessingJob:
     job = db.get(ProcessingJob, job_id)
-    if job is None or job.video_id is None:
+    if job is None or job.project_id is None:
         raise NotFoundError("Job not found")
-    video = db.get(Video, job.video_id)
-    assert video is not None  # FK (cascade) guarantees the video exists
-    folder = db.get(Folder, video.folder_id)
-    assert folder is not None
-    _require_membership(db, folder.project_id, user.id)
+    _require_membership(db, job.project_id, user.id)
     return job

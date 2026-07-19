@@ -79,6 +79,7 @@ def test_video_and_asset_enum(db_session: Session, user: User) -> None:
 
     video = Video(
         folder_id=folder.id,
+        project_id=project.id,
         name="Clip",
         original_filename="clip.mp4",
         created_by=user.id,
@@ -109,6 +110,7 @@ def test_processing_job_defaults(db_session: Session) -> None:
     assert job.status is JobStatus.PENDING
     assert job.progress == 0
     assert job.video_id is None
+    assert job.project_id is None
     assert job.result is None
     assert job.started_at is None
     assert isinstance(job.created_at, datetime)

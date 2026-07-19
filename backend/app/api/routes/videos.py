@@ -46,6 +46,7 @@ def upload_video(
 
     video = Video(
         folder_id=folder.id,
+        project_id=folder.project_id,
         name=Path(filename).stem or "Untitled",
         original_filename=filename,
         created_by=user.id,
@@ -66,7 +67,12 @@ def upload_video(
         )
     )
 
-    job = ProcessingJob(video_id=video.id, type=FIRST_STAGE, status=JobStatus.PENDING)
+    job = ProcessingJob(
+        video_id=video.id,
+        project_id=folder.project_id,
+        type=FIRST_STAGE,
+        status=JobStatus.PENDING,
+    )
     db.add(job)
     db.flush()
     db.commit()
