@@ -73,11 +73,11 @@ Search uses Postgres full-text search (`tsvector` generated columns + GIN indexe
 - [x] Verify: pytest (115 passed, incl. the live Deepgram call), mypy clean, ruff check + format clean; `alembic upgrade head`/`downgrade -1` round-trip on real Supabase; **real speech clip driven end-to-end against real Supabase + real ffmpeg — all 4 media stages completed**; **live Deepgram transcription now verified** via the integration test (a real key is provisioned in `.env`), which returns real diarized words that `normalize()` maps correctly. Speaker-rename propagation is covered by `test_speakers.py`.
 
 ## Phase 6 — Token editing
-- [ ] `services/tokens.py`: edit/delete/merge/split, typed errors (e.g. TokenMergeInvalidSegmentError)
-- [ ] `api/routes/tokens.py`: PATCH, DELETE, merge, split
-- [ ] `GET /transcripts/{id}` excludes deleted tokens
-- [ ] Tests first (highest-value TDD phase): merge same-segment, merge cross-segment rejected, delete excluded-but-persisted, split interpolated timestamps, edit only changes text
-- [ ] Verify: pytest, mypy, ruff check, manual curl each op
+- [x] `services/tokens.py`: edit/delete/merge/split, typed errors (`TokenMergeInvalidSegmentError` subclasses `BadRequestError` → renders `TOKEN_MERGE_CROSS_SEGMENT`). Non-destructive: edit overlays `edited_text` (timing/`original_text` untouched), delete sets `is_deleted`, merge/split soft-delete originals and create replacements with fractional `NUMERIC` positions so order stays stable; split interpolates timing evenly across the original range
+- [x] `api/routes/tokens.py`: PATCH (edit text, nullable to clear), DELETE (soft), POST `/tokens/merge`, POST `/tokens/{id}/split`. Authz: `require_token_access` dep for the path-id ops; `require_merge_context` dep is the sole body consumer for merge (loads + authorizes all tokens, one project) so the route keeps a single body param
+- [x] `GET /transcripts/{id}` excludes deleted tokens (already implemented in Phase 5, re-verified by Phase 6 delete/merge/split API tests)
+- [x] Tests first (highest-value TDD phase): `tests/services/test_tokens.py` (edit-only-changes-text, clear edit, soft delete, merge same-segment/cross-segment rejected/<2 rejected, split interpolated timestamps/<2 rejected/positions between neighbours) + `tests/api/routes/test_tokens.py` (edit display, delete excluded-but-persisted, merge, cross-segment 400, split, non-member 403)
+- [x] Verify: pytest (130 passed, 1 integration deselected), mypy clean (105 files), ruff check + format clean; no migration (Phase 6 adds no schema); app boots with all four token routes in the OpenAPI schema. Authenticated curl deferred as in prior phases (needs an interactive Supabase token; the ops are covered end-to-end by TestClient tests against the real rolled-back DB)
 
 ## Phase 7 — Comments
 - [ ] Models: Comment, CommentRange, CommentReply; migration 0004

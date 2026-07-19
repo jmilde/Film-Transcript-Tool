@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 
 from fastapi import Depends
 from sqlalchemy import select
@@ -12,9 +13,10 @@ from app.models.job import ProcessingJob
 from app.models.membership import ProjectMembership
 from app.models.project import Project
 from app.models.speaker import Speaker
-from app.models.transcript import Transcript
+from app.models.transcript import Transcript, TranscriptToken
 from app.models.user import User
 from app.models.video import Video
+from app.schemas.token import TokenMergeRequest
 from app.storage.base import Storage
 from app.storage.factory import get_local_storage
 
@@ -104,3 +106,49 @@ def require_speaker_access(
         raise NotFoundError("Speaker not found")
     _require_membership(db, speaker.project_id, user.id)
     return speaker
+
+
+def require_token_access(
+    token_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> TranscriptToken:
+    token = db.get(TranscriptToken, token_id)
+    if token is None:
+        raise NotFoundError("Token not found")
+    _require_membership(db, token.project_id, user.id)
+    return token
+
+
+@dataclass
+class MergeContext:
+    """Resolved, authorized inputs for a token merge."""
+
+    tokens: list[TranscriptToken]
+    text: str
+
+
+def require_merge_context(
+    payload: TokenMergeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> MergeContext:
+    """Load and authorize the tokens named in a merge request.
+
+    This is the sole consumer of the request body so the route keeps a single
+    body parameter. Every token must exist and share one project (they must be
+    in the same segment to merge anyway), which the caller must be a member of.
+    """
+    tokens = list(
+        db.execute(select(TranscriptToken).where(TranscriptToken.id.in_(payload.token_ids)))
+        .scalars()
+        .all()
+    )
+    found = {token.id for token in tokens}
+    if any(token_id not in found for token_id in payload.token_ids):
+        raise NotFoundError("Token not found")
+    project_ids = {token.project_id for token in tokens}
+    if len(project_ids) != 1:
+        raise ForbiddenError("Tokens belong to different projects")
+    _require_membership(db, next(iter(project_ids)), user.id)
+    return MergeContext(tokens=tokens, text=payload.text)
