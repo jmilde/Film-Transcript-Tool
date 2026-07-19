@@ -5,6 +5,7 @@
 from app.models import (  # noqa: F401
     asset,
     comment,
+    export,
     folder,
     job,
     membership,

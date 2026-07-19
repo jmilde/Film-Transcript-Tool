@@ -9,6 +9,7 @@ from app.core.auth import get_current_user
 from app.core.errors import ForbiddenError, NotFoundError
 from app.db.session import get_db
 from app.models.comment import Comment
+from app.models.export import Export
 from app.models.folder import Folder
 from app.models.job import ProcessingJob
 from app.models.membership import ProjectMembership
@@ -131,6 +132,18 @@ def require_comment_access(
         raise NotFoundError("Comment not found")
     _require_membership(db, comment.project_id, user.id)
     return comment
+
+
+def require_export_access(
+    export_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Export:
+    export = db.get(Export, export_id)
+    if export is None:
+        raise NotFoundError("Export not found")
+    _require_membership(db, export.project_id, user.id)
+    return export
 
 
 @dataclass

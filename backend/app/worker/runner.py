@@ -10,6 +10,7 @@ from app.models.job import JobStatus, JobType, ProcessingJob
 from app.services.pipeline import next_stage
 from app.worker.claim import claim_next_job
 from app.worker.handlers.audio_extract import handle_extract_audio
+from app.worker.handlers.export import handle_export
 from app.worker.handlers.metadata import handle_extract_metadata
 from app.worker.handlers.noop import handle_noop
 from app.worker.handlers.proxy import handle_generate_proxy
@@ -25,6 +26,7 @@ HANDLERS: dict[JobType, JobHandler] = {
     JobType.GENERATE_WAVEFORM: handle_generate_waveform,
     JobType.EXTRACT_AUDIO: handle_extract_audio,
     JobType.TRANSCRIBE: handle_transcribe,
+    JobType.EXPORT: handle_export,
 }
 
 

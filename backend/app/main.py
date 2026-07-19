@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api.routes import (
     comments,
+    exports,
     folders,
     jobs,
     projects,
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(tokens.router)
     app.include_router(comments.router)
     app.include_router(search.router)
+    app.include_router(exports.router)
 
     return app
 
