@@ -6,9 +6,17 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_transcript_access, require_video_access
 from app.db.session import get_db
+from app.models.job import JobStatus, JobType, ProcessingJob
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.video import Video
-from app.schemas.transcript import SegmentRead, TokenRead, TranscriptRead, TranscriptSummary
+from app.schemas.transcript import (
+    SegmentRead,
+    TokenRead,
+    TranscriptRead,
+    TranscriptSummary,
+    TranslationCreate,
+    TranslationResponse,
+)
 
 router = APIRouter(tags=["transcripts"])
 
@@ -88,3 +96,31 @@ def get_transcript(
             for segment in segments
         ],
     )
+
+
+@router.post("/transcripts/{transcript_id}/translate", response_model=TranslationResponse)
+def create_translation(
+    payload: TranslationCreate,
+    transcript: Transcript = Depends(require_transcript_access),
+    db: Session = Depends(get_db),
+) -> TranslationResponse:
+    """Request a translation: enqueue the worker that produces it.
+
+    The long-running translation runs in the worker, never inline. The job
+    carries the source transcript and target language; the worker builds a new
+    translation transcript and leaves the source untouched.
+    """
+    job = ProcessingJob(
+        video_id=transcript.video_id,
+        project_id=transcript.project_id,
+        type=JobType.TRANSLATE,
+        status=JobStatus.PENDING,
+        result={
+            "source_transcript_id": str(transcript.id),
+            "target_language": payload.target_language,
+        },
+    )
+    db.add(job)
+    db.flush()
+    db.commit()
+    return TranslationResponse(job_id=job.id)

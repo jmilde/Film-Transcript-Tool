@@ -1,6 +1,8 @@
 from collections.abc import Callable
 
+import pytest
 from app.models.folder import Folder
+from app.models.job import JobStatus, JobType, ProcessingJob
 from app.models.membership import ProjectMembership
 from app.models.project import Project
 from app.models.transcript import Transcript, TranscriptToken
@@ -8,11 +10,20 @@ from app.models.user import User
 from app.models.video import Video
 from app.services.transcripts import create_transcript_from_normalized
 from app.transcription.normalize import normalize
+from app.translation import factory as translation_factory
+from app.worker.runner import run_once
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from tests.transcription.deepgram_fixture import load_deepgram_sample
+
+
+class _FakeTranslationProvider:
+    def translate(
+        self, texts: list[str], *, source_language: str, target_language: str
+    ) -> list[str]:
+        return [text.upper() for text in texts]
 
 
 def _seed_transcript(db: Session, user: User) -> tuple[Video, Transcript]:
@@ -131,4 +142,58 @@ def test_get_transcript_non_member_forbidden(
 
     other = app_client(other_user)
     resp = other.get(f"/transcripts/{transcript.id}")
+    assert resp.status_code == 403
+
+
+def test_create_translation_enqueues_job(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    _video, transcript = _seed_transcript(db_session, user)
+
+    resp = auth_client.post(
+        f"/transcripts/{transcript.id}/translate", json={"target_language": "es"}
+    )
+
+    assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+    job = db_session.get(ProcessingJob, job_id)
+    assert job is not None
+    assert job.type is JobType.TRANSLATE
+    assert job.status is JobStatus.PENDING
+    assert job.result == {"source_transcript_id": str(transcript.id), "target_language": "es"}
+
+
+def test_create_translation_then_worker_produces_translation(
+    auth_client: TestClient,
+    db_session: Session,
+    user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        translation_factory, "get_translation_provider", lambda: _FakeTranslationProvider()
+    )
+    video, transcript = _seed_transcript(db_session, user)
+    db_session.commit()
+
+    auth_client.post(f"/transcripts/{transcript.id}/translate", json={"target_language": "es"})
+    processed = run_once(db_session)
+    assert processed is not None
+    assert processed.status is JobStatus.COMPLETED
+
+    listing = auth_client.get(f"/videos/{video.id}/transcripts").json()
+    languages = {(row["type"], row["language"]) for row in listing}
+    assert ("original", "en") in languages
+    assert ("translation", "es") in languages
+
+
+def test_create_translation_non_member_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    _video, transcript = _seed_transcript(db_session, user)
+
+    other = app_client(other_user)
+    resp = other.post(f"/transcripts/{transcript.id}/translate", json={"target_language": "es"})
     assert resp.status_code == 403

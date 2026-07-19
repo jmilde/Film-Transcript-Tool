@@ -42,3 +42,13 @@ class TranscriptRead(BaseModel):
     type: TranscriptType
     created_at: datetime
     segments: list[SegmentRead]
+
+
+class TranslationCreate(BaseModel):
+    # ISO 639-1 language code to translate into (e.g. "en"). Version 1 ships the
+    # Spanish->English Argos model; other pairs work once their model is present.
+    target_language: str
+
+
+class TranslationResponse(BaseModel):
+    job_id: uuid.UUID

@@ -15,6 +15,7 @@ from app.worker.handlers.metadata import handle_extract_metadata
 from app.worker.handlers.noop import handle_noop
 from app.worker.handlers.proxy import handle_generate_proxy
 from app.worker.handlers.transcribe import handle_transcribe
+from app.worker.handlers.translate import handle_translate
 from app.worker.handlers.waveform import handle_generate_waveform
 
 JobHandler = Callable[[Session, ProcessingJob], dict[str, Any] | None]
@@ -26,6 +27,7 @@ HANDLERS: dict[JobType, JobHandler] = {
     JobType.GENERATE_WAVEFORM: handle_generate_waveform,
     JobType.EXTRACT_AUDIO: handle_extract_audio,
     JobType.TRANSCRIBE: handle_transcribe,
+    JobType.TRANSLATE: handle_translate,
     JobType.EXPORT: handle_export,
 }
 
