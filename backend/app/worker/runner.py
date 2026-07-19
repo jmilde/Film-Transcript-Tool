@@ -7,14 +7,44 @@ from sqlalchemy.orm import Session
 
 from app.db.session import WorkerSessionLocal
 from app.models.job import JobStatus, JobType, ProcessingJob
+from app.services.pipeline import next_stage
 from app.worker.claim import claim_next_job
+from app.worker.handlers.audio_extract import handle_extract_audio
+from app.worker.handlers.metadata import handle_extract_metadata
 from app.worker.handlers.noop import handle_noop
+from app.worker.handlers.proxy import handle_generate_proxy
+from app.worker.handlers.waveform import handle_generate_waveform
 
 JobHandler = Callable[[Session, ProcessingJob], dict[str, Any] | None]
 
 HANDLERS: dict[JobType, JobHandler] = {
     JobType.NOOP: handle_noop,
+    JobType.EXTRACT_METADATA: handle_extract_metadata,
+    JobType.GENERATE_PROXY: handle_generate_proxy,
+    JobType.GENERATE_WAVEFORM: handle_generate_waveform,
+    JobType.EXTRACT_AUDIO: handle_extract_audio,
 }
+
+
+def _enqueue_next_stage(session: Session, job: ProcessingJob) -> None:
+    """Enqueue the job that follows ``job`` in the upload pipeline, if any.
+
+    Chaining on completion (rather than up front) is what gives the pipeline its
+    resume-only-failed-stage behaviour: a stage's successor is created only once
+    that stage succeeds, so a failed stage's retry picks up exactly where it
+    stopped without re-running earlier, already-completed stages.
+    """
+    following = next_stage(job.type)
+    if following is None or job.video_id is None or job.project_id is None:
+        return
+    session.add(
+        ProcessingJob(
+            video_id=job.video_id,
+            project_id=job.project_id,
+            type=following,
+            status=JobStatus.PENDING,
+        )
+    )
 
 
 def run_once(
@@ -35,7 +65,9 @@ def run_once(
     session.commit()
 
     try:
-        handler = registry[job.type]
+        handler = registry.get(job.type)
+        if handler is None:
+            raise RuntimeError(f"No handler registered for job type {job.type.value!r}")
         result = handler(session, job)
     except Exception as exc:
         session.rollback()
@@ -51,6 +83,7 @@ def run_once(
     job.progress = 100
     job.result = result
     job.completed_at = datetime.now(UTC)
+    _enqueue_next_stage(session, job)
     session.commit()
     return job
 

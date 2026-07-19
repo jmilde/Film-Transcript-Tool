@@ -58,10 +58,10 @@ Search uses Postgres full-text search (`tsvector` generated columns + GIN indexe
 - [x] Verify: pytest (70 passed), mypy clean, ruff check + format clean; `alembic upgrade head`/`downgrade -1` round-trip on real Supabase; **two concurrent workers drained 20 real jobs, all completed, no double-claim/stuck rows**; app boots with all routes, unauth upload → 401. Real authenticated upload curl deferred (needs interactive Supabase token; upload path covered by integration tests).
 
 ## Phase 4 — Media pipeline (FFmpeg)
-- [ ] `media/ffmpeg.py`: probe, generate_proxy, generate_waveform, extract_audio (typed arg builders)
-- [ ] `worker/handlers/{metadata,proxy,waveform,audio_extract}.py` (idempotent, skip-if-done)
-- [ ] Tests first: pure arg-builder tests, real ffmpeg run against a tiny sample clip
-- [ ] Verify: pytest, mypy, ruff check, real upload through all 4 stages, retry resumes only failed stage
+- [x] `media/ffmpeg.py`: probe, generate_proxy, generate_waveform, extract_audio (typed arg builders + `parse_probe`/`compute_peaks` pure helpers; `FFmpegError` on non-zero exit). `storage/factory.py` shared by API dep + worker; `worker/media.py` (input loaders + deterministic asset keys)
+- [x] `worker/handlers/{metadata,proxy,waveform,audio_extract}.py` (idempotent: metadata skips if `duration` set, proxy/waveform skip if asset exists, audio skips if key exists — no audio asset type since Phase 4 adds no schema). Runner registers all four + `_enqueue_next_stage` chains the pipeline on completion (forward-only, so retry resumes only the failed stage); unregistered job type now fails with a clear message
+- [x] Tests first (mirroring source): `tests/media/test_ffmpeg.py` (pure arg-builder + parse/peaks tests, real ffmpeg run against a generated sample clip), `tests/worker/handlers/test_{metadata,proxy,waveform,audio_extract}.py` (real ffmpeg via `media` fixture + tmp storage), runner chaining/unregistered-handler tests
+- [x] Verify: pytest (94 passed), mypy clean, ruff check + format clean; **real upload driven end-to-end against real Supabase + real ffmpeg — all 4 media stages completed (metadata 640x480/2.0s/30fps, proxy/waveform/audio assets written), transcribe fails as expected (handler is Phase 5)**
 
 ## Phase 5 — Deepgram transcription + transcript population
 - [ ] `transcription/base.py`, `transcription/deepgram.py`, `transcription/normalize.py`

@@ -4,7 +4,6 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.core.auth import get_current_user
 from app.core.errors import ForbiddenError, NotFoundError
 from app.db.session import get_db
@@ -15,11 +14,11 @@ from app.models.project import Project
 from app.models.user import User
 from app.models.video import Video
 from app.storage.base import Storage
-from app.storage.local import LocalStorage
+from app.storage.factory import get_local_storage
 
 
 def get_storage() -> Storage:
-    return LocalStorage(get_settings().storage_root)
+    return get_local_storage()
 
 
 def _require_membership(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> None:
