@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Callable
 
-from app.models import User
+from app.models.user import User
 from fastapi.testclient import TestClient
 
 

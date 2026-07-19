@@ -1,7 +1,13 @@
 import uuid
 from datetime import datetime
 
-from app.models import AssetType, Folder, Project, ProjectMembership, User, Video, VideoAsset
+from app.models.asset import AssetType, VideoAsset
+from app.models.folder import Folder
+from app.models.job import JobStatus, JobType, ProcessingJob
+from app.models.membership import ProjectMembership
+from app.models.project import Project
+from app.models.user import User
+from app.models.video import Video
 from sqlalchemy.orm import Session
 
 
@@ -92,3 +98,17 @@ def test_video_and_asset_enum(db_session: Session, user: User) -> None:
 
     assert asset.type is AssetType.ORIGINAL
     assert video.duration is None
+
+
+def test_processing_job_defaults(db_session: Session) -> None:
+    job = ProcessingJob(type=JobType.NOOP)
+    db_session.add(job)
+    db_session.flush()
+    db_session.refresh(job)
+
+    assert job.status is JobStatus.PENDING
+    assert job.progress == 0
+    assert job.video_id is None
+    assert job.result is None
+    assert job.started_at is None
+    assert isinstance(job.created_at, datetime)

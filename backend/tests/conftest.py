@@ -6,7 +6,7 @@ from app.config import get_settings
 from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.main import create_app
-from app.models import User
+from app.models.user import User
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session

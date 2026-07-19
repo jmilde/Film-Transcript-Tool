@@ -8,6 +8,7 @@ EXPECTED_TABLES = {
     "folders",
     "videos",
     "video_assets",
+    "processing_jobs",
 }
 
 

@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_project_member
 from app.core.auth import get_current_user
 from app.db.session import get_db
-from app.models import Project, ProjectMembership, User
+from app.models.membership import ProjectMembership
+from app.models.project import Project
+from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
 
 router = APIRouter(tags=["projects"])

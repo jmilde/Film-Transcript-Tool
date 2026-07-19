@@ -3,7 +3,10 @@ import uuid
 import pytest
 from app.api.deps import require_folder_access, require_project_member
 from app.core.errors import ForbiddenError, NotFoundError
-from app.models import Folder, Project, ProjectMembership, User
+from app.models.folder import Folder
+from app.models.membership import ProjectMembership
+from app.models.project import Project
+from app.models.user import User
 from sqlalchemy.orm import Session
 
 

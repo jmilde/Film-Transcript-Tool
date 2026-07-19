@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.routes import folders, projects
+from app.api.routes import folders, jobs, projects, videos
 from app.core.errors import register_error_handlers
 
 
@@ -14,6 +14,8 @@ def create_app() -> FastAPI:
 
     app.include_router(projects.router)
     app.include_router(folders.router)
+    app.include_router(videos.router)
+    app.include_router(jobs.router)
 
     return app
 

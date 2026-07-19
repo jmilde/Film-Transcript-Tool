@@ -1,7 +1,8 @@
 import uuid
 from collections.abc import Callable
 
-from app.models import Folder, User
+from app.models.folder import Folder
+from app.models.user import User
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session

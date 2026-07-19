@@ -1,16 +1,13 @@
-from app.models.asset import AssetType, VideoAsset
-from app.models.folder import Folder
-from app.models.membership import ProjectMembership
-from app.models.project import Project
-from app.models.user import User
-from app.models.video import Video
-
-__all__ = [
-    "AssetType",
-    "Folder",
-    "Project",
-    "ProjectMembership",
-    "User",
-    "Video",
-    "VideoAsset",
-]
+# Import the model modules for their side effect: registering each mapped class
+# on ``Base.metadata`` so Alembic autogenerate sees the full schema. Import model
+# classes explicitly from their defining module (e.g. ``from app.models.user
+# import User``) rather than re-exporting names here.
+from app.models import (  # noqa: F401
+    asset,
+    folder,
+    job,
+    membership,
+    project,
+    user,
+    video,
+)

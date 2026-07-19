@@ -7,6 +7,7 @@ Three rules apply to every phase, not just some:
 - **Linted and formatted.** `uv run ruff check .` and `uv run ruff format --check .` must pass at the end of every phase.
 - **Test-driven development.** Write tests first (they should fail against no implementation), then implement until green, then run the phase's manual verification. Every phase ends with green `uv run pytest` + `uv run mypy app` + `uv run ruff check .`.
 - **Test tree mirrors the source tree.** A test for `app/<pkg>/<mod>.py` lives at `tests/<pkg>/test_<mod>.py` (e.g. `app/storage/local.py` → `tests/storage/test_local.py`, `app/api/routes/projects.py` → `tests/api/routes/test_projects.py`). No `unit/`/`integration/` split — the module path already says what each test covers; pure-vs-DB is evident from the module.
+- **Explicit imports, no `__all__`.** Import every name from its defining module (`from app.models.user import User`), never through an aggregating package. See `backend/CLAUDE.md`.
 
 Confirmed decisions: backend-first; real Supabase (Postgres + Auth) from day one, no stubs; single repo `/backend` + `/frontend`, worker is a process inside `backend`, not a separate package; real FFmpeg + real Deepgram from the start; folder/video delete **cascades**; translation provider is **DeepL**.
 
@@ -46,15 +47,15 @@ Search uses Postgres full-text search (`tsvector` generated columns + GIN indexe
 - [x] Verify: pytest (38 passed), mypy clean, ruff check + format clean; manual smoke of running app (`/health` 200, no-token/bad-token → 401 envelope). Curl with a *real* minted Supabase bearer token deferred — needs interactive Supabase login to mint a JWT; authenticated CRUD is covered by integration tests against the real (rolled-back) DB and JWT verification is unit-tested with real ES256 signing.
 
 ## Phase 3 — Job queue + worker skeleton
-- [ ] `models/job.py` (ProcessingJob + result JSONB, JobType/JobStatus enums); migration 0002
-- [ ] `worker/claim.py` (SELECT...FOR UPDATE SKIP LOCKED)
-- [ ] `worker/runner.py` (poll loop, typed handler registry)
-- [ ] `worker/handlers/noop.py`
-- [ ] `api/routes/videos.py` (upload, mp4/mov validation, enqueues extract_metadata, **cascade delete**)
-- [ ] `api/routes/jobs.py` (get, retry)
-- [ ] `services/pipeline.py` (stage order map)
-- [ ] Tests first: claim race (two connections), noop job completes, upload valid/invalid, cascade delete
-- [ ] Verify: pytest, mypy, ruff check, real worker process + concurrent workers no double-claim, real upload
+- [x] `models/job.py` (ProcessingJob + result JSONB, video_id nullable, JobType/JobStatus enums); migration 0002 (`e4354408f955`)
+- [x] `worker/claim.py` (`claim_next_job`: SELECT…FOR UPDATE SKIP LOCKED → running)
+- [x] `worker/runner.py` (`run_once` + `run_forever` poll loop, typed `HANDLERS` registry, commit-after-claim releases lock; `WorkerSessionLocal` on the 5432 connection)
+- [x] `worker/handlers/noop.py`
+- [x] `api/routes/videos.py` (upload, mp4/mov validation, stores original + `VideoAsset`, enqueues `extract_metadata`, get, **cascade delete** + storage cleanup); `get_storage`/`require_video_access` deps
+- [x] `api/routes/jobs.py` (get, retry failed→pending); `require_job_access` dep
+- [x] `services/pipeline.py` (`UPLOAD_PIPELINE` order map, `FIRST_STAGE`, `next_stage`)
+- [x] Tests first (mirroring source): `tests/worker/test_claim.py` (SKIP LOCKED race, two real connections, explicit cleanup), `tests/worker/test_runner.py` (noop completes, failing handler → failed), `tests/services/test_pipeline.py`, `tests/api/routes/test_videos.py` (valid/invalid upload, cascade delete, non-member), `tests/api/routes/test_jobs.py` (get/retry/403/404)
+- [x] Verify: pytest (70 passed), mypy clean, ruff check + format clean; `alembic upgrade head`/`downgrade -1` round-trip on real Supabase; **two concurrent workers drained 20 real jobs, all completed, no double-claim/stuck rows**; app boots with all routes, unauth upload → 401. Real authenticated upload curl deferred (needs interactive Supabase token; upload path covered by integration tests).
 
 ## Phase 4 — Media pipeline (FFmpeg)
 - [ ] `media/ffmpeg.py`: probe, generate_proxy, generate_waveform, extract_audio (typed arg builders)

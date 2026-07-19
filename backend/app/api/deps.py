@@ -4,10 +4,22 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.core.auth import get_current_user
 from app.core.errors import ForbiddenError, NotFoundError
 from app.db.session import get_db
-from app.models import Folder, Project, ProjectMembership, User
+from app.models.folder import Folder
+from app.models.job import ProcessingJob
+from app.models.membership import ProjectMembership
+from app.models.project import Project
+from app.models.user import User
+from app.models.video import Video
+from app.storage.base import Storage
+from app.storage.local import LocalStorage
+
+
+def get_storage() -> Storage:
+    return LocalStorage(get_settings().storage_root)
 
 
 def _require_membership(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> None:
@@ -43,3 +55,33 @@ def require_folder_access(
         raise NotFoundError("Folder not found")
     _require_membership(db, folder.project_id, user.id)
     return folder
+
+
+def require_video_access(
+    video_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Video:
+    video = db.get(Video, video_id)
+    if video is None:
+        raise NotFoundError("Video not found")
+    folder = db.get(Folder, video.folder_id)
+    assert folder is not None  # FK guarantees the parent folder exists
+    _require_membership(db, folder.project_id, user.id)
+    return video
+
+
+def require_job_access(
+    job_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ProcessingJob:
+    job = db.get(ProcessingJob, job_id)
+    if job is None or job.video_id is None:
+        raise NotFoundError("Job not found")
+    video = db.get(Video, job.video_id)
+    assert video is not None  # FK (cascade) guarantees the video exists
+    folder = db.get(Folder, video.folder_id)
+    assert folder is not None
+    _require_membership(db, folder.project_id, user.id)
+    return job

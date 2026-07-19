@@ -8,7 +8,10 @@ from app.api.deps import require_folder_access, require_project_member
 from app.core.auth import get_current_user
 from app.core.errors import BadRequestError
 from app.db.session import get_db
-from app.models import Folder, Project, User, Video
+from app.models.folder import Folder
+from app.models.project import Project
+from app.models.user import User
+from app.models.video import Video
 from app.schemas.folder import (
     FolderContents,
     FolderCreate,

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.core.errors import UnauthorizedError
 from app.db.session import get_db
-from app.models import User
+from app.models.user import User
 
 # Supabase issues asymmetric JWTs (ES256 for new projects, RS256 for older
 # ones) verified via the project's JWKS endpoint.
