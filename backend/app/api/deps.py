@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.core.errors import ForbiddenError, NotFoundError
 from app.db.session import get_db
+from app.models.comment import Comment
 from app.models.folder import Folder
 from app.models.job import ProcessingJob
 from app.models.membership import ProjectMembership
@@ -118,6 +119,18 @@ def require_token_access(
         raise NotFoundError("Token not found")
     _require_membership(db, token.project_id, user.id)
     return token
+
+
+def require_comment_access(
+    comment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Comment:
+    comment = db.get(Comment, comment_id)
+    if comment is None:
+        raise NotFoundError("Comment not found")
+    _require_membership(db, comment.project_id, user.id)
+    return comment
 
 
 @dataclass

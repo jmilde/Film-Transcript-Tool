@@ -80,10 +80,10 @@ Search uses Postgres full-text search (`tsvector` generated columns + GIN indexe
 - [x] Verify: pytest (130 passed, 1 integration deselected), mypy clean (105 files), ruff check + format clean; no migration (Phase 6 adds no schema); app boots with all four token routes in the OpenAPI schema. Authenticated curl deferred as in prior phases (needs an interactive Supabase token; the ops are covered end-to-end by TestClient tests against the real rolled-back DB)
 
 ## Phase 7 — Comments
-- [ ] Models: Comment, CommentRange, CommentReply; migration 0004
-- [ ] `api/routes/comments.py`: create, list (computed timecodes), reply, resolve
-- [ ] Tests first: create/list/reply/resolve, cross-transcript rejected
-- [ ] Verify: pytest, mypy, ruff check, manual curl flow
+- [x] Models: Comment (+denormalized project_id, resolved bool, OwnedMixin), CommentRange (start/end token FKs, immutable — CreatedAtMixin only), CommentReply (immutable, created_by + CreatedAtMixin, no update columns per docs §15); migration 0005 (`3caf3f9ffb4d`) — note: docs said "0004" but 0004 was consumed by Phase 5 transcripts, so Comments is 0005. In/out timecodes are **not stored** — derived from the range's `start_token.start_time`/`end_token.end_time` on read so they follow token edits
+- [x] `services/comments.py`: `create_comment` (validates both tokens exist and belong to the path transcript → `CommentRangeInvalidError`/`COMMENT_RANGE_INVALID` on a cross-transcript range), `add_reply`, `set_resolved`; `api/routes/comments.py`: POST `/transcripts/{id}/comments`, GET `/transcripts/{id}/comments` (computed `in_time`/`out_time`, nested replies), POST `/comments/{id}/replies`, PATCH `/comments/{id}` (resolve). `require_comment_access` dep (O(1) via denormalized project_id)
+- [x] Tests first (mirroring source): `tests/services/test_comments.py` (range built, cross-transcript rejected, reply stored, resolve toggles) + `tests/api/routes/test_comments.py` (create+list with computed timecodes 0.0/0.8, reply, resolve, cross-transcript 400 `COMMENT_RANGE_INVALID`, non-member 403)
+- [x] Verify: pytest (139 passed, 1 integration deselected), mypy clean (111 files), ruff check + format clean; `alembic upgrade head`/`downgrade -1`/re-upgrade round-trip on real Supabase; all four comment routes present in the OpenAPI schema. Authenticated curl deferred as in prior phases (needs an interactive Supabase token; the flow is covered end-to-end by TestClient tests against the real rolled-back DB)
 
 ## Phase 8 — Search (Postgres FTS)
 - [ ] Migration 0005: generated tsvector columns + GIN indexes (tokens, speakers, comments)

@@ -4,6 +4,7 @@
 # import User``) rather than re-exporting names here.
 from app.models import (  # noqa: F401
     asset,
+    comment,
     folder,
     job,
     membership,
