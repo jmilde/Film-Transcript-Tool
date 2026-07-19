@@ -11,6 +11,8 @@ from app.models.folder import Folder
 from app.models.job import ProcessingJob
 from app.models.membership import ProjectMembership
 from app.models.project import Project
+from app.models.speaker import Speaker
+from app.models.transcript import Transcript
 from app.models.user import User
 from app.models.video import Video
 from app.storage.base import Storage
@@ -78,3 +80,27 @@ def require_job_access(
         raise NotFoundError("Job not found")
     _require_membership(db, job.project_id, user.id)
     return job
+
+
+def require_transcript_access(
+    transcript_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Transcript:
+    transcript = db.get(Transcript, transcript_id)
+    if transcript is None:
+        raise NotFoundError("Transcript not found")
+    _require_membership(db, transcript.project_id, user.id)
+    return transcript
+
+
+def require_speaker_access(
+    speaker_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Speaker:
+    speaker = db.get(Speaker, speaker_id)
+    if speaker is None:
+        raise NotFoundError("Speaker not found")
+    _require_membership(db, speaker.project_id, user.id)
+    return speaker

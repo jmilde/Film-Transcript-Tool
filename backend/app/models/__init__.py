@@ -8,6 +8,8 @@ from app.models import (  # noqa: F401
     job,
     membership,
     project,
+    speaker,
+    transcript,
     user,
     video,
 )
