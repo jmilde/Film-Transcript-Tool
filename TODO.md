@@ -6,6 +6,7 @@ Three rules apply to every phase, not just some:
 - **Fully typed Python.** Every function/method/module-level variable is annotated; `uv run mypy app` must pass at the end of every phase.
 - **Linted and formatted.** `uv run ruff check .` and `uv run ruff format --check .` must pass at the end of every phase.
 - **Test-driven development.** Write tests first (they should fail against no implementation), then implement until green, then run the phase's manual verification. Every phase ends with green `uv run pytest` + `uv run mypy app` + `uv run ruff check .`.
+- **Test tree mirrors the source tree.** A test for `app/<pkg>/<mod>.py` lives at `tests/<pkg>/test_<mod>.py` (e.g. `app/storage/local.py` → `tests/storage/test_local.py`, `app/api/routes/projects.py` → `tests/api/routes/test_projects.py`). No `unit/`/`integration/` split — the module path already says what each test covers; pure-vs-DB is evident from the module.
 
 Confirmed decisions: backend-first; real Supabase (Postgres + Auth) from day one, no stubs; single repo `/backend` + `/frontend`, worker is a process inside `backend`, not a separate package; real FFmpeg + real Deepgram from the start; folder/video delete **cascades**; translation provider is **DeepL**.
 
@@ -24,25 +25,25 @@ Search uses Postgres full-text search (`tsvector` generated columns + GIN indexe
 - [x] `.env.example`
 - [x] `app/main.py`: FastAPI app factory + `GET /health`
 - [x] `tests/conftest.py`: `client` fixture (DB transaction-rollback + `auth_headers` fixtures deferred to Phase 1/2 — no `db/session.py` or auth module exists yet to build them against)
-- [x] `tests/integration/test_health.py` written first, then implementation
+- [x] `tests/test_main.py` (health) written first, then implementation
 - [x] Verify: `uv run pytest` green, `uv run mypy app` clean, `uv run ruff check .` clean, manual curl `/health`
 
 ## Phase 1 — Core hierarchy schema
 - [x] `db/base.py` (Base + naming convention + TimestampMixin/OwnedMixin + CreatedAtMixin/UUIDPrimaryKeyMixin), `db/session.py`
 - [x] Models: User, Project (+archived_at), ProjectMembership, Folder (self-referential), Video, VideoAsset
 - [x] `alembic init`; wire `env.py` to Base.metadata + Settings (worker URL for DDL); migration 0001 (`653ca282cee5`)
-- [x] Tests first: model construction (`tests/unit/test_models.py`), migration/table-exists check (`tests/integration/test_migrations.py`); `conftest.py` gained transaction-rollback `db_session` + `user` fixtures and `get_db`-override `client`
+- [x] Tests first: model construction (`tests/models/test_models.py`), migration/table-exists check (`tests/db/test_migrations.py`); `conftest.py` gained transaction-rollback `db_session` + `user` fixtures and `get_db`-override `client`
 - [x] Verify: `alembic upgrade head` against real Supabase (6 tables created), pytest (8 passed), mypy clean, ruff clean, `alembic downgrade -1` reverses cleanly then re-upgraded to head
 
 ## Phase 2 — Storage, auth, Projects/Folders CRUD
-- [ ] `storage/base.py` (Storage protocol), `storage/local.py` (path-traversal guarded)
-- [ ] `core/auth.py`: `verify_jwt`, `get_current_user` (upserts User)
-- [ ] `core/errors.py`: typed exceptions → `{"error":{"code","message"}}`
-- [ ] `api/deps.py`: get_db, get_current_user, require_project_member
-- [ ] `schemas/project.py`, `schemas/folder.py`
-- [ ] Tests first: storage, auth, projects CRUD, folders CRUD (nested, move-cycle guard, **cascade delete**, non-member 403)
-- [ ] `api/routes/projects.py`, `api/routes/folders.py`
-- [ ] Verify: pytest, mypy, ruff check, manual curl with real bearer token
+- [x] `storage/base.py` (Storage protocol), `storage/local.py` (path-traversal guarded)
+- [x] `core/auth.py`: `verify_jwt` (JWKS/ES256+RS256, not HS256 — config uses `supabase_jwks_url`), `get_current_user` (upserts User)
+- [x] `core/errors.py`: typed `AppError` hierarchy + handler → `{"error":{"code","message"}}`
+- [x] `api/deps.py`: get_db, get_current_user, require_project_member (+ require_folder_access)
+- [x] `schemas/project.py`, `schemas/folder.py`
+- [x] Tests first (mirroring source): `tests/storage/test_local.py`, `tests/core/test_auth.py` (ES256-signed fixtures + monkeypatched signing key), `tests/core/test_errors.py`, `tests/api/test_deps.py` (authorization), `tests/api/routes/test_projects.py` + `test_folders.py` (nested, foreign-parent reject, move-into-self/descendant guard, **cascade delete**, non-member 403); conftest gained `other_user` + `app_client` factory + `auth_client`
+- [x] `api/routes/projects.py`, `api/routes/folders.py`
+- [x] Verify: pytest (38 passed), mypy clean, ruff check + format clean; manual smoke of running app (`/health` 200, no-token/bad-token → 401 envelope). Curl with a *real* minted Supabase bearer token deferred — needs interactive Supabase login to mint a JWT; authenticated CRUD is covered by integration tests against the real (rolled-back) DB and JWT verification is unit-tested with real ES256 signing.
 
 ## Phase 3 — Job queue + worker skeleton
 - [ ] `models/job.py` (ProcessingJob + result JSONB, JobType/JobStatus enums); migration 0002
