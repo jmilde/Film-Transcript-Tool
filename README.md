@@ -96,12 +96,12 @@ Project documentation is located in `/docs`.
 
 | Document | Description |
 |-----------|-------------|
-| 100-product-spec.md | Functional product specification |
-| 200-user-workflows.md | User workflows |
-| 300-architecture.md | System architecture |
-| 400-database.md | Database schema |
-| 500-transcript-model.md | Transcript editing model |
-| 600-processing-pipeline.md | Processing pipeline |
-| 700-backend-api.md | REST API |
-| 800-frontend.md | Frontend architecture |
-| 900-export.md | Export formats |
+| 100_product_spec.md | Functional product specification |
+| 200_user_workflows.md | User workflows |
+| 300_architecture.md | System architecture |
+| 400_database.md | Database schema |
+| 500_transcript_model.md | Transcript editing model |
+| 600_processing_pipeline.md | Processing pipeline |
+| 700_backend_api.md | REST API |
+| 800_frontend.md | Frontend architecture |
+| 900_export.md | Export formats |
