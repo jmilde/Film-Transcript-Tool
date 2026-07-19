@@ -4,15 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-This repository currently contains **only the specification** for Film Transcript Tool, not an implementation. `main.py` and `pyproject.toml` are placeholder stubs from `uv init`. No FastAPI backend, worker, React frontend, or database migrations exist yet. When asked to "implement" something, check `docs/` first — it is the source of truth for what the feature must do, and there is no existing code pattern to follow yet for most areas.
+This repository contains the `/docs` specification plus an implemented Python **backend** in `backend/` (FastAPI API + a Postgres-backed worker, SQLAlchemy models, Alembic migrations). Implementation follows the phased checklist in `TODO.md` — read it for what is done and what is next. The React **frontend** does not exist yet (it is a later phase). When implementing, check `docs/` first — it is the source of truth for what a feature must do — then follow the existing backend patterns and the rules in `backend/CLAUDE.md`.
 
 ## Commands
 
-The project uses `uv` for Python dependency management (Python 3.12+, per `.python-version` and `pyproject.toml`).
+The Python backend lives in `backend/` and uses `uv` (Python 3.12+, per `.python-version` and `backend/pyproject.toml`). A repo-root **`Makefile`** wraps the common developer commands; every target `cd`s into `backend/` and runs `uv` there, so run them from the repo root:
 
-- Run the stub entrypoint: `uv run main.py`
-- Add a dependency: `uv add <package>`
-- No test suite, linter, or build tooling is configured yet — none of `pytest`, `ruff`, etc. are declared in `pyproject.toml`. Check `pyproject.toml` before assuming a tool is available.
+- `make help` — list all targets
+- `make test` — run the test suite **without** integration tests (no network/credentials needed)
+- `make test-all` — run **every** test, including live integration tests (needs real credentials in `backend/.env`)
+- `make test-integration` — run only the live integration tests
+- `make lint` / `make lint-fix` — ruff lint check / auto-fix
+- `make format` / `make format-check` — ruff format in place / check only
+- `make typecheck` — `mypy --strict`
+- `make check` — full **offline** quality gate (lint + format-check + typecheck + `test`); use this before committing
+- `make check-all` — same gate but with integration tests included
+- `make install` — sync dependencies (incl. dev group)
+
+The underlying tools (`pytest`, `ruff`, `mypy`) are declared in `backend/pyproject.toml`; to invoke one directly, `cd backend` first (e.g. `cd backend && uv run pytest -k tokens`). Add a dependency with `cd backend && uv add <package>`.
 
 ## Documentation is the spec
 

@@ -26,4 +26,11 @@ Guidance specific to the `backend/` package. The repo-root `CLAUDE.md` and `docs
 
 ## Typing, lint, format
 
-Every phase ends green on `uv run pytest`, `uv run mypy app tests` (strict), `uv run ruff check .`, and `uv run ruff format --check .`.
+Every phase ends green on the full quality gate. Run it from the repo root via the `Makefile`:
+
+- `make check` — the **offline** gate: `ruff check` + `ruff format --check` + `mypy --strict app tests` + `pytest -m "not integration"`. This is the default pre-commit gate — no network or credentials required.
+- `make check-all` — the same gate but with the live integration tests (`pytest`, all markers). Needs real credentials in `backend/.env`; run it when a phase's verification calls for a live external call (e.g. Deepgram).
+
+Individual targets exist too (`make test`, `make test-all`, `make lint`, `make lint-fix`, `make format`, `make format-check`, `make typecheck`) — see `make help`. Each just wraps the equivalent `uv run …` command executed inside `backend/`; to run a tool directly with extra flags, `cd backend` first (e.g. `cd backend && uv run pytest -k tokens`).
+
+Integration tests are marked `integration` and skip when their credential is absent, so `make test` stays green offline; `make test-all` exercises them.
