@@ -210,3 +210,9 @@ secrets_manager_dumps
 # These files are used to track the progress of AI agents and should not be committed.
 **/*PLAN*.md
 **/*plan*.md
+
+# the data from local storage
+backend/storage
+
+# claude code folder
+.claude/
