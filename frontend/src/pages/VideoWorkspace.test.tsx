@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
@@ -11,6 +12,7 @@ import type { SearchResult } from '../api/hooks/useSearch'
 
 const VIDEO_ID = '00000000-0000-0000-0000-0000000000v1'
 const TRANSCRIPT_ID = '00000000-0000-0000-0000-0000000000t1'
+const TRANSLATION_ID = '00000000-0000-0000-0000-0000000000t2'
 const SPEAKER_ID = '00000000-0000-0000-0000-0000000000s1'
 
 beforeEach(() => {
@@ -266,5 +268,68 @@ describe('VideoWorkspace', () => {
         focusTokenId: '00000000-0000-0000-0000-0000000000k2',
       })
     })
+  })
+
+  it('shows a dual-pane original/translation view once a translation is selected', async () => {
+    handlers()
+    server.use(
+      http.get(`http://localhost:8000/videos/${VIDEO_ID}/transcripts`, () =>
+        HttpResponse.json([
+          {
+            id: TRANSCRIPT_ID,
+            video_id: VIDEO_ID,
+            language: 'en',
+            type: 'original',
+            created_at: '2026-01-01T00:00:00Z',
+          },
+          {
+            id: TRANSLATION_ID,
+            video_id: VIDEO_ID,
+            language: 'es',
+            type: 'translation',
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ]),
+      ),
+      http.get(`http://localhost:8000/transcripts/${TRANSLATION_ID}`, () =>
+        HttpResponse.json({
+          id: TRANSLATION_ID,
+          video_id: VIDEO_ID,
+          language: 'es',
+          type: 'translation',
+          created_at: '2026-01-01T00:00:00Z',
+          segments: [
+            {
+              id: '00000000-0000-0000-0000-0000000000g1',
+              speaker_id: SPEAKER_ID,
+              tokens: [
+                {
+                  id: '00000000-0000-0000-0000-0000000000k3',
+                  segment_id: '00000000-0000-0000-0000-0000000000g1',
+                  original_text: 'Hola',
+                  edited_text: null,
+                  text: 'Hola',
+                  start_time: 0,
+                  end_time: 1,
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+      http.get(`http://localhost:8000/transcripts/${TRANSLATION_ID}/comments`, () =>
+        HttpResponse.json([]),
+      ),
+    )
+    renderWorkspace()
+
+    await screen.findByText('Hello', { exact: false })
+    await userEvent.selectOptions(screen.getByLabelText('Translation pane'), TRANSLATION_ID)
+
+    expect(await screen.findByText('Hola', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('Original')).toBeInTheDocument()
+    expect(screen.getByText('Translation (es)')).toBeInTheDocument()
+    // The original pane is still there alongside the translation.
+    expect(screen.getByText('Hello', { exact: false })).toBeInTheDocument()
   })
 })

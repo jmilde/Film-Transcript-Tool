@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useVideo } from '../api/hooks/useVideos'
@@ -12,6 +12,7 @@ import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 import { CommentsPanel } from '../features/comments/CommentsPanel'
+import { TranslationControl } from '../features/translation/TranslationControl'
 import type { SearchResult } from '../api/hooks/useSearch'
 
 export function VideoWorkspace() {
@@ -50,13 +51,20 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     }
   }, [currentTime])
 
-  // F3 shows the original transcript; dual original/translation view is F8.
+  // The left pane always shows the original transcript.
   const transcriptId = useMemo(() => {
     if (!transcripts || transcripts.length === 0) return null
     return (transcripts.find((t) => t.type === 'original') ?? transcripts[0]).id
   }, [transcripts])
   const { data: transcript, isLoading: transcriptLoading } = useTranscript(transcriptId)
   const { data: comments, isLoading: commentsLoading } = useComments(transcriptId)
+
+  // Optional right pane: a translation, chosen via TranslationControl (docs
+  // §11 dual transcript view). Cleared if the video changes underneath it.
+  const [secondTranscriptId, setSecondTranscriptId] = useState<string | null>(null)
+  const { data: secondTranscript, isLoading: secondTranscriptLoading } =
+    useTranscript(secondTranscriptId)
+  const { data: secondComments } = useComments(secondTranscriptId)
 
   function seek(seconds: number) {
     if (videoRef.current) videoRef.current.currentTime = seconds
@@ -105,6 +113,15 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
           ← Projects
         </Link>
         <h2 className="truncate text-lg font-semibold text-slate-800">{video?.name ?? 'Video'}</h2>
+        <div className="ml-auto">
+          <TranslationControl
+            videoId={videoId}
+            originalTranscriptId={transcriptId}
+            transcripts={transcripts}
+            secondTranscriptId={secondTranscriptId}
+            onSelectSecond={setSecondTranscriptId}
+          />
+        </div>
       </div>
 
       {/* Numeric sizes are pixels in v4; strings without units are percentages. */}
@@ -113,14 +130,50 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
         className="flex-1 overflow-hidden rounded-lg border border-slate-200"
       >
         <Panel defaultSize="55" minSize="30" className="bg-white">
-          <TranscriptViewer
-            transcript={transcript}
-            speakers={speakers}
-            comments={comments}
-            isLoading={transcriptId !== null && transcriptLoading}
-            onSeekToken={seek}
-            onPlaySelection={playSelection}
-          />
+          {secondTranscriptId ? (
+            <Group orientation="horizontal" className="h-full">
+              <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
+                <div className="border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
+                  Original
+                </div>
+                <div className="min-h-0 flex-1">
+                  <TranscriptViewer
+                    transcript={transcript}
+                    speakers={speakers}
+                    comments={comments}
+                    isLoading={transcriptId !== null && transcriptLoading}
+                    onSeekToken={seek}
+                    onPlaySelection={playSelection}
+                  />
+                </div>
+              </Panel>
+              <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
+              <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
+                <div className="border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
+                  Translation ({secondTranscript?.language ?? '…'})
+                </div>
+                <div className="min-h-0 flex-1">
+                  <TranscriptViewer
+                    transcript={secondTranscript}
+                    speakers={speakers}
+                    comments={secondComments}
+                    isLoading={secondTranscriptLoading}
+                    onSeekToken={seek}
+                    onPlaySelection={playSelection}
+                  />
+                </div>
+              </Panel>
+            </Group>
+          ) : (
+            <TranscriptViewer
+              transcript={transcript}
+              speakers={speakers}
+              comments={comments}
+              isLoading={transcriptId !== null && transcriptLoading}
+              onSeekToken={seek}
+              onPlaySelection={playSelection}
+            />
+          )}
         </Panel>
         <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
         <Panel defaultSize="45" minSize="25">
