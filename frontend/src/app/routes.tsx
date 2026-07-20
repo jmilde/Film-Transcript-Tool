@@ -4,6 +4,7 @@ import { AppShell } from '../components/AppShell'
 import { SignIn } from '../pages/SignIn'
 import { Projects } from '../pages/Projects'
 import { ProjectView } from '../pages/ProjectView'
+import { VideoWorkspace } from '../pages/VideoWorkspace'
 
 export const router = createBrowserRouter([
   { path: '/signin', element: <SignIn /> },
@@ -15,6 +16,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Projects /> },
           { path: 'projects/:projectId', element: <ProjectView /> },
+          { path: 'videos/:videoId', element: <VideoWorkspace /> },
         ],
       },
     ],

@@ -1,12 +1,20 @@
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_storage, require_folder_access, require_video_access
+from app.api.deps import (
+    get_storage,
+    require_folder_access,
+    require_video_access,
+    require_video_media_access,
+)
 from app.core.auth import get_current_user
-from app.core.errors import BadRequestError
+from app.core.errors import BadRequestError, NotFoundError
+from app.core.media_token import DEFAULT_TTL_SECONDS, mint_media_token
 from app.db.session import get_db
 from app.models.asset import AssetType, VideoAsset
 from app.models.folder import Folder
@@ -14,6 +22,7 @@ from app.models.job import JobStatus, ProcessingJob
 from app.models.user import User
 from app.models.video import Video
 from app.schemas.video import (
+    MediaTokenResponse,
     VideoAssetRead,
     VideoJobRead,
     VideoRead,
@@ -25,6 +34,16 @@ from app.storage.base import Storage
 router = APIRouter(tags=["videos"])
 
 ALLOWED_EXTENSIONS = {".mp4", ".mov"}
+
+
+def _find_asset(db: Session, video_id: uuid.UUID, asset_type: AssetType) -> VideoAsset | None:
+    return (
+        db.execute(
+            select(VideoAsset).where(VideoAsset.video_id == video_id, VideoAsset.type == asset_type)
+        )
+        .scalars()
+        .first()
+    )
 
 
 @router.post(
@@ -106,6 +125,63 @@ def get_video(
         assets=[VideoAssetRead.model_validate(a) for a in assets],
         jobs=[VideoJobRead.model_validate(j) for j in jobs],
     )
+
+
+@router.get("/videos/{video_id}/media-token", response_model=MediaTokenResponse)
+def create_media_token(
+    video: Video = Depends(require_video_access),
+) -> MediaTokenResponse:
+    """Mint a short-lived signed token for streaming this video's media.
+
+    The browser attaches it as ``?token=`` on the proxy stream, which a
+    ``<video>`` element cannot authenticate with a Bearer header.
+    """
+    return MediaTokenResponse(
+        token=mint_media_token(video.id),
+        expires_in=DEFAULT_TTL_SECONDS,
+    )
+
+
+@router.get("/videos/{video_id}/proxy")
+def stream_proxy(
+    video: Video = Depends(require_video_media_access),
+    db: Session = Depends(get_db),
+    storage: Storage = Depends(get_storage),
+) -> FileResponse:
+    """Stream the playback proxy (falling back to the original) with Range support.
+
+    Authorized by a signed ``?token=`` rather than a Bearer header. Starlette's
+    ``FileResponse`` honors HTTP Range requests, so ``<video>`` seeking works.
+    """
+    asset = _find_asset(db, video.id, AssetType.PROXY) or _find_asset(
+        db, video.id, AssetType.ORIGINAL
+    )
+    if asset is None:
+        raise NotFoundError("No playable asset for this video")
+    path = storage.path_for(asset.storage_path)
+    if not path.is_file():
+        raise NotFoundError("Media file is missing from storage")
+    return FileResponse(path, media_type=asset.mime_type or "video/mp4")
+
+
+@router.get("/videos/{video_id}/waveform")
+def get_waveform(
+    video: Video = Depends(require_video_access),
+    db: Session = Depends(get_db),
+    storage: Storage = Depends(get_storage),
+) -> FileResponse:
+    """Return the precomputed waveform peaks JSON for the timeline display.
+
+    Fetched via the typed client (XHR/fetch can send a Bearer header), so this
+    keeps the normal membership check rather than the media-token scheme.
+    """
+    asset = _find_asset(db, video.id, AssetType.WAVEFORM)
+    if asset is None:
+        raise NotFoundError("No waveform for this video")
+    path = storage.path_for(asset.storage_path)
+    if not path.is_file():
+        raise NotFoundError("Waveform file is missing from storage")
+    return FileResponse(path, media_type="application/json")
 
 
 @router.delete("/videos/{video_id}", status_code=204)

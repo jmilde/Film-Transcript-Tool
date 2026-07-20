@@ -135,6 +135,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/videos/{video_id}/media-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Create Media Token
+         * @description Mint a short-lived signed token for streaming this video's media.
+         *
+         *     The browser attaches it as ``?token=`` on the proxy stream, which a
+         *     ``<video>`` element cannot authenticate with a Bearer header.
+         */
+        get: operations["create_media_token_videos__video_id__media_token_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{video_id}/proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Proxy
+         * @description Stream the playback proxy (falling back to the original) with Range support.
+         *
+         *     Authorized by a signed ``?token=`` rather than a Bearer header. Starlette's
+         *     ``FileResponse`` honors HTTP Range requests, so ``<video>`` seeking works.
+         */
+        get: operations["stream_proxy_videos__video_id__proxy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{video_id}/waveform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Waveform
+         * @description Return the precomputed waveform peaks JSON for the timeline display.
+         *
+         *     Fetched via the typed client (XHR/fetch can send a Bearer header), so this
+         *     keeps the normal membership check rather than the media-token scheme.
+         */
+        get: operations["get_waveform_videos__video_id__waveform_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -674,6 +743,13 @@ export interface components {
          * @enum {string}
          */
         JobType: "extract_metadata" | "generate_proxy" | "generate_waveform" | "extract_audio" | "transcribe" | "translate" | "export" | "noop";
+        /** MediaTokenResponse */
+        MediaTokenResponse: {
+            /** Token */
+            token: string;
+            /** Expires In */
+            expires_in: number;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Name */
@@ -1378,6 +1454,101 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_media_token_videos__video_id__media_token_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_proxy_videos__video_id__proxy_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_waveform_videos__video_id__waveform_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {

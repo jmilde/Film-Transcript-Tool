@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { useCreateFolder, useFolderContents } from '../../api/hooks/useFolders'
 import { useUploadVideo, useVideoProcessing } from '../../api/hooks/useVideos'
 
@@ -83,7 +84,12 @@ function FolderPanelInner({
           <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
             {data.videos.map((v) => (
               <li key={v.id} className="flex items-center justify-between px-4 py-2.5">
-                <span className="truncate text-slate-800">{v.name}</span>
+                <Link
+                  to={`/videos/${v.id}`}
+                  className="truncate text-slate-800 hover:text-slate-950 hover:underline"
+                >
+                  {v.name}
+                </Link>
                 {uploaded.includes(v.id) && <ProcessingBadge videoId={v.id} />}
               </li>
             ))}

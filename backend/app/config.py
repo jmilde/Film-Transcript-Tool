@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API (the frontend dev server by
     # default). Override via CORS_ALLOW_ORIGINS as a JSON array.
     cors_allow_origins: list[str] = ["http://localhost:5173"]
+    # Secret for signing short-lived media-access tokens. A browser <video>/<img>
+    # src cannot send an Authorization header, so media routes accept a signed
+    # ?token= minted by an authorized endpoint instead. MUST be overridden with a
+    # strong random value in production; the default is for local dev/tests only.
+    media_token_secret: str = "dev-insecure-media-token-secret"
 
 
 @lru_cache

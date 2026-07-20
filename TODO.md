@@ -127,9 +127,10 @@ Toolchain note: used **Node 22 LTS** (via nvm `.nvmrc`), which the `npm create v
 - [x] Tests (ProjectView via MSW: folder tree + select-loads-videos) + full frontend gate green (typecheck, lint, 4 tests, build, format)
 
 ### F2 — Workspace shell + video player (docs §6, §7)
-- [ ] **Backend: media streaming** — `GET /videos/{id}/proxy` (Range-aware `FileResponse` over `storage.path_for`, PROXY→ORIGINAL fallback) + `GET /videos/{id}/waveform` (peaks JSON); reuse `require_video_access`/`get_storage`; 206/bytes + non-member 403 tests; `make check`
-- [ ] **Backend: media-auth** — resolve `<video src>` bearer-header gap; recommended: short-lived signed `?token=` from `GET /videos/{id}/media-token` (HMAC video_id+exp), validated on the media routes (confirm approach before building)
-- [ ] Resizable two-pane layout (`react-resizable-panels`); HTML5 player behind a thin abstraction (play/pause/seek/volume/fullscreen, time/duration) over `/videos/{id}/proxy`; optional canvas waveform from `/videos/{id}/waveform`; route `/videos/:videoId`
+- [x] **Backend: media streaming** — `GET /videos/{id}/proxy` (Range-aware `FileResponse`, PROXY→ORIGINAL fallback, 206 verified) + `GET /videos/{id}/waveform` (peaks JSON, Bearer); reuse `require_video_access`/`get_storage`; 206/bytes + non-member 403 + missing-404 tests; `make check` green (207 passed)
+- [x] **Backend: media-auth** — short-lived HMAC-signed `?token=` (`app/core/media_token.py`, video_id+exp) minted by `GET /videos/{id}/media-token` (Bearer + membership), validated on the proxy route via `require_video_media_access`; `MEDIA_TOKEN_SECRET` config (dev default). Unit tests (roundtrip/expiry/tamper/wrong-video/malformed). Documented in docs/700
+- [x] Resizable two-pane layout (`react-resizable-panels` v4 — `Group`/`Panel`/`Separator`, sizes as % strings); HTML5 player abstraction (`VideoPlayer`, native controls = play/pause/seek/volume/fullscreen, time/duration readout) over `/videos/{id}/proxy?token=`; playback zustand store (currentTime/duration/playing/autoFollow, for F3); canvas `Waveform` with live playhead + click-to-seek; route `/videos/:videoId`; video items link into it
+- [x] Tests (formatTime unit; VideoWorkspace via MSW: title + proxy `src` with media token; ResizeObserver polyfill for jsdom) + full frontend gate green (typecheck, lint, 8 tests, build, format)
 
 ### F3 — Transcript viewer + playback sync (docs §8, §9)
 - [ ] Render segments/speakers/tokens (display text = edited∨original, deleted already excluded by API); highlight active token from playback time; auto-follow scroll toggle

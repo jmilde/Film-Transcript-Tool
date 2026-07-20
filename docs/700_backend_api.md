@@ -242,6 +242,43 @@ DELETE /videos/{video_id}
 
 ---
 
+## Media Access Token
+
+```
+GET /videos/{video_id}/media-token
+```
+
+Mints a short-lived signed token authorizing playback of this video's media.
+Requires project membership (Bearer auth). Returns `{ "token", "expires_in" }`.
+Needed because a browser `<video>`/`<img>` element cannot send an
+`Authorization` header, so the stream is authorized by a `?token=` instead.
+
+---
+
+## Stream Proxy
+
+```
+GET /videos/{video_id}/proxy?token={media_token}
+```
+
+Streams the playback proxy (falling back to the original) as `video/*` with HTTP
+Range support (`206 Partial Content`) so seeking works. Authorized by the signed
+`token` query parameter rather than a Bearer header.
+
+---
+
+## Waveform
+
+```
+GET /videos/{video_id}/waveform
+```
+
+Returns the precomputed waveform peaks JSON (`{ version, sample_rate, peaks }`)
+for the timeline display. Fetched via the typed client, so it uses normal Bearer
+auth. `404` until the waveform has been generated.
+
+---
+
 # 7. Processing Jobs
 
 ## Get Job Status

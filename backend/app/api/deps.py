@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
 from app.core.errors import ForbiddenError, NotFoundError
+from app.core.media_token import verify_media_token
 from app.db.session import get_db
 from app.models.comment import Comment
 from app.models.export import Export
@@ -71,6 +72,24 @@ def require_video_access(
     if video is None:
         raise NotFoundError("Video not found")
     _require_membership(db, video.project_id, user.id)
+    return video
+
+
+def require_video_media_access(
+    video_id: uuid.UUID,
+    token: str,
+    db: Session = Depends(get_db),
+) -> Video:
+    """Authorize a media (proxy/stream) request via a signed ``?token=``.
+
+    Used by routes that a browser reaches through ``<video src>``/``<img src>``,
+    which cannot send an ``Authorization`` header. A valid token was only ever
+    minted for a project member, so it stands in for the membership check.
+    """
+    verify_media_token(token, video_id)
+    video = db.get(Video, video_id)
+    if video is None:
+        raise NotFoundError("Video not found")
     return video
 
 
