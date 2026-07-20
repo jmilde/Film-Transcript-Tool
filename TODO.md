@@ -137,7 +137,10 @@ Toolchain note: used **Node 22 LTS** (via nvm `.nvmrc`), which the `npm create v
 - [x] Tests (`findActiveTokenId` unit; `TranscriptViewer` highlight/click-seek/toggle/empty-state; VideoWorkspace MSW extended with transcript/speaker fixtures); jsdom `scrollIntoView` polyfill + explicit RTL `cleanup` in `afterEach` (needed since `globals: true` isn't set, so RTL's auto-cleanup never self-registers — was masked before because no file rendered the same text twice) + full frontend gate green (typecheck, lint, 17 tests, build, format)
 
 ### F4 — Transcript selection + actions (docs §10)
-- [ ] Drag-select token ranges; show selected text + in/out timecodes; play-selection; copy
+- [x] `store/selection.ts` (zustand): anchor/focus token id range, keyed by `transcriptId`, per §17's "Transcript State: selection". `TranscriptViewer` distinguishes a plain click (mousedown+mouseup on the same token, no drag) — which seeks, as in F3 — from a drag (mouseenter over a second token while the button is down) — which starts/extends the range and suppresses the seek. Selecting a range shows a toolbar with the joined token text, in/out timecodes (`formatTime`), and Play selection / Copy / Clear actions
+- [x] `VideoWorkspace.playSelection(start, end)`: seeks the `<video>`, plays it, and — via a ref checked against the playback store's `currentTime` — pauses once `currentTime` reaches `end`
+- [x] Copy uses `navigator.clipboard.writeText`; jsdom lacks the Clipboard API, so `test/setup.ts` gained a `navigator.clipboard.writeText` stub alongside the existing `scrollIntoView`/`ResizeObserver` polyfills
+- [x] Tests (`TranscriptViewer`: click-to-seek via mousedown/mouseup, drag-select shows text+timecodes, play-selection callback, clipboard copy, clear); full frontend gate green (typecheck, lint, 21 tests, build, format)
 
 ### F5 — Transcript editing (docs §12)
 - [ ] Single-token edit (`PATCH /tokens/{id}`), delete (soft), merge (`POST /tokens/merge`), split (`POST /tokens/{id}/split`) with optimistic update + query invalidation; Ctrl/Cmd+S save UX

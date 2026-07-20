@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TranscriptViewer } from './TranscriptViewer'
 import { usePlaybackStore } from '../../store/playback'
+import { useSelectionStore } from '../../store/selection'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Transcript } from '../../api/hooks/useTranscripts'
 
@@ -43,6 +44,15 @@ const TRANSCRIPT: Transcript = {
           start_time: 1,
           end_time: 2,
         },
+        {
+          id: 'tok-c',
+          segment_id: 'seg-1',
+          original_text: 'again',
+          edited_text: null,
+          text: 'again',
+          start_time: 2,
+          end_time: 3,
+        },
       ],
     },
   ],
@@ -51,26 +61,32 @@ const TRANSCRIPT: Transcript = {
 beforeEach(() => {
   usePlaybackStore.getState().reset()
   usePlaybackStore.setState({ autoFollow: true })
+  useSelectionStore.getState().clear()
 })
+
+function renderViewer(onPlaySelection = vi.fn()) {
+  render(
+    <TranscriptViewer
+      transcript={TRANSCRIPT}
+      speakers={[SPEAKER]}
+      isLoading={false}
+      onSeekToken={vi.fn()}
+      onPlaySelection={onPlaySelection}
+    />,
+  )
+}
 
 describe('TranscriptViewer', () => {
   it('highlights the token matching the current playback time', () => {
     usePlaybackStore.setState({ currentTime: 1.5 })
-    render(
-      <TranscriptViewer
-        transcript={TRANSCRIPT}
-        speakers={[SPEAKER]}
-        isLoading={false}
-        onSeekToken={() => {}}
-      />,
-    )
+    renderViewer()
 
     expect(screen.getByText('Jordan')).toBeInTheDocument()
     expect(screen.getByText('world')).toHaveClass('bg-amber-200')
     expect(screen.getByText('Hello')).not.toHaveClass('bg-amber-200')
   })
 
-  it('seeks the video when a token is clicked', async () => {
+  it('seeks the video on a plain click', () => {
     const onSeekToken = vi.fn()
     render(
       <TranscriptViewer
@@ -78,22 +94,17 @@ describe('TranscriptViewer', () => {
         speakers={[SPEAKER]}
         isLoading={false}
         onSeekToken={onSeekToken}
+        onPlaySelection={vi.fn()}
       />,
     )
 
-    await userEvent.click(screen.getByText('world'))
+    fireEvent.mouseDown(screen.getByText('world'))
+    fireEvent.mouseUp(document)
     expect(onSeekToken).toHaveBeenCalledWith(1)
   })
 
   it('toggles auto-follow', async () => {
-    render(
-      <TranscriptViewer
-        transcript={TRANSCRIPT}
-        speakers={[SPEAKER]}
-        isLoading={false}
-        onSeekToken={() => {}}
-      />,
-    )
+    renderViewer()
 
     const checkbox = screen.getByLabelText('Auto-follow')
     expect(checkbox).toBeChecked()
@@ -107,9 +118,60 @@ describe('TranscriptViewer', () => {
         transcript={undefined}
         speakers={[]}
         isLoading={false}
-        onSeekToken={() => {}}
+        onSeekToken={vi.fn()}
+        onPlaySelection={vi.fn()}
       />,
     )
     expect(screen.getByText('No transcript available yet.')).toBeInTheDocument()
+  })
+
+  it('drag-selects a token range and shows text + in/out timecodes', () => {
+    renderViewer()
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseEnter(screen.getByText('again'))
+    fireEvent.mouseUp(document)
+
+    expect(screen.getByText('"Hello world again"')).toBeInTheDocument()
+    expect(screen.getByText('0:00 – 0:03')).toBeInTheDocument()
+    expect(screen.getByText('Hello')).toHaveClass('bg-sky-200')
+    expect(screen.getByText('again')).toHaveClass('bg-sky-200')
+  })
+
+  it('plays the selection when "Play selection" is clicked', async () => {
+    const onPlaySelection = vi.fn()
+    renderViewer(onPlaySelection)
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByText('Play selection'))
+    expect(onPlaySelection).toHaveBeenCalledWith(0, 2)
+  })
+
+  it('copies the selected text to the clipboard', async () => {
+    renderViewer()
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByText('Copy'))
+    expect(writeText).toHaveBeenCalledWith('Hello world')
+  })
+
+  it('clears the selection', async () => {
+    renderViewer()
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+    expect(screen.getByText('"Hello world"')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByLabelText('Clear selection'))
+    expect(screen.queryByText('"Hello world"')).not.toBeInTheDocument()
   })
 })

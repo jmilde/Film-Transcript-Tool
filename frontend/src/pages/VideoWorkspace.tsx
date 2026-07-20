@@ -24,9 +24,19 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const { data: speakers } = useSpeakers(videoId)
   const videoRef = useRef<HTMLVideoElement>(null)
   const resetPlayback = usePlaybackStore((s) => s.reset)
+  const currentTime = usePlaybackStore((s) => s.currentTime)
 
   // Reset playback state when switching videos.
   useEffect(() => resetPlayback, [videoId, resetPlayback])
+
+  // Pauses playback once it reaches the end of a "play selection" request.
+  const selectionEndRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (selectionEndRef.current !== null && currentTime >= selectionEndRef.current) {
+      videoRef.current?.pause()
+      selectionEndRef.current = null
+    }
+  }, [currentTime])
 
   // F3 shows the original transcript; dual original/translation view is F8.
   const transcriptId = useMemo(() => {
@@ -37,6 +47,13 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
 
   function seek(seconds: number) {
     if (videoRef.current) videoRef.current.currentTime = seconds
+  }
+
+  function playSelection(startTime: number, endTime: number) {
+    if (!videoRef.current) return
+    videoRef.current.currentTime = startTime
+    selectionEndRef.current = endTime
+    void videoRef.current.play()
   }
 
   const src = media ? proxyUrl(videoId, media.token) : undefined
@@ -61,6 +78,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
             speakers={speakers}
             isLoading={transcriptId !== null && transcriptLoading}
             onSeekToken={seek}
+            onPlaySelection={playSelection}
           />
         </Panel>
         <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
