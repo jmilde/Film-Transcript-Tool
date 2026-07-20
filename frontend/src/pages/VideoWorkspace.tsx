@@ -23,7 +23,7 @@ export function VideoWorkspace() {
 }
 
 function VideoWorkspaceInner({ videoId }: { videoId: string }) {
-  const { data: video } = useVideo(videoId)
+  const { data: video, isError: videoError } = useVideo(videoId)
   const { data: media } = useMediaToken(videoId)
   const waveform = useWaveform(videoId)
   const { data: transcripts } = useTranscripts(videoId)
@@ -67,6 +67,26 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     useTranscript(secondTranscriptId)
   const { data: secondComments } = useComments(secondTranscriptId)
 
+  // Space toggles play/pause (docs §16), unless the user is typing or
+  // interacting with a control that already uses Space itself (buttons,
+  // checkboxes, text inputs).
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.code !== 'Space') return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return
+      if (target?.isContentEditable) return
+      e.preventDefault()
+      const el = videoRef.current
+      if (!el) return
+      if (el.paused) void el.play()
+      else el.pause()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   function seek(seconds: number) {
     if (videoRef.current) videoRef.current.currentTime = seconds
   }
@@ -106,6 +126,17 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   }, [pendingSearch, comments, setSelectionRange])
 
   const src = media ? proxyUrl(videoId, media.token) : undefined
+
+  if (videoError) {
+    return (
+      <div className="space-y-3">
+        <Link to="/" className="text-sm text-slate-500 hover:underline">
+          ← Projects
+        </Link>
+        <p className="text-red-600">Could not load this video.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">

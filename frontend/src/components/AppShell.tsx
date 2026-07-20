@@ -19,7 +19,7 @@ export function AppShell() {
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">
+      <main className="px-6 py-8">
         <Outlet />
       </main>
     </div>

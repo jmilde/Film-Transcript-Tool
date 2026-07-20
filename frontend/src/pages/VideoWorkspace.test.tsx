@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/server'
 import { AuthProvider } from '../auth/AuthProvider'
 import { useSelectionStore } from '../store/selection'
@@ -331,5 +331,41 @@ describe('VideoWorkspace', () => {
     expect(screen.getByText('Translation (es)')).toBeInTheDocument()
     // The original pane is still there alongside the translation.
     expect(screen.getByText('Hello', { exact: false })).toBeInTheDocument()
+  })
+
+  it('shows an error state if the video fails to load', async () => {
+    server.use(
+      http.get(`http://localhost:8000/videos/${VIDEO_ID}`, () =>
+        HttpResponse.json({ error: { code: 'NOT_FOUND' } }, { status: 404 }),
+      ),
+    )
+    renderWorkspace()
+
+    expect(await screen.findByText('Could not load this video.')).toBeInTheDocument()
+  })
+
+  it('toggles play/pause on Space, but not while typing in a text field', async () => {
+    handlers()
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async () => {})
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    try {
+      renderWorkspace()
+      await screen.findByRole('heading', { name: 'Interview A' })
+
+      fireEvent.keyDown(document, { code: 'Space' })
+      expect(play).toHaveBeenCalledTimes(1)
+
+      // Editing a token's text needs the space bar for word-splitting, so the
+      // global player shortcut must not fire while an editable field is focused.
+      const worldToken = await screen.findByText('world', { exact: false })
+      fireEvent.dblClick(worldToken)
+      const input = screen.getByDisplayValue('world')
+      fireEvent.keyDown(input, { code: 'Space' })
+      expect(play).toHaveBeenCalledTimes(1)
+      expect(pause).not.toHaveBeenCalled()
+    } finally {
+      play.mockRestore()
+      pause.mockRestore()
+    }
   })
 })

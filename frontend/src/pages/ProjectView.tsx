@@ -36,7 +36,7 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <Link to="/" className="text-sm text-slate-500 hover:underline">

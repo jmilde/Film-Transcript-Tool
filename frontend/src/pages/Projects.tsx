@@ -16,7 +16,7 @@ export function Projects() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-slate-800">Projects</h2>
         <form onSubmit={onCreate} className="flex gap-2">
