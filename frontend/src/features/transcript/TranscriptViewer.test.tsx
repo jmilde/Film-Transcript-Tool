@@ -368,4 +368,87 @@ describe('TranscriptViewer', () => {
 
     await waitFor(() => expect(body).toEqual({ token_ids: ['tok-a', 'tok-b'], text: "don't" }))
   })
+
+  it('creates a comment for the selection via the Comment button', async () => {
+    let body: unknown
+    server.use(
+      http.post('http://localhost:8000/transcripts/t-1/comments', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({
+          id: 'c-1',
+          transcript_id: 't-1',
+          created_by: 'user-a',
+          text: 'Check this',
+          resolved: false,
+          start_token_id: 'tok-a',
+          end_token_id: 'tok-b',
+          in_time: 0,
+          out_time: 2,
+          created_at: '2026-01-01T00:00:00Z',
+          replies: [],
+        })
+      }),
+    )
+    renderViewer()
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByText('Comment'))
+    const commentInput = screen.getByRole('textbox')
+    fireEvent.change(commentInput, { target: { value: 'Check this' } })
+    await userEvent.click(screen.getByText('Confirm'))
+
+    await waitFor(() =>
+      expect(body).toEqual({ start_token_id: 'tok-a', end_token_id: 'tok-b', text: 'Check this' }),
+    )
+  })
+
+  it('underlines tokens covered by a comment, gray once resolved', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={TRANSCRIPT}
+          speakers={[SPEAKER]}
+          comments={[
+            {
+              id: 'c-1',
+              transcript_id: 't-1',
+              created_by: 'user-a',
+              text: 'note',
+              resolved: false,
+              start_token_id: 'tok-a',
+              end_token_id: 'tok-a',
+              in_time: 0,
+              out_time: 1,
+              created_at: '2026-01-01T00:00:00Z',
+              replies: [],
+            },
+            {
+              id: 'c-2',
+              transcript_id: 't-1',
+              created_by: 'user-a',
+              text: 'done',
+              resolved: true,
+              start_token_id: 'tok-c',
+              end_token_id: 'tok-c',
+              in_time: 2,
+              out_time: 3,
+              created_at: '2026-01-01T00:00:00Z',
+              replies: [],
+            },
+          ]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('Hello')).toHaveClass('decoration-violet-400')
+    expect(screen.getByText('again')).toHaveClass('decoration-slate-300')
+    expect(screen.getByText('world')).not.toHaveClass('decoration-violet-400')
+  })
 })

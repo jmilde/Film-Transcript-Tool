@@ -19,6 +19,7 @@ interface SelectionState {
   extend: (tokenId: string) => void
   finish: () => void
   clear: () => void
+  setRange: (transcriptId: string, anchorTokenId: string, focusTokenId: string) => void
 }
 
 export const useSelectionStore = create<SelectionState>((set) => ({
@@ -33,4 +34,8 @@ export const useSelectionStore = create<SelectionState>((set) => ({
     set((s) => (s.isSelecting && s.range ? { range: { ...s.range, focusTokenId: tokenId } } : s)),
   finish: () => set({ isSelecting: false }),
   clear: () => set({ range: null, isSelecting: false }),
+  // Directly sets a range without entering drag-selection mode — used to
+  // jump to and highlight a comment's anchored range from the comments panel.
+  setRange: (transcriptId, anchorTokenId, focusTokenId) =>
+    set({ range: { transcriptId, anchorTokenId, focusTokenId }, isSelecting: false }),
 }))

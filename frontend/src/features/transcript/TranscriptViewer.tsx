@@ -7,14 +7,17 @@ import {
   useMergeTokens,
   useSplitToken,
 } from '../../api/hooks/useTokens'
+import { useCreateComment } from '../../api/hooks/useComments'
 import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Token, Transcript } from '../../api/hooks/useTranscripts'
+import type { Comment } from '../../api/hooks/useComments'
 
 interface TranscriptViewerProps {
   transcript: Transcript | undefined
   speakers: Speaker[] | undefined
+  comments?: Comment[] | undefined
   isLoading: boolean
   onSeekToken: (seconds: number) => void
   onPlaySelection: (startTime: number, endTime: number) => void
@@ -26,11 +29,14 @@ interface TranscriptViewerProps {
  * it into view. Clicking a token seeks the video there; dragging across
  * tokens selects a range, showing its text/timecodes and play/copy/merge/
  * delete actions. Double-clicking a token edits its text inline — clearing it
- * deletes the token, typing a space splits it into multiple tokens.
+ * deletes the token, typing a space splits it into multiple tokens. Ranges
+ * covered by a comment are underlined (violet while unresolved, gray once
+ * resolved); selecting a range offers a Comment action alongside Merge/Delete.
  */
 export function TranscriptViewer({
   transcript,
   speakers,
+  comments,
   isLoading,
   onSeekToken,
   onPlaySelection,
@@ -50,10 +56,12 @@ export function TranscriptViewer({
   const deleteTokens = useDeleteTokens(transcriptId)
   const mergeTokens = useMergeTokens(transcriptId)
   const splitToken = useSplitToken(transcriptId)
+  const createComment = useCreateComment(transcriptId)
 
   const [editingTokenId, setEditingTokenId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
   const [mergeDraft, setMergeDraft] = useState<string | null>(null)
+  const [commentDraft, setCommentDraft] = useState<string | null>(null)
 
   const speakerNames = useMemo(() => {
     const map = new Map<string, string>()
@@ -106,6 +114,27 @@ export function TranscriptViewer({
   const canMerge =
     selectedTokens.length >= 2 &&
     selectedTokens.every((t) => t.segment_id === selectedTokens[0].segment_id)
+
+  // Which tokens fall inside a comment's anchored range, and whether the
+  // "strongest" (most recently unresolved) covering comment is resolved —
+  // drives the underline shown under commented text.
+  const commentedTokenInfo = useMemo(() => {
+    const map = new Map<string, { resolved: boolean }>()
+    for (const comment of comments ?? []) {
+      const a = tokenIndex.get(comment.start_token_id)
+      const b = tokenIndex.get(comment.end_token_id)
+      if (a === undefined || b === undefined) continue
+      const [lo, hi] = a <= b ? [a, b] : [b, a]
+      for (let i = lo; i <= hi; i++) {
+        const token = flatTokens[i]
+        const existing = map.get(token.id)
+        if (!existing || (existing.resolved && !comment.resolved)) {
+          map.set(token.id, { resolved: comment.resolved })
+        }
+      }
+    }
+    return map
+  }, [comments, tokenIndex, flatTokens])
 
   // Tracks the drag gesture: a plain click (no movement onto another token)
   // seeks; movement onto a second token starts a range selection instead.
@@ -192,6 +221,7 @@ export function TranscriptViewer({
 
   function beginEdit(token: Token) {
     setMergeDraft(null)
+    setCommentDraft(null)
     setEditingTokenId(token.id)
     setEditingText(token.text)
   }
@@ -200,6 +230,17 @@ export function TranscriptViewer({
     if (mergeDraft === null || mergeDraft.trim() === '') return
     mergeTokens.mutate({ tokenIds: selectedTokens.map((t) => t.id), text: mergeDraft.trim() })
     setMergeDraft(null)
+    clearSelection()
+  }
+
+  function confirmComment() {
+    if (commentDraft === null || commentDraft.trim() === '' || selectedTokens.length === 0) return
+    createComment.mutate({
+      startTokenId: selectedTokens[0].id,
+      endTokenId: selectedTokens[selectedTokens.length - 1].id,
+      text: commentDraft.trim(),
+    })
+    setCommentDraft(null)
     clearSelection()
   }
 
@@ -250,6 +291,34 @@ export function TranscriptViewer({
               Cancel
             </button>
           </div>
+        ) : commentDraft !== null ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-violet-100 bg-violet-50 px-4 py-2 text-xs text-slate-600">
+            <span className="text-slate-500">Comment:</span>
+            <input
+              autoFocus
+              value={commentDraft}
+              onChange={(e) => setCommentDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmComment()
+                if (e.key === 'Escape') setCommentDraft(null)
+              }}
+              className="min-w-48 flex-1 rounded border border-violet-400 px-1 py-0.5"
+            />
+            <button
+              type="button"
+              className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700"
+              onClick={confirmComment}
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
+              onClick={() => setCommentDraft(null)}
+            >
+              Cancel
+            </button>
+          </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
             <span className="font-mono">
@@ -281,6 +350,13 @@ export function TranscriptViewer({
             )}
             <button
               type="button"
+              className="rounded border border-violet-300 px-2 py-1 text-violet-700 hover:bg-violet-50"
+              onClick={() => setCommentDraft('')}
+            >
+              Comment
+            </button>
+            <button
+              type="button"
               className="rounded border border-red-300 px-2 py-1 text-red-600 hover:bg-red-50"
               onClick={deleteSelection}
             >
@@ -306,40 +382,48 @@ export function TranscriptViewer({
                 : 'Unknown speaker'}
             </div>
             <p className="leading-relaxed text-slate-800">
-              {segment.tokens.map((token) =>
-                token.id === editingTokenId ? (
-                  <input
-                    key={token.id}
-                    autoFocus
-                    value={editingText}
-                    onChange={(e) => setEditingText(e.target.value)}
-                    onBlur={commitEdit}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitEdit()
-                      if (e.key === 'Escape') setEditingTokenId(null)
-                    }}
-                    style={{ width: `${Math.max(editingText.length, 3)}ch` }}
-                    className="rounded border border-sky-400 px-0.5 text-slate-800"
-                  />
-                ) : (
+              {segment.tokens.map((token) => {
+                if (token.id === editingTokenId) {
+                  return (
+                    <input
+                      key={token.id}
+                      autoFocus
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      onBlur={commitEdit}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitEdit()
+                        if (e.key === 'Escape') setEditingTokenId(null)
+                      }}
+                      style={{ width: `${Math.max(editingText.length, 3)}ch` }}
+                      className="rounded border border-sky-400 px-0.5 text-slate-800"
+                    />
+                  )
+                }
+                const bg = selectedIds.has(token.id)
+                  ? 'bg-sky-200'
+                  : token.id === activeTokenId
+                    ? 'bg-amber-200'
+                    : 'hover:bg-slate-100'
+                const comment = commentedTokenInfo.get(token.id)
+                const decoration = comment
+                  ? comment.resolved
+                    ? 'underline decoration-slate-300 decoration-2 underline-offset-2'
+                    : 'underline decoration-violet-400 decoration-2 underline-offset-2'
+                  : ''
+                return (
                   <span
                     key={token.id}
                     ref={token.id === activeTokenId ? activeRef : undefined}
                     onMouseDown={() => handleTokenMouseDown(token)}
                     onMouseEnter={() => handleTokenMouseEnter(token)}
                     onDoubleClick={() => beginEdit(token)}
-                    className={
-                      selectedIds.has(token.id)
-                        ? 'cursor-pointer rounded bg-sky-200 px-0.5'
-                        : token.id === activeTokenId
-                          ? 'cursor-pointer rounded bg-amber-200 px-0.5'
-                          : 'cursor-pointer rounded px-0.5 hover:bg-slate-100'
-                    }
+                    className={`cursor-pointer rounded px-0.5 ${bg} ${decoration}`}
                   >
                     {token.text}{' '}
                   </span>
-                ),
-              )}
+                )
+              })}
             </p>
           </div>
         ))}

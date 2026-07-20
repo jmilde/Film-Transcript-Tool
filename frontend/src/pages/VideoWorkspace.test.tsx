@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
+import { AuthProvider } from '../auth/AuthProvider'
 import { VideoWorkspace } from './VideoWorkspace'
 
 const VIDEO_ID = '00000000-0000-0000-0000-0000000000v1'
@@ -17,7 +18,9 @@ function renderWorkspace() {
   })
   return render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={router} />
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
     </QueryClientProvider>,
   )
 }
@@ -101,6 +104,9 @@ function handlers() {
           },
         ],
       }),
+    ),
+    http.get(`http://localhost:8000/transcripts/${TRANSCRIPT_ID}/comments`, () =>
+      HttpResponse.json([]),
     ),
   )
 }

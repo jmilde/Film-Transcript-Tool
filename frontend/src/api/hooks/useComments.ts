@@ -1,0 +1,73 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, unwrap } from '../client'
+import type { components } from '../schema'
+
+export type Comment = components['schemas']['CommentRead']
+
+/** All comment threads (with replies) anchored to ranges in a transcript. */
+export function useComments(transcriptId: string | null) {
+  return useQuery({
+    queryKey: ['comments', transcriptId],
+    enabled: transcriptId !== null,
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/transcripts/{transcript_id}/comments', {
+          params: { path: { transcript_id: transcriptId as string } },
+        }),
+      ),
+  })
+}
+
+function useInvalidateComments(transcriptId: string) {
+  const client = useQueryClient()
+  return () => void client.invalidateQueries({ queryKey: ['comments', transcriptId] })
+}
+
+/** Create a comment thread anchored to a token range (`POST /transcripts/{id}/comments`). */
+export function useCreateComment(transcriptId: string) {
+  const invalidate = useInvalidateComments(transcriptId)
+  return useMutation({
+    mutationFn: async (input: { startTokenId: string; endTokenId: string; text: string }) =>
+      unwrap(
+        await api.POST('/transcripts/{transcript_id}/comments', {
+          params: { path: { transcript_id: transcriptId } },
+          body: {
+            start_token_id: input.startTokenId,
+            end_token_id: input.endTokenId,
+            text: input.text,
+          },
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}
+
+/** Reply to a comment thread (`POST /comments/{id}/replies`). */
+export function useReplyToComment(transcriptId: string) {
+  const invalidate = useInvalidateComments(transcriptId)
+  return useMutation({
+    mutationFn: async (input: { commentId: string; text: string }) =>
+      unwrap(
+        await api.POST('/comments/{comment_id}/replies', {
+          params: { path: { comment_id: input.commentId } },
+          body: { text: input.text },
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}
+
+/** Resolve or reopen a comment thread (`PATCH /comments/{id}`). */
+export function useResolveComment(transcriptId: string) {
+  const invalidate = useInvalidateComments(transcriptId)
+  return useMutation({
+    mutationFn: async (input: { commentId: string; resolved: boolean }) =>
+      unwrap(
+        await api.PATCH('/comments/{comment_id}', {
+          params: { path: { comment_id: input.commentId } },
+          body: { resolved: input.resolved },
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}

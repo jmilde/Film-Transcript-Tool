@@ -5,10 +5,12 @@ import { useVideo } from '../api/hooks/useVideos'
 import { proxyUrl, useMediaToken, useWaveform } from '../api/hooks/useMedia'
 import { useSpeakers } from '../api/hooks/useSpeakers'
 import { useTranscript, useTranscripts } from '../api/hooks/useTranscripts'
+import { useComments } from '../api/hooks/useComments'
 import { usePlaybackStore } from '../store/playback'
 import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
+import { CommentsPanel } from '../features/comments/CommentsPanel'
 
 export function VideoWorkspace() {
   const { videoId } = useParams<{ videoId: string }>()
@@ -44,6 +46,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     return (transcripts.find((t) => t.type === 'original') ?? transcripts[0]).id
   }, [transcripts])
   const { data: transcript, isLoading: transcriptLoading } = useTranscript(transcriptId)
+  const { data: comments, isLoading: commentsLoading } = useComments(transcriptId)
 
   function seek(seconds: number) {
     if (videoRef.current) videoRef.current.currentTime = seconds
@@ -76,6 +79,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
           <TranscriptViewer
             transcript={transcript}
             speakers={speakers}
+            comments={comments}
             isLoading={transcriptId !== null && transcriptLoading}
             onSeekToken={seek}
             onPlaySelection={playSelection}
@@ -83,7 +87,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
         </Panel>
         <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
         <Panel defaultSize="45" minSize="25">
-          <div className="space-y-3 p-4">
+          <div className="h-full space-y-3 overflow-y-auto p-4">
             {src ? (
               <VideoPlayer src={src} videoRef={videoRef} />
             ) : (
@@ -92,6 +96,12 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               </div>
             )}
             {waveform.data && <Waveform peaks={waveform.data.peaks} onSeek={seek} />}
+            <CommentsPanel
+              transcriptId={transcriptId}
+              comments={comments}
+              isLoading={transcriptId !== null && commentsLoading}
+              onLocate={seek}
+            />
           </div>
         </Panel>
       </Group>
