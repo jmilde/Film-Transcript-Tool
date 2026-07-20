@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useLocation, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useVideo } from '../api/hooks/useVideos'
 import { proxyUrl, useMediaToken, useWaveform } from '../api/hooks/useMedia'
@@ -7,10 +7,12 @@ import { useSpeakers } from '../api/hooks/useSpeakers'
 import { useTranscript, useTranscripts } from '../api/hooks/useTranscripts'
 import { useComments } from '../api/hooks/useComments'
 import { usePlaybackStore } from '../store/playback'
+import { useSelectionStore } from '../store/selection'
 import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 import { CommentsPanel } from '../features/comments/CommentsPanel'
+import type { SearchResult } from '../api/hooks/useSearch'
 
 export function VideoWorkspace() {
   const { videoId } = useParams<{ videoId: string }>()
@@ -27,6 +29,14 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const resetPlayback = usePlaybackStore((s) => s.reset)
   const currentTime = usePlaybackStore((s) => s.currentTime)
+  const setSelectionRange = useSelectionStore((s) => s.setRange)
+
+  // Set via navigate(..., { state }) when arriving from a search result
+  // (SearchOverlay). Applied once below, after the transcript/comments it
+  // targets have loaded.
+  const location = useLocation()
+  const pendingSearch = location.state as SearchResult | null
+  const appliedSearchRef = useRef(false)
 
   // Reset playback state when switching videos.
   useEffect(() => resetPlayback, [videoId, resetPlayback])
@@ -58,6 +68,33 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     selectionEndRef.current = endTime
     void videoRef.current.play()
   }
+
+  // Applies a pending search-result navigation: seek to it and highlight its
+  // range. Transcript-kind results carry their own token id/time directly;
+  // comment-kind results only carry the comment id, so its anchor range is
+  // looked up from the loaded comments once they arrive. Speaker-kind results
+  // have no timecode or range — arriving at the video is enough.
+  useEffect(() => {
+    if (!pendingSearch || appliedSearchRef.current) return
+    if (
+      pendingSearch.kind === 'transcript' &&
+      pendingSearch.transcript_id &&
+      pendingSearch.start_time !== null
+    ) {
+      appliedSearchRef.current = true
+      seek(pendingSearch.start_time)
+      setSelectionRange(pendingSearch.transcript_id, pendingSearch.id, pendingSearch.id)
+    } else if (pendingSearch.kind === 'comment' && comments) {
+      const comment = comments.find((c) => c.id === pendingSearch.id)
+      if (comment) {
+        appliedSearchRef.current = true
+        seek(comment.in_time)
+        setSelectionRange(comment.transcript_id, comment.start_token_id, comment.end_token_id)
+      }
+    } else if (pendingSearch.kind === 'speaker') {
+      appliedSearchRef.current = true
+    }
+  }, [pendingSearch, comments, setSelectionRange])
 
   const src = media ? proxyUrl(videoId, media.token) : undefined
 

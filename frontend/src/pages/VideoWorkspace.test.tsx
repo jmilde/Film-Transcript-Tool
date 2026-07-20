@@ -2,19 +2,25 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { server } from '../test/server'
 import { AuthProvider } from '../auth/AuthProvider'
+import { useSelectionStore } from '../store/selection'
 import { VideoWorkspace } from './VideoWorkspace'
+import type { SearchResult } from '../api/hooks/useSearch'
 
 const VIDEO_ID = '00000000-0000-0000-0000-0000000000v1'
 const TRANSCRIPT_ID = '00000000-0000-0000-0000-0000000000t1'
 const SPEAKER_ID = '00000000-0000-0000-0000-0000000000s1'
 
-function renderWorkspace() {
+beforeEach(() => {
+  useSelectionStore.getState().clear()
+})
+
+function renderWorkspace(searchResult?: SearchResult) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([{ path: '/videos/:videoId', element: <VideoWorkspace /> }], {
-    initialEntries: [`/videos/${VIDEO_ID}`],
+    initialEntries: [{ pathname: `/videos/${VIDEO_ID}`, state: searchResult ?? null }],
   })
   return render(
     <QueryClientProvider client={client}>
@@ -194,5 +200,71 @@ describe('VideoWorkspace', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
 
     expect(await screen.findByText('earth', { exact: false })).toBeInTheDocument()
+  })
+
+  it('highlights the matched token for a pending transcript search result', async () => {
+    handlers()
+    const tokenId = '00000000-0000-0000-0000-0000000000k2'
+    renderWorkspace({
+      kind: 'transcript',
+      id: tokenId,
+      video_id: VIDEO_ID,
+      transcript_id: TRANSCRIPT_ID,
+      text: 'world',
+      start_time: 1,
+      rank: 1,
+    })
+
+    await screen.findByText('Hello', { exact: false })
+
+    await waitFor(() => {
+      expect(useSelectionStore.getState().range).toEqual({
+        transcriptId: TRANSCRIPT_ID,
+        anchorTokenId: tokenId,
+        focusTokenId: tokenId,
+      })
+    })
+  })
+
+  it('resolves a pending comment search result against the loaded comment range', async () => {
+    handlers()
+    server.use(
+      http.get(`http://localhost:8000/transcripts/${TRANSCRIPT_ID}/comments`, () =>
+        HttpResponse.json([
+          {
+            id: 'comment-1',
+            transcript_id: TRANSCRIPT_ID,
+            created_by: 'user-a',
+            text: 'Check this',
+            resolved: false,
+            start_token_id: '00000000-0000-0000-0000-0000000000k1',
+            end_token_id: '00000000-0000-0000-0000-0000000000k2',
+            in_time: 0,
+            out_time: 2,
+            created_at: '2026-01-01T00:00:00Z',
+            replies: [],
+          },
+        ]),
+      ),
+    )
+    renderWorkspace({
+      kind: 'comment',
+      id: 'comment-1',
+      video_id: VIDEO_ID,
+      transcript_id: TRANSCRIPT_ID,
+      text: 'Check this',
+      start_time: 0,
+      rank: 1,
+    })
+
+    await screen.findByText('Hello')
+
+    await waitFor(() => {
+      expect(useSelectionStore.getState().range).toEqual({
+        transcriptId: TRANSCRIPT_ID,
+        anchorTokenId: '00000000-0000-0000-0000-0000000000k1',
+        focusTokenId: '00000000-0000-0000-0000-0000000000k2',
+      })
+    })
   })
 })
