@@ -58,3 +58,21 @@ export function useUploadVideo(folderId: string) {
     onSuccess: () => client.invalidateQueries({ queryKey: ['folder', folderId] }),
   })
 }
+
+/** Move a video into a different folder (e.g. drag-and-drop in the folder view). */
+export function useMoveVideo() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { videoId: string; folderId: string; fromFolderId: string }) =>
+      unwrap(
+        await api.PATCH('/videos/{video_id}', {
+          params: { path: { video_id: input.videoId } },
+          body: { folder_id: input.folderId },
+        }),
+      ),
+    onSuccess: (_data, input) => {
+      void client.invalidateQueries({ queryKey: ['folder', input.fromFolderId] })
+      void client.invalidateQueries({ queryKey: ['folder', input.folderId] })
+    },
+  })
+}

@@ -132,7 +132,8 @@ export interface paths {
         delete: operations["delete_video_videos__video_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Video */
+        patch: operations["update_video_videos__video_id__patch"];
         trace?: never;
     };
     "/videos/{video_id}/media-token": {
@@ -1047,6 +1048,11 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** VideoUpdate */
+        VideoUpdate: {
+            /** Folder Id */
+            folder_id?: string | null;
+        };
         /** VideoUploadResponse */
         VideoUploadResponse: {
             /**
@@ -1454,6 +1460,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_video_videos__video_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoRead"];
+                };
             };
             /** @description Validation Error */
             422: {

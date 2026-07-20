@@ -76,7 +76,7 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
             <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
               Folders
             </span>
-            <NewRootFolder projectId={projectId} />
+            <NewFolder projectId={projectId} parentFolderId={selectedFolderId} />
           </div>
           <FolderTree
             projectId={projectId}
@@ -86,18 +86,26 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
         </aside>
 
         <section>
-          <FolderPanel
-            projectId={projectId}
-            folderId={selectedFolderId}
-            onSelectFolder={setSelectedFolderId}
-          />
+          <FolderPanel folderId={selectedFolderId} onSelectFolder={setSelectedFolderId} />
         </section>
       </div>
     </div>
   )
 }
 
-function NewRootFolder({ projectId }: { projectId: string }) {
+/**
+ * Creates a folder inside whichever folder is currently selected in the tree
+ * (root if none is selected — clicking empty space in the tree deselects).
+ * This is the only place folders can be created; the folder panel to the
+ * right no longer offers it.
+ */
+function NewFolder({
+  projectId,
+  parentFolderId,
+}: {
+  projectId: string
+  parentFolderId: string | null
+}) {
   const createFolder = useCreateFolder(projectId)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -106,7 +114,7 @@ function NewRootFolder({ projectId }: { projectId: string }) {
     event.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) return
-    await createFolder.mutateAsync({ name: trimmed, parentFolderId: null })
+    await createFolder.mutateAsync({ name: trimmed, parentFolderId })
     setName('')
     setOpen(false)
   }
@@ -115,7 +123,7 @@ function NewRootFolder({ projectId }: { projectId: string }) {
     return (
       <button
         type="button"
-        aria-label="New root folder"
+        aria-label="New folder"
         onClick={() => setOpen(true)}
         className="rounded px-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
       >

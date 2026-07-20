@@ -26,6 +26,7 @@ from app.schemas.video import (
     VideoAssetRead,
     VideoJobRead,
     VideoRead,
+    VideoUpdate,
     VideoUploadResponse,
 )
 from app.services.pipeline import FIRST_STAGE
@@ -43,6 +44,31 @@ def _find_asset(db: Session, video_id: uuid.UUID, asset_type: AssetType) -> Vide
         )
         .scalars()
         .first()
+    )
+
+
+def _video_read(db: Session, video: Video) -> VideoRead:
+    assets = db.execute(select(VideoAsset).where(VideoAsset.video_id == video.id)).scalars().all()
+    jobs = (
+        db.execute(
+            select(ProcessingJob)
+            .where(ProcessingJob.video_id == video.id)
+            .order_by(ProcessingJob.created_at)
+        )
+        .scalars()
+        .all()
+    )
+    return VideoRead(
+        id=video.id,
+        folder_id=video.folder_id,
+        name=video.name,
+        original_filename=video.original_filename,
+        duration=video.duration,
+        frame_rate=video.frame_rate,
+        width=video.width,
+        height=video.height,
+        assets=[VideoAssetRead.model_validate(a) for a in assets],
+        jobs=[VideoJobRead.model_validate(j) for j in jobs],
     )
 
 
@@ -103,28 +129,25 @@ def get_video(
     video: Video = Depends(require_video_access),
     db: Session = Depends(get_db),
 ) -> VideoRead:
-    assets = db.execute(select(VideoAsset).where(VideoAsset.video_id == video.id)).scalars().all()
-    jobs = (
-        db.execute(
-            select(ProcessingJob)
-            .where(ProcessingJob.video_id == video.id)
-            .order_by(ProcessingJob.created_at)
-        )
-        .scalars()
-        .all()
-    )
-    return VideoRead(
-        id=video.id,
-        folder_id=video.folder_id,
-        name=video.name,
-        original_filename=video.original_filename,
-        duration=video.duration,
-        frame_rate=video.frame_rate,
-        width=video.width,
-        height=video.height,
-        assets=[VideoAssetRead.model_validate(a) for a in assets],
-        jobs=[VideoJobRead.model_validate(j) for j in jobs],
-    )
+    return _video_read(db, video)
+
+
+@router.patch("/videos/{video_id}", response_model=VideoRead)
+def update_video(
+    payload: VideoUpdate,
+    video: Video = Depends(require_video_access),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> VideoRead:
+    if "folder_id" in payload.model_fields_set and payload.folder_id is not None:
+        folder = db.get(Folder, payload.folder_id)
+        if folder is None or folder.project_id != video.project_id:
+            raise BadRequestError("folder_id does not belong to this project")
+        video.folder_id = folder.id
+    video.updated_by = user.id
+    db.commit()
+    db.refresh(video)
+    return _video_read(db, video)
 
 
 @router.get("/videos/{video_id}/media-token", response_model=MediaTokenResponse)

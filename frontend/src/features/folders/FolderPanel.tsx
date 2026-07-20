@@ -1,16 +1,20 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
-import { useCreateFolder, useFolderContents } from '../../api/hooks/useFolders'
+import { useRef, useState, type DragEvent, type MouseEvent } from 'react'
+import { useNavigate } from 'react-router'
+import { useFolderContents } from '../../api/hooks/useFolders'
 import { useUploadVideo, useVideoProcessing } from '../../api/hooks/useVideos'
+import { FolderIcon, VideoIcon } from '../../components/icons'
+import { VIDEO_DND_TYPE } from './FolderTree'
 
 interface PanelProps {
-  projectId: string
   folderId: string | null
   onSelectFolder: (folderId: string) => void
 }
 
-/** Contents of the selected folder: subfolders, videos, and create/upload actions. */
-export function FolderPanel({ projectId, folderId, onSelectFolder }: PanelProps) {
+/** Contents of the selected folder: subfolders and videos in one Explorer-style
+ * list (folders first, alphabetical, then videos), plus the upload action.
+ * Folder creation lives only in the folder tree to the left.
+ */
+export function FolderPanel({ folderId, onSelectFolder }: PanelProps) {
   if (folderId === null) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-slate-500">
@@ -18,137 +22,130 @@ export function FolderPanel({ projectId, folderId, onSelectFolder }: PanelProps)
       </div>
     )
   }
-  // Remount on folder change so per-folder UI state (upload tracking) resets.
-  return (
-    <FolderPanelInner
-      key={folderId}
-      projectId={projectId}
-      folderId={folderId}
-      onSelectFolder={onSelectFolder}
-    />
-  )
+  // Remount on folder change so per-folder UI state (selection, upload tracking) resets.
+  return <FolderPanelInner key={folderId} folderId={folderId} onSelectFolder={onSelectFolder} />
 }
 
 function FolderPanelInner({
-  projectId,
   folderId,
   onSelectFolder,
 }: {
-  projectId: string
   folderId: string
   onSelectFolder: (folderId: string) => void
 }) {
   const { data, isPending, isError } = useFolderContents(folderId)
   // Videos uploaded in this session, tracked for live processing status.
   const [uploaded, setUploaded] = useState<string[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const lastClickedRef = useRef<string | null>(null)
+  const navigate = useNavigate()
 
   if (isPending) return <p className="text-slate-500">Loading…</p>
   if (isError) return <p className="text-red-600">Could not load this folder.</p>
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-slate-800">{data.folder.name}</h3>
-        <div className="flex items-center gap-2">
-          <NewFolderForm projectId={projectId} parentFolderId={folderId} />
-          <UploadVideo folderId={folderId} onUploaded={(id) => setUploaded((v) => [...v, id])} />
-        </div>
-      </div>
+  const videos = data.videos
+  const folders = data.folders
 
-      {data.folders.length > 0 && (
-        <div>
-          <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-            Folders
-          </h4>
-          <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-            {data.folders.map((f) => (
-              <li key={f.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelectFolder(f.id)}
-                  className="w-full px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50"
-                >
-                  {f.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div>
-        <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Videos</h4>
-        {data.videos.length === 0 ? (
-          <p className="text-sm text-slate-500">No videos in this folder yet.</p>
-        ) : (
-          <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-            {data.videos.map((v) => (
-              <li key={v.id} className="flex items-center justify-between px-4 py-2.5">
-                <Link
-                  to={`/videos/${v.id}`}
-                  className="truncate text-slate-800 hover:text-slate-950 hover:underline"
-                >
-                  {v.name}
-                </Link>
-                {uploaded.includes(v.id) && <ProcessingBadge videoId={v.id} />}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function NewFolderForm({
-  projectId,
-  parentFolderId,
-}: {
-  projectId: string
-  parentFolderId: string | null
-}) {
-  const createFolder = useCreateFolder(projectId)
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    const trimmed = name.trim()
-    if (!trimmed) return
-    await createFolder.mutateAsync({ name: trimmed, parentFolderId })
-    setName('')
-    setOpen(false)
+  function handleVideoClick(e: MouseEvent, videoId: string) {
+    if (e.shiftKey && lastClickedRef.current !== null) {
+      const ids = videos.map((v) => v.id)
+      const from = ids.indexOf(lastClickedRef.current as string)
+      const to = ids.indexOf(videoId)
+      if (from !== -1 && to !== -1) {
+        const [lo, hi] = from < to ? [from, to] : [to, from]
+        setSelected(new Set(ids.slice(lo, hi + 1)))
+        return
+      }
+    }
+    if (e.metaKey || e.ctrlKey) {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        if (next.has(videoId)) next.delete(videoId)
+        else next.add(videoId)
+        return next
+      })
+    } else {
+      setSelected(new Set([videoId]))
+    }
+    lastClickedRef.current = videoId
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
-      >
-        New folder
-      </button>
+  function handleVideoDragStart(e: DragEvent, videoId: string) {
+    // Dragging an item outside the current selection drags just that item,
+    // matching Explorer/Finder: it becomes the new (single) selection.
+    const ids = selected.has(videoId) ? Array.from(selected) : [videoId]
+    if (!selected.has(videoId)) setSelected(new Set([videoId]))
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData(
+      VIDEO_DND_TYPE,
+      JSON.stringify({ videoIds: ids, fromFolderId: folderId }),
     )
   }
 
+  function handleVideoDrop(e: DragEvent) {
+    // Dropping selected videos back onto their own folder's list is a no-op;
+    // cross-folder drops happen on FolderTree nodes, not here.
+    e.preventDefault()
+  }
+
   return (
-    <form onSubmit={onSubmit} className="flex gap-2">
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Folder name"
-        className="rounded border border-slate-300 px-2 py-1.5 text-sm"
-      />
-      <button
-        type="submit"
-        disabled={createFolder.isPending}
-        className="rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-      >
-        Add
-      </button>
-    </form>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold text-slate-800">{data.folder.name}</h3>
+        <UploadVideo folderId={folderId} onUploaded={(id) => setUploaded((v) => [...v, id])} />
+      </div>
+
+      {folders.length === 0 && videos.length === 0 ? (
+        <p className="text-sm text-slate-500">This folder is empty.</p>
+      ) : (
+        <ul
+          className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white"
+          onClick={() => setSelected(new Set())}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes(VIDEO_DND_TYPE)) e.preventDefault()
+          }}
+          onDrop={handleVideoDrop}
+        >
+          {folders.map((f) => (
+            <li key={f.id}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelectFolder(f.id)
+                }}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50"
+              >
+                <FolderIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="truncate">{f.name}</span>
+              </button>
+            </li>
+          ))}
+          {videos.map((v) => (
+            <li
+              key={v.id}
+              draggable
+              onDragStart={(e) => handleVideoDragStart(e, v.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleVideoClick(e, v.id)
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                void navigate(`/videos/${v.id}`)
+              }}
+              className={`flex cursor-default items-center gap-2 px-4 py-2.5 ${
+                selected.has(v.id) ? 'bg-slate-200' : 'hover:bg-slate-50'
+              }`}
+            >
+              <VideoIcon className="h-4 w-4 shrink-0 text-slate-400" />
+              <span className="flex-1 truncate text-slate-800">{v.name}</span>
+              {uploaded.includes(v.id) && <ProcessingBadge videoId={v.id} />}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 

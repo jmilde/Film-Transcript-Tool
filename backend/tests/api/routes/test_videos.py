@@ -118,6 +118,45 @@ def test_delete_video_cascades(
     assert not (tmp_path / "videos" / str(vid) / "original.mp4").exists()
 
 
+def test_move_video_to_another_folder(auth_client: TestClient, tmp_path: Path) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+    vid = auth_client.post(
+        f"/folders/{fid}/videos",
+        files={"file": ("clip.mp4", b"x", "video/mp4")},
+    ).json()["video_id"]
+    pid = auth_client.get(f"/folders/{fid}").json()["folder"]["project_id"]
+    other_folder = auth_client.post(f"/projects/{pid}/folders", json={"name": "Other"}).json()["id"]
+
+    resp = auth_client.patch(f"/videos/{vid}", json={"folder_id": other_folder})
+
+    assert resp.status_code == 200
+    assert resp.json()["folder_id"] == other_folder
+
+
+def test_move_video_rejects_foreign_folder(
+    auth_client: TestClient,
+    app_client: Callable[[User], TestClient],
+    other_user: User,
+    tmp_path: Path,
+) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+    vid = auth_client.post(
+        f"/folders/{fid}/videos",
+        files={"file": ("clip.mp4", b"x", "video/mp4")},
+    ).json()["video_id"]
+
+    other = app_client(other_user)
+    _use_tmp_storage(other, tmp_path)
+    foreign_folder = _make_folder(other)
+
+    resp = auth_client.patch(f"/videos/{vid}", json={"folder_id": foreign_folder})
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "BAD_REQUEST"
+
+
 def test_upload_non_member_forbidden(
     auth_client: TestClient,
     app_client: Callable[[User], TestClient],

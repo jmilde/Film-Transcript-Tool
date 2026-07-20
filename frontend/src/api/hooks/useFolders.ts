@@ -55,3 +55,29 @@ export function useCreateFolder(projectId: string) {
     },
   })
 }
+
+/** Move (reparent) a folder, e.g. via drag-and-drop in the folder tree. */
+export function useMoveFolder(projectId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      folderId: string
+      fromParentId: string | null
+      toParentId: string | null
+    }) =>
+      unwrap(
+        await api.PATCH('/folders/{folder_id}', {
+          params: { path: { folder_id: input.folderId } },
+          body: { parent_folder_id: input.toParentId },
+        }),
+      ),
+    onSuccess: (_data, input) => {
+      const invalidate = (parentId: string | null) =>
+        parentId === null
+          ? client.invalidateQueries({ queryKey: ['folders', projectId, 'root'] })
+          : client.invalidateQueries({ queryKey: ['folder', parentId] })
+      void invalidate(input.fromParentId)
+      void invalidate(input.toParentId)
+    },
+  })
+}

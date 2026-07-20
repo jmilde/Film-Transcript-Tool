@@ -46,6 +46,10 @@ class VideoUploadResponse(BaseModel):
     processing_job_id: uuid.UUID
 
 
+class VideoUpdate(BaseModel):
+    folder_id: uuid.UUID | None = None
+
+
 class MediaTokenResponse(BaseModel):
     token: str
     # Seconds until the token expires (clients re-fetch before playback resumes).

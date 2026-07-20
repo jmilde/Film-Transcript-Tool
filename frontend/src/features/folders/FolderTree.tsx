@@ -1,32 +1,95 @@
-import { useState } from 'react'
-import { useFolderContents, useRootFolders, type Folder } from '../../api/hooks/useFolders'
+import { useState, type DragEvent } from 'react'
+import {
+  useFolderContents,
+  useMoveFolder,
+  useRootFolders,
+  type Folder,
+} from '../../api/hooks/useFolders'
+import { useMoveVideo } from '../../api/hooks/useVideos'
+import { FolderIcon } from '../../components/icons'
+
+// Custom MIME types used to identify what's being dragged, since native HTML5
+// drag-and-drop only exposes payloads (not types) on drop, not dragover.
+const FOLDER_DND_TYPE = 'application/x-doculog-folder'
+export const VIDEO_DND_TYPE = 'application/x-doculog-videos'
+
+interface FolderDragPayload {
+  folderId: string
+  fromParentId: string | null
+}
+
+interface VideoDragPayload {
+  videoIds: string[]
+  fromFolderId: string
+}
 
 interface TreeProps {
   projectId: string
   selectedFolderId: string | null
-  onSelect: (folderId: string) => void
+  onSelect: (folderId: string | null) => void
 }
 
-/** Nested folder navigation for a project. Each node lazily loads its children. */
+/** Nested folder navigation for a project. Each node lazily loads its children.
+ *
+ * The only place folders can be created or reparented — clicking empty space
+ * deselects (so "New folder" targets the project root), and folders/videos can
+ * be dropped here to move them.
+ */
 export function FolderTree({ projectId, selectedFolderId, onSelect }: TreeProps) {
   const { data: roots, isPending, isError } = useRootFolders(projectId)
+  const moveFolder = useMoveFolder(projectId)
+  const moveVideo = useMoveVideo()
+  const [rootDragOver, setRootDragOver] = useState(false)
 
-  if (isPending) return <p className="px-2 py-1 text-sm text-slate-500">Loading folders…</p>
-  if (isError) return <p className="px-2 py-1 text-sm text-red-600">Could not load folders.</p>
-  if (roots.length === 0) return <p className="px-2 py-1 text-sm text-slate-500">No folders yet.</p>
+  function handleRootDragOver(e: DragEvent) {
+    if (!e.dataTransfer.types.includes(FOLDER_DND_TYPE)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setRootDragOver(true)
+  }
+
+  function handleRootDrop(e: DragEvent) {
+    e.preventDefault()
+    setRootDragOver(false)
+    const raw = e.dataTransfer.getData(FOLDER_DND_TYPE)
+    if (!raw) return
+    const payload = JSON.parse(raw) as FolderDragPayload
+    if (payload.fromParentId !== null) {
+      moveFolder.mutate({
+        folderId: payload.folderId,
+        fromParentId: payload.fromParentId,
+        toParentId: null,
+      })
+    }
+  }
 
   return (
-    <ul className="text-sm">
-      {roots.map((folder) => (
-        <FolderTreeNode
-          key={folder.id}
-          folder={folder}
-          depth={0}
-          selectedFolderId={selectedFolderId}
-          onSelect={onSelect}
-        />
-      ))}
-    </ul>
+    <div
+      className={`min-h-16 rounded text-sm ${rootDragOver ? 'bg-slate-100 ring-1 ring-inset ring-slate-400' : ''}`}
+      onClick={() => onSelect(null)}
+      onDragOver={handleRootDragOver}
+      onDragLeave={() => setRootDragOver(false)}
+      onDrop={handleRootDrop}
+    >
+      {isPending && <p className="px-2 py-1 text-slate-500">Loading folders…</p>}
+      {isError && <p className="px-2 py-1 text-red-600">Could not load folders.</p>}
+      {roots && roots.length === 0 && <p className="px-2 py-1 text-slate-500">No folders yet.</p>}
+      {roots && roots.length > 0 && (
+        <ul>
+          {roots.map((folder) => (
+            <FolderTreeNode
+              key={folder.id}
+              folder={folder}
+              depth={0}
+              selectedFolderId={selectedFolderId}
+              onSelect={onSelect}
+              moveFolder={moveFolder}
+              moveVideo={moveVideo}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -34,19 +97,93 @@ interface NodeProps {
   folder: Folder
   depth: number
   selectedFolderId: string | null
-  onSelect: (folderId: string) => void
+  onSelect: (folderId: string | null) => void
+  moveFolder: ReturnType<typeof useMoveFolder>
+  moveVideo: ReturnType<typeof useMoveVideo>
 }
 
-function FolderTreeNode({ folder, depth, selectedFolderId, onSelect }: NodeProps) {
+function FolderTreeNode({
+  folder,
+  depth,
+  selectedFolderId,
+  onSelect,
+  moveFolder,
+  moveVideo,
+}: NodeProps) {
   const [expanded, setExpanded] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   // Only fetch children once the node is opened.
   const { data } = useFolderContents(expanded ? folder.id : null)
   const isSelected = folder.id === selectedFolderId
 
+  function handleDragStart(e: DragEvent) {
+    e.stopPropagation()
+    e.dataTransfer.effectAllowed = 'move'
+    const payload: FolderDragPayload = {
+      folderId: folder.id,
+      fromParentId: folder.parent_folder_id,
+    }
+    e.dataTransfer.setData(FOLDER_DND_TYPE, JSON.stringify(payload))
+  }
+
+  function handleDragOver(e: DragEvent) {
+    if (
+      !e.dataTransfer.types.includes(FOLDER_DND_TYPE) &&
+      !e.dataTransfer.types.includes(VIDEO_DND_TYPE)
+    ) {
+      return
+    }
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOver(true)
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+
+    const folderRaw = e.dataTransfer.getData(FOLDER_DND_TYPE)
+    if (folderRaw) {
+      const payload = JSON.parse(folderRaw) as FolderDragPayload
+      if (payload.folderId !== folder.id) {
+        moveFolder.mutate({
+          folderId: payload.folderId,
+          fromParentId: payload.fromParentId,
+          toParentId: folder.id,
+        })
+      }
+      return
+    }
+
+    const videoRaw = e.dataTransfer.getData(VIDEO_DND_TYPE)
+    if (videoRaw) {
+      const payload = JSON.parse(videoRaw) as VideoDragPayload
+      if (payload.fromFolderId !== folder.id) {
+        for (const videoId of payload.videoIds) {
+          moveVideo.mutate({ videoId, folderId: folder.id, fromFolderId: payload.fromFolderId })
+        }
+      }
+    }
+  }
+
   return (
     <li>
       <div
-        className={`flex items-center rounded ${isSelected ? 'bg-slate-200' : 'hover:bg-slate-100'}`}
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={(e) => e.stopPropagation()}
+        className={`flex items-center rounded ${
+          isSelected
+            ? 'bg-slate-200'
+            : dragOver
+              ? 'bg-slate-100 ring-1 ring-inset ring-slate-400'
+              : 'hover:bg-slate-100'
+        }`}
         style={{ paddingLeft: depth * 14 }}
       >
         <button
@@ -57,6 +194,7 @@ function FolderTreeNode({ folder, depth, selectedFolderId, onSelect }: NodeProps
         >
           {expanded ? '▾' : '▸'}
         </button>
+        <FolderIcon className="mr-1 h-4 w-4 shrink-0 text-slate-400" />
         <button
           type="button"
           onClick={() => onSelect(folder.id)}
@@ -74,6 +212,8 @@ function FolderTreeNode({ folder, depth, selectedFolderId, onSelect }: NodeProps
               depth={depth + 1}
               selectedFolderId={selectedFolderId}
               onSelect={onSelect}
+              moveFolder={moveFolder}
+              moveVideo={moveVideo}
             />
           ))}
         </ul>
