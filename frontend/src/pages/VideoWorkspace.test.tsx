@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
@@ -119,5 +119,74 @@ describe('VideoWorkspace', () => {
 
     expect(await screen.findByText('Jordan')).toBeInTheDocument()
     expect(await screen.findByText('Hello', { exact: false })).toBeInTheDocument()
+  })
+
+  it('optimistically shows an edited token before the PATCH settles', async () => {
+    handlers()
+    const tokenId = '00000000-0000-0000-0000-0000000000k2'
+    const segmentId = '00000000-0000-0000-0000-0000000000g1'
+    // Stateful so a post-mutation refetch (triggered by invalidateQueries)
+    // reflects the edit too, instead of clobbering the optimistic update
+    // with stale data.
+    let currentText = 'world'
+    server.use(
+      http.get(`http://localhost:8000/transcripts/${TRANSCRIPT_ID}`, () =>
+        HttpResponse.json({
+          id: TRANSCRIPT_ID,
+          video_id: VIDEO_ID,
+          language: 'en',
+          type: 'original',
+          created_at: '2026-01-01T00:00:00Z',
+          segments: [
+            {
+              id: segmentId,
+              speaker_id: SPEAKER_ID,
+              tokens: [
+                {
+                  id: '00000000-0000-0000-0000-0000000000k1',
+                  segment_id: segmentId,
+                  original_text: 'Hello',
+                  edited_text: null,
+                  text: 'Hello',
+                  start_time: 0,
+                  end_time: 1,
+                },
+                {
+                  id: tokenId,
+                  segment_id: segmentId,
+                  original_text: 'world',
+                  edited_text: currentText === 'world' ? null : currentText,
+                  text: currentText,
+                  start_time: 1,
+                  end_time: 2,
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+      http.patch(`http://localhost:8000/tokens/${tokenId}`, async ({ request }) => {
+        const body = (await request.json()) as { edited_text: string | null }
+        currentText = body.edited_text ?? 'world'
+        return HttpResponse.json({
+          id: tokenId,
+          segment_id: segmentId,
+          original_text: 'world',
+          edited_text: body.edited_text,
+          text: currentText,
+          start_time: 1,
+          end_time: 2,
+        })
+      }),
+    )
+    renderWorkspace()
+
+    const worldToken = await screen.findByText('world', { exact: false })
+    fireEvent.dblClick(worldToken)
+    const input = screen.getByDisplayValue('world')
+    fireEvent.change(input, { target: { value: 'earth' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(await screen.findByText('earth', { exact: false })).toBeInTheDocument()
   })
 })

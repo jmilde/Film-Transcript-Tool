@@ -143,7 +143,10 @@ Toolchain note: used **Node 22 LTS** (via nvm `.nvmrc`), which the `npm create v
 - [x] Tests (`TranscriptViewer`: click-to-seek via mousedown/mouseup, drag-select shows text+timecodes, play-selection callback, clipboard copy, clear); full frontend gate green (typecheck, lint, 21 tests, build, format)
 
 ### F5 — Transcript editing (docs §12)
-- [ ] Single-token edit (`PATCH /tokens/{id}`), delete (soft), merge (`POST /tokens/merge`), split (`POST /tokens/{id}/split`) with optimistic update + query invalidation; Ctrl/Cmd+S save UX
+- [x] `api/hooks/useTokens.ts`: `useEditToken`/`useDeleteTokens`/`useMergeTokens`/`useSplitToken` mutations over `PATCH /tokens/{id}`, `DELETE /tokens/{id}` (batched per selected id), `POST /tokens/merge`, `POST /tokens/{id}/split`. A shared `useOptimisticTranscriptMutation` helper applies each edit to the cached `['transcript', id]` data in `onMutate` (rolling back in `onError`), then reconciles with the server via `invalidateQueries` in `onSettled`
+- [x] `TranscriptViewer`: double-click a token to edit its text inline; committing (Enter/blur/Ctrl-Cmd+S) clears it to delete, adds whitespace to split, otherwise edits; Escape cancels without a request. Selection toolbar (F4) gained Delete (any range) and Merge (same-segment ranges only, per the backend's cross-segment restriction) — Merge opens an inline confirm/cancel input pre-filled with the joined text
+- [x] Ctrl/Cmd+S always prevents the browser's save dialog and commits an in-progress edit, via a document keydown listener that reads the latest edit through a ref (avoids re-subscribing every render)
+- [x] Tests (`useTokens` exercised through `TranscriptViewer`: edit/escape-cancel/ctrl-s-commit/delete-via-clear/split-via-space/toolbar-delete/toolbar-merge, each asserting the exact request fired via MSW; one `VideoWorkspace` integration test proves the optimistic update renders before the request settles, with a stateful mock so the post-settle refetch doesn't clobber it); full frontend gate green (typecheck, lint, 29 tests, build, format)
 
 ### F6 — Comments (docs §13)
 - [ ] Threads anchored to ranges: create (`POST /transcripts/{id}/comments`), list with computed in/out timecodes, reply (`POST /comments/{id}/replies`), resolve (`PATCH /comments/{id}`)
