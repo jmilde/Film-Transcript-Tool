@@ -12,7 +12,7 @@ FRONTEND := frontend
 
 .DEFAULT_GOAL := help
 .PHONY: help install test test-all test-integration lint lint-fix format format-check typecheck check check-all \
-	openapi fe-install fe-dev fe-build fe-lint fe-test fe-check
+	run-backend run-worker openapi fe-install fe-dev run-frontend fe-build fe-lint fe-test fe-check
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -49,6 +49,12 @@ check: lint format-check typecheck test ## Full offline quality gate: lint + for
 
 check-all: lint format-check typecheck test-all ## Full quality gate INCLUDING live integration tests
 
+run-backend: ## Run the FastAPI dev server with autoreload (http://localhost:8000)
+	$(UV) run uvicorn app.main:app --reload
+
+run-worker: ## Run the job-queue worker (polls Postgres, runs FFmpeg/Deepgram/DeepL jobs)
+	$(UV) run python -m app.worker.runner
+
 # --- Frontend (needs Node 20+; with nvm run `nvm use` in frontend/ first) ---
 
 openapi: ## Regenerate the frontend typed API client from the backend OpenAPI schema
@@ -59,6 +65,8 @@ fe-install: ## Install frontend dependencies
 
 fe-dev: ## Run the frontend dev server (Vite)
 	cd $(FRONTEND) && npm run dev
+
+run-frontend: fe-dev ## Alias for fe-dev, to match run-backend/run-worker naming
 
 fe-build: ## Build the frontend for production
 	cd $(FRONTEND) && npm run build
