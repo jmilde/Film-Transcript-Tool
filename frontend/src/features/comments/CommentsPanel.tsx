@@ -49,6 +49,8 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
     setReplyDrafts((d) => ({ ...d, [commentId]: '' }))
   }
 
+  const sortedComments = comments && [...comments].sort((a, b) => a.in_time - b.in_time)
+
   return (
     <div className="space-y-2">
       <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Comments</h3>
@@ -61,7 +63,7 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
         </div>
       )}
 
-      {comments?.map((comment) => {
+      {sortedComments?.map((comment) => {
         const isOpen = openIds.has(comment.id)
         return (
           <div

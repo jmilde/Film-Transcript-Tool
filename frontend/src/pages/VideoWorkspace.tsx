@@ -14,6 +14,7 @@ import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 import { CommentsPanel } from '../features/comments/CommentsPanel'
 import { TranslationControl } from '../features/translation/TranslationControl'
 import { ExportControl } from '../features/export/ExportControl'
+import { CloseIcon } from '../components/icons'
 import type { SearchResult } from '../api/hooks/useSearch'
 
 export function VideoWorkspace() {
@@ -186,8 +187,17 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               </Panel>
               <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
               <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
-                <div className="border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
                   Translation ({secondTranscript?.language ?? '…'})
+                  <button
+                    type="button"
+                    aria-label="Close translation"
+                    title="Close translation"
+                    onClick={() => setSecondTranscriptId(null)}
+                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <CloseIcon className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <div className="min-h-0 flex-1">
                   <TranscriptViewer

@@ -10,6 +10,17 @@ import {
 import { useCreateComment } from '../../api/hooks/useComments'
 import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CloseIcon,
+  CommentIcon,
+  CopyIcon,
+  EditIcon,
+  PlayIcon,
+  SearchIcon,
+  TrashIcon,
+} from '../../components/icons'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Token, Transcript } from '../../api/hooks/useTranscripts'
 import type { Comment } from '../../api/hooks/useComments'
@@ -23,15 +34,24 @@ interface TranscriptViewerProps {
   onPlaySelection: (startTime: number, endTime: number) => void
 }
 
+interface SpeakerGroup {
+  key: string
+  speakerId: string | null
+  tokens: Token[]
+}
+
 /**
  * Renders a transcript's segments/speakers/tokens, highlighting the token
  * matching the current playback time and (when auto-follow is on) scrolling
- * it into view. Clicking a token seeks the video there; dragging across
- * tokens selects a range, showing its text/timecodes and play/copy/merge/
- * delete actions. Double-clicking a token edits its text inline — clearing it
+ * it into view. Consecutive segments spoken by the same speaker are grouped
+ * under a single speaker header, matching how the transcript reads out loud.
+ * Clicking a token seeks the video there; dragging across tokens selects a
+ * range, showing its text/timecodes and play/copy/edit/comment/delete
+ * actions. Double-clicking a token edits its text inline — clearing it
  * deletes the token, typing a space splits it into multiple tokens. Ranges
  * covered by a comment are underlined (violet while unresolved, gray once
- * resolved); selecting a range offers a Comment action alongside Merge/Delete.
+ * resolved). An inline search finds and steps through matches in this
+ * transcript.
  */
 export function TranscriptViewer({
   transcript,
@@ -63,6 +83,10 @@ export function TranscriptViewer({
   const [mergeDraft, setMergeDraft] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState<string | null>(null)
 
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [matchIndex, setMatchIndex] = useState(0)
+
   const speakerNames = useMemo(() => {
     const map = new Map<string, string>()
     for (const speaker of speakers ?? []) {
@@ -85,6 +109,22 @@ export function TranscriptViewer({
     flatTokens.forEach((token, i) => map.set(token.id, i))
     return map
   }, [flatTokens])
+
+  // Consecutive segments spoken by the same speaker are shown as one block
+  // with a single speaker header, rather than repeating it per segment.
+  const speakerGroups = useMemo<SpeakerGroup[]>(() => {
+    if (!transcript) return []
+    const groups: SpeakerGroup[] = []
+    for (const segment of transcript.segments) {
+      const last = groups[groups.length - 1]
+      if (last && last.speakerId === segment.speaker_id) {
+        last.tokens.push(...segment.tokens)
+      } else {
+        groups.push({ key: segment.id, speakerId: segment.speaker_id, tokens: [...segment.tokens] })
+      }
+    }
+    return groups
+  }, [transcript])
 
   const selectedIds = useMemo(() => {
     if (!transcript || !selectionRange || selectionRange.transcriptId !== transcript.id) {
@@ -135,6 +175,35 @@ export function TranscriptViewer({
     }
     return map
   }, [comments, tokenIndex, flatTokens])
+
+  // Tokens matching the in-transcript search query, in transcript order.
+  const searchMatches = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return []
+    return flatTokens.filter((t) => t.text.toLowerCase().includes(query))
+  }, [flatTokens, searchQuery])
+  const matchIds = useMemo(() => new Set(searchMatches.map((t) => t.id)), [searchMatches])
+  const currentMatch =
+    searchMatches.length > 0 ? searchMatches[matchIndex % searchMatches.length] : null
+
+  useEffect(() => setMatchIndex(0), [searchQuery])
+
+  const tokenRefs = useRef(new Map<string, HTMLSpanElement>())
+
+  useEffect(() => {
+    if (!currentMatch) return
+    tokenRefs.current.get(currentMatch.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [currentMatch])
+
+  function stepMatch(direction: 1 | -1) {
+    if (searchMatches.length === 0) return
+    setMatchIndex((i) => (i + direction + searchMatches.length) % searchMatches.length)
+  }
+
+  function closeSearch() {
+    setSearchOpen(false)
+    setSearchQuery('')
+  }
 
   // Tracks the drag gesture: a plain click (no movement onto another token)
   // seeks; movement onto a second token starts a range selection instead.
@@ -188,7 +257,7 @@ export function TranscriptViewer({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const activeRef = useRef<HTMLSpanElement>(null)
+  const activeRef = useRef<HTMLSpanElement | null>(null)
 
   useEffect(() => {
     if (autoFollow) activeRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -251,8 +320,68 @@ export function TranscriptViewer({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-end border-b border-slate-100 px-4 py-2">
-        <label className="flex items-center gap-2 text-xs text-slate-500">
+      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
+        {searchOpen ? (
+          <div className="flex flex-1 items-center gap-1">
+            <SearchIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <input
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') stepMatch(e.shiftKey ? -1 : 1)
+                if (e.key === 'Escape') closeSearch()
+              }}
+              placeholder="Find in transcript…"
+              className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-xs"
+            />
+            <span className="shrink-0 font-mono text-xs text-slate-400">
+              {searchQuery
+                ? `${searchMatches.length > 0 ? matchIndex + 1 : 0}/${searchMatches.length}`
+                : ''}
+            </span>
+            <button
+              type="button"
+              aria-label="Previous match"
+              title="Previous match"
+              disabled={searchMatches.length === 0}
+              onClick={() => stepMatch(-1)}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+            >
+              <ChevronUpIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next match"
+              title="Next match"
+              disabled={searchMatches.length === 0}
+              onClick={() => stepMatch(1)}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+            >
+              <ChevronDownIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Close search"
+              title="Close search"
+              onClick={closeSearch}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100"
+            >
+              <CloseIcon className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-label="Search transcript"
+            title="Search transcript"
+            onClick={() => setSearchOpen(true)}
+            className="rounded p-1 text-slate-400 hover:bg-slate-100"
+          >
+            <SearchIcon className="h-4 w-4" />
+          </button>
+        )}
+        <label className="ml-auto flex items-center gap-2 text-xs text-slate-500">
           <input
             type="checkbox"
             checked={autoFollow}
@@ -265,7 +394,7 @@ export function TranscriptViewer({
       {selectionInfo &&
         (mergeDraft !== null ? (
           <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
-            <span className="text-slate-500">Merge into:</span>
+            <span className="text-slate-500">Edit to:</span>
             <input
               autoFocus
               value={mergeDraft}
@@ -320,69 +449,80 @@ export function TranscriptViewer({
             </button>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
+          <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
             <span className="font-mono">
               {formatTime(selectionInfo.startTime)} – {formatTime(selectionInfo.endTime)}
             </span>
             <span className="max-w-xs truncate italic">"{selectionInfo.text}"</span>
             <button
               type="button"
-              className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700"
+              aria-label="Play selection"
+              title="Play selection"
+              className="rounded bg-slate-800 p-1.5 text-white hover:bg-slate-700"
               onClick={() => onPlaySelection(selectionInfo.startTime, selectionInfo.endTime)}
             >
-              Play selection
+              <PlayIcon className="h-4 w-4" />
             </button>
             <button
               type="button"
-              className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
+              aria-label="Copy"
+              title="Copy"
+              className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
               onClick={() => void navigator.clipboard.writeText(selectionInfo.text)}
             >
-              Copy
+              <CopyIcon className="h-4 w-4" />
             </button>
             {canMerge && (
               <button
                 type="button"
-                className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
+                aria-label="Edit"
+                title="Edit"
+                className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
                 onClick={() => setMergeDraft(selectionInfo.text)}
               >
-                Merge
+                <EditIcon className="h-4 w-4" />
               </button>
             )}
             <button
               type="button"
-              className="rounded border border-violet-300 px-2 py-1 text-violet-700 hover:bg-violet-50"
+              aria-label="Comment"
+              title="Comment"
+              className="rounded border border-violet-300 p-1.5 text-violet-700 hover:bg-violet-50"
               onClick={() => setCommentDraft('')}
             >
-              Comment
+              <CommentIcon className="h-4 w-4" />
             </button>
             <button
               type="button"
-              className="rounded border border-red-300 px-2 py-1 text-red-600 hover:bg-red-50"
+              aria-label="Delete"
+              title="Delete"
+              className="rounded border border-red-300 p-1.5 text-red-600 hover:bg-red-50"
               onClick={deleteSelection}
             >
-              Delete
+              <TrashIcon className="h-4 w-4" />
             </button>
             <button
               type="button"
-              className="ml-auto text-slate-400 hover:text-slate-600"
+              className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               onClick={() => clearSelection()}
               aria-label="Clear selection"
+              title="Clear selection"
             >
-              ✕
+              <CloseIcon className="h-4 w-4" />
             </button>
           </div>
         ))}
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4 select-none">
-        {transcript.segments.map((segment) => (
-          <div key={segment.id}>
+        {speakerGroups.map((group) => (
+          <div key={group.key}>
             <div className="mb-1 text-xs font-semibold text-slate-500">
-              {segment.speaker_id
-                ? (speakerNames.get(segment.speaker_id) ?? 'Unknown speaker')
+              {group.speakerId
+                ? (speakerNames.get(group.speakerId) ?? 'Unknown speaker')
                 : 'Unknown speaker'}
             </div>
             <p className="leading-relaxed text-slate-800">
-              {segment.tokens.map((token) => {
+              {group.tokens.map((token) => {
                 if (token.id === editingTokenId) {
                   return (
                     <input
@@ -400,11 +540,17 @@ export function TranscriptViewer({
                     />
                   )
                 }
+                const isCurrentMatch = currentMatch?.id === token.id
+                const isMatch = matchIds.has(token.id)
                 const bg = selectedIds.has(token.id)
                   ? 'bg-sky-200'
-                  : token.id === activeTokenId
-                    ? 'bg-amber-200'
-                    : 'hover:bg-slate-100'
+                  : isCurrentMatch
+                    ? 'bg-orange-300'
+                    : token.id === activeTokenId
+                      ? 'bg-amber-200'
+                      : isMatch
+                        ? 'bg-yellow-100'
+                        : 'hover:bg-slate-100'
                 const comment = commentedTokenInfo.get(token.id)
                 const decoration = comment
                   ? comment.resolved
@@ -414,11 +560,15 @@ export function TranscriptViewer({
                 return (
                   <span
                     key={token.id}
-                    ref={token.id === activeTokenId ? activeRef : undefined}
+                    ref={(el) => {
+                      if (el) tokenRefs.current.set(token.id, el)
+                      else tokenRefs.current.delete(token.id)
+                      if (token.id === activeTokenId) activeRef.current = el
+                    }}
                     onMouseDown={() => handleTokenMouseDown(token)}
                     onMouseEnter={() => handleTokenMouseEnter(token)}
                     onDoubleClick={() => beginEdit(token)}
-                    className={`cursor-pointer rounded px-0.5 ${bg} ${decoration}`}
+                    className={`cursor-text rounded px-0.5 ${bg} ${decoration}`}
                   >
                     {token.text}{' '}
                   </span>

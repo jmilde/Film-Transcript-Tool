@@ -1,1 +1,14 @@
 @import 'tailwindcss';
+
+/* Tailwind's preflight doesn't set a pointer cursor on buttons (browsers
+   don't either, unlike links), so every clickable control needs it explicitly. */
+button:not(:disabled),
+[role='button'],
+select,
+summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}

@@ -324,13 +324,17 @@ describe('VideoWorkspace', () => {
     renderWorkspace()
 
     await screen.findByText('Hello', { exact: false })
-    await userEvent.selectOptions(screen.getByLabelText('Translation pane'), TRANSLATION_ID)
+    await userEvent.click(screen.getByRole('button', { name: /Translations/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Spanish' }))
 
     expect(await screen.findByText('Hola', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('Original')).toBeInTheDocument()
     expect(screen.getByText('Translation (es)')).toBeInTheDocument()
     // The original pane is still there alongside the translation.
     expect(screen.getByText('Hello', { exact: false })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close translation' }))
+    expect(screen.queryByText('Translation (es)')).not.toBeInTheDocument()
   })
 
   it('shows an error state if the video fails to load', async () => {

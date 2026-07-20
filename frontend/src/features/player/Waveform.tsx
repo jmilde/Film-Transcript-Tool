@@ -1,12 +1,17 @@
 import { useEffect, useRef, type MouseEvent } from 'react'
 import { usePlaybackStore } from '../../store/playback'
+import { formatTime } from './format'
 
 interface WaveformProps {
   peaks: number[]
   onSeek: (seconds: number) => void
 }
 
-/** Canvas waveform with a live playhead; click to seek. */
+/**
+ * Canvas waveform with a live playhead and its current time shown above it;
+ * click to seek. This is the only place seeking happens — the video element
+ * itself has no seek bar.
+ */
 export function Waveform({ peaks, onSeek }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const currentTime = usePlaybackStore((s) => s.currentTime)
@@ -43,13 +48,25 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
     onSeek(fraction * duration)
   }
 
+  const fraction = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0
+  // Clamped so the label doesn't clip past the waveform's edges near 0%/100%.
+  const labelLeft = Math.min(97, Math.max(3, fraction * 100))
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={800}
-      height={64}
-      onClick={handleClick}
-      className="h-16 w-full cursor-pointer rounded bg-slate-50"
-    />
+    <div className="relative pt-5">
+      <div
+        className="pointer-events-none absolute top-0 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-white"
+        style={{ left: `${labelLeft}%` }}
+      >
+        {formatTime(currentTime)}
+      </div>
+      <canvas
+        ref={canvasRef}
+        width={800}
+        height={64}
+        onClick={handleClick}
+        className="h-16 w-full cursor-pointer rounded bg-slate-50"
+      />
+    </div>
   )
 }

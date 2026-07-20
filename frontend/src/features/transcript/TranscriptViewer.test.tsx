@@ -159,7 +159,7 @@ describe('TranscriptViewer', () => {
     fireEvent.mouseEnter(screen.getByText('world'))
     fireEvent.mouseUp(document)
 
-    await userEvent.click(screen.getByText('Play selection'))
+    await userEvent.click(screen.getByRole('button', { name: 'Play selection' }))
     expect(onPlaySelection).toHaveBeenCalledWith(0, 2)
   })
 
@@ -171,7 +171,7 @@ describe('TranscriptViewer', () => {
     fireEvent.mouseEnter(screen.getByText('world'))
     fireEvent.mouseUp(document)
 
-    await userEvent.click(screen.getByText('Copy'))
+    await userEvent.click(screen.getByRole('button', { name: 'Copy' }))
     expect(writeText).toHaveBeenCalledWith('Hello world')
   })
 
@@ -183,7 +183,7 @@ describe('TranscriptViewer', () => {
     fireEvent.mouseUp(document)
     expect(screen.getByText('"Hello world"')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByLabelText('Clear selection'))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
     expect(screen.queryByText('"Hello world"')).not.toBeInTheDocument()
   })
 
@@ -335,11 +335,11 @@ describe('TranscriptViewer', () => {
     fireEvent.mouseEnter(screen.getByText('world'))
     fireEvent.mouseUp(document)
 
-    await userEvent.click(screen.getByText('Delete'))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(deleted.sort()).toEqual(['tok-a', 'tok-b']))
   })
 
-  it('merges the selection via the Merge button', async () => {
+  it('merges the selection via the Edit button', async () => {
     let body: unknown
     server.use(
       http.post('http://localhost:8000/tokens/merge', async ({ request }) => {
@@ -361,7 +361,7 @@ describe('TranscriptViewer', () => {
     fireEvent.mouseEnter(screen.getByText('world'))
     fireEvent.mouseUp(document)
 
-    await userEvent.click(screen.getByText('Merge'))
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
     const mergeInput = screen.getByDisplayValue('Hello world')
     fireEvent.change(mergeInput, { target: { value: "don't" } })
     await userEvent.click(screen.getByText('Confirm'))
@@ -395,7 +395,7 @@ describe('TranscriptViewer', () => {
     fireEvent.mouseEnter(screen.getByText('world'))
     fireEvent.mouseUp(document)
 
-    await userEvent.click(screen.getByText('Comment'))
+    await userEvent.click(screen.getByRole('button', { name: 'Comment' }))
     const commentInput = screen.getByRole('textbox')
     fireEvent.change(commentInput, { target: { value: 'Check this' } })
     await userEvent.click(screen.getByText('Confirm'))
@@ -450,5 +450,70 @@ describe('TranscriptViewer', () => {
     expect(screen.getByText('Hello')).toHaveClass('decoration-violet-400')
     expect(screen.getByText('again')).toHaveClass('decoration-slate-300')
     expect(screen.getByText('world')).not.toHaveClass('decoration-violet-400')
+  })
+
+  it('groups consecutive same-speaker segments under a single header', () => {
+    const OTHER_SPEAKER: Speaker = {
+      id: 'spk-2',
+      video_id: 'vid-1',
+      provider_identifier: 'spk_1',
+      name: 'Alex',
+      color: null,
+    }
+    const transcript: Transcript = {
+      ...TRANSCRIPT,
+      segments: [
+        {
+          id: 'seg-1',
+          speaker_id: 'spk-1',
+          tokens: [TRANSCRIPT.segments[0].tokens[0]],
+        },
+        {
+          id: 'seg-2',
+          speaker_id: 'spk-1',
+          tokens: [TRANSCRIPT.segments[0].tokens[1]],
+        },
+        {
+          id: 'seg-3',
+          speaker_id: 'spk-2',
+          tokens: [TRANSCRIPT.segments[0].tokens[2]],
+        },
+      ],
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={transcript}
+          speakers={[SPEAKER, OTHER_SPEAKER]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getAllByText('Jordan')).toHaveLength(1)
+    expect(screen.getAllByText('Alex')).toHaveLength(1)
+    expect(screen.getByText('Hello')).toBeInTheDocument()
+    expect(screen.getByText('world')).toBeInTheDocument()
+    expect(screen.getByText('again')).toBeInTheDocument()
+  })
+
+  it('searches within the transcript and steps through matches', async () => {
+    renderViewer()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Search transcript' }))
+    await userEvent.type(screen.getByPlaceholderText('Find in transcript…'), 'o')
+
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+    expect(screen.getByText('Hello')).toHaveClass('bg-orange-300')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next match' }))
+    expect(screen.getByText('2/2')).toBeInTheDocument()
+    expect(screen.getByText('world')).toHaveClass('bg-orange-300')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close search' }))
+    expect(screen.queryByPlaceholderText('Find in transcript…')).not.toBeInTheDocument()
   })
 })

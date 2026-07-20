@@ -22,14 +22,14 @@ const transcripts: TranscriptSummary[] = [
   },
 ]
 
-function renderControl(onSelectSecond = vi.fn()) {
+function renderControl(onSelectSecond = vi.fn(), transcriptList = transcripts) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <TranslationControl
         videoId={VIDEO_ID}
         originalTranscriptId={ORIGINAL_ID}
-        transcripts={transcripts}
+        transcripts={transcriptList}
         secondTranscriptId={null}
         onSelectSecond={onSelectSecond}
       />
@@ -69,9 +69,10 @@ describe('TranslationControl', () => {
     )
     const { onSelectSecond } = renderControl()
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Translate' }))
-    await userEvent.type(screen.getByPlaceholderText('e.g. en'), 'es')
-    await userEvent.click(screen.getByRole('button', { name: 'Go' }))
+    await userEvent.click(screen.getByRole('button', { name: /Translations/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Add translation' }))
+    await userEvent.selectOptions(screen.getByLabelText('Target language'), 'es')
+    await userEvent.click(screen.getByRole('button', { name: 'Translate' }))
 
     expect(await screen.findByText('Translating…')).toBeInTheDocument()
 
@@ -103,14 +104,15 @@ describe('TranslationControl', () => {
     )
     renderControl()
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Translate' }))
-    await userEvent.type(screen.getByPlaceholderText('e.g. en'), 'es')
-    await userEvent.click(screen.getByRole('button', { name: 'Go' }))
+    await userEvent.click(screen.getByRole('button', { name: /Translations/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Add translation' }))
+    await userEvent.selectOptions(screen.getByLabelText('Target language'), 'es')
+    await userEvent.click(screen.getByRole('button', { name: 'Translate' }))
 
     expect(await screen.findByText('Translation failed.')).toBeInTheDocument()
   })
 
-  it('lists existing translations in the pane dropdown and selects one', async () => {
+  it('lists existing translations in the panel and selects one', async () => {
     const withTranslation: TranscriptSummary[] = [
       ...transcripts,
       {
@@ -121,21 +123,11 @@ describe('TranslationControl', () => {
         created_at: '2026-01-01T00:00:00Z',
       },
     ]
-    const onSelectSecond = vi.fn()
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <TranslationControl
-          videoId={VIDEO_ID}
-          originalTranscriptId={ORIGINAL_ID}
-          transcripts={withTranslation}
-          secondTranscriptId={null}
-          onSelectSecond={onSelectSecond}
-        />
-      </QueryClientProvider>,
-    )
+    const { onSelectSecond } = renderControl(vi.fn(), withTranslation)
 
-    await userEvent.selectOptions(screen.getByLabelText('Translation pane'), 'fr')
+    await userEvent.click(screen.getByRole('button', { name: /Translations/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'French' }))
+
     expect(onSelectSecond).toHaveBeenCalledWith('transcript-fr')
   })
 })
