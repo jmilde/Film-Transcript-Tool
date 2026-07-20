@@ -133,7 +133,8 @@ Toolchain note: used **Node 22 LTS** (via nvm `.nvmrc`), which the `npm create v
 - [x] Tests (formatTime unit; VideoWorkspace via MSW: title + proxy `src` with media token; ResizeObserver polyfill for jsdom) + full frontend gate green (typecheck, lint, 8 tests, build, format)
 
 ### F3 — Transcript viewer + playback sync (docs §8, §9)
-- [ ] Render segments/speakers/tokens (display text = edited∨original, deleted already excluded by API); highlight active token from playback time; auto-follow scroll toggle
+- [x] `useTranscripts`/`useTranscript`/`useSpeakers` hooks; `TranscriptViewer` renders segments/speakers/tokens (display text = edited∨original, deleted already excluded by API), defaulting to the video's `original` transcript (dual-view is F8); pure `findActiveTokenId` matches playback time to a token (or the last-started one during a gap); active token highlighted + auto-follow scrolls it into view via the F2 playback store; click a token to seek; auto-follow toggle checkbox
+- [x] Tests (`findActiveTokenId` unit; `TranscriptViewer` highlight/click-seek/toggle/empty-state; VideoWorkspace MSW extended with transcript/speaker fixtures); jsdom `scrollIntoView` polyfill + explicit RTL `cleanup` in `afterEach` (needed since `globals: true` isn't set, so RTL's auto-cleanup never self-registers — was masked before because no file rendered the same text twice) + full frontend gate green (typecheck, lint, 17 tests, build, format)
 
 ### F4 — Transcript selection + actions (docs §10)
 - [ ] Drag-select token ranges; show selected text + in/out timecodes; play-selection; copy

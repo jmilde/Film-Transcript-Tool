@@ -1,11 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Link, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useVideo } from '../api/hooks/useVideos'
 import { proxyUrl, useMediaToken, useWaveform } from '../api/hooks/useMedia'
+import { useSpeakers } from '../api/hooks/useSpeakers'
+import { useTranscript, useTranscripts } from '../api/hooks/useTranscripts'
 import { usePlaybackStore } from '../store/playback'
 import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
+import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 
 export function VideoWorkspace() {
   const { videoId } = useParams<{ videoId: string }>()
@@ -17,11 +20,20 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const { data: video } = useVideo(videoId)
   const { data: media } = useMediaToken(videoId)
   const waveform = useWaveform(videoId)
+  const { data: transcripts } = useTranscripts(videoId)
+  const { data: speakers } = useSpeakers(videoId)
   const videoRef = useRef<HTMLVideoElement>(null)
   const resetPlayback = usePlaybackStore((s) => s.reset)
 
   // Reset playback state when switching videos.
   useEffect(() => resetPlayback, [videoId, resetPlayback])
+
+  // F3 shows the original transcript; dual original/translation view is F8.
+  const transcriptId = useMemo(() => {
+    if (!transcripts || transcripts.length === 0) return null
+    return (transcripts.find((t) => t.type === 'original') ?? transcripts[0]).id
+  }, [transcripts])
+  const { data: transcript, isLoading: transcriptLoading } = useTranscript(transcriptId)
 
   function seek(seconds: number) {
     if (videoRef.current) videoRef.current.currentTime = seconds
@@ -44,9 +56,12 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
         className="flex-1 overflow-hidden rounded-lg border border-slate-200"
       >
         <Panel defaultSize="55" minSize="30" className="bg-white">
-          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-400">
-            Transcript viewer — coming in F3.
-          </div>
+          <TranscriptViewer
+            transcript={transcript}
+            speakers={speakers}
+            isLoading={transcriptId !== null && transcriptLoading}
+            onSeekToken={seek}
+          />
         </Panel>
         <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
         <Panel defaultSize="45" minSize="25">
