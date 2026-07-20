@@ -32,6 +32,13 @@ if (!navigator.clipboard) {
   })
 }
 
+// jsdom doesn't implement blob object URLs, which the export download flow
+// uses to trigger a file save.
+if (!URL.createObjectURL) {
+  URL.createObjectURL = () => 'blob:mock'
+  URL.revokeObjectURL = () => {}
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())

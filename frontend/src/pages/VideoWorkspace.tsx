@@ -13,6 +13,7 @@ import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 import { CommentsPanel } from '../features/comments/CommentsPanel'
 import { TranslationControl } from '../features/translation/TranslationControl'
+import { ExportControl } from '../features/export/ExportControl'
 import type { SearchResult } from '../api/hooks/useSearch'
 
 export function VideoWorkspace() {
@@ -113,13 +114,18 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
           ← Projects
         </Link>
         <h2 className="truncate text-lg font-semibold text-slate-800">{video?.name ?? 'Video'}</h2>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <TranslationControl
             videoId={videoId}
             originalTranscriptId={transcriptId}
             transcripts={transcripts}
             secondTranscriptId={secondTranscriptId}
             onSelectSecond={setSecondTranscriptId}
+          />
+          <ExportControl
+            videoName={video?.name}
+            transcripts={transcripts}
+            defaultTranscriptId={transcriptId}
           />
         </div>
       </div>

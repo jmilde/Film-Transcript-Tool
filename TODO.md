@@ -167,7 +167,10 @@ Toolchain note: used **Node 22 LTS** (via nvm `.nvmrc`), which the `npm create v
 - [x] Tests (`TranslationControl`: submits the target language and polls to completion → selects the new transcript, surfaces a failure message, lists/selects an existing translation from the dropdown; `VideoWorkspace`: selecting a translation shows both panes with their own transcript content); full frontend gate green (typecheck, lint, 49 tests, build, format)
 
 ### F9 — Export UI (docs §15)
-- [ ] Pick format → `POST /transcripts/{id}/exports` → poll `GET /exports/{id}` (ready) → download `GET /exports/{id}/content`
+- [x] `api/hooks/useExports.ts`: `useCreateExport(transcriptId)` (`POST /transcripts/{id}/exports` → `{export_id, processing_job_id}`), `useExport(exportId)` polling `GET /exports/{id}` every 1500ms until `ready` (per the TODO wording this polls the export resource itself, not the `ProcessingJob`), and `useDownloadExport()` — the content endpoint returns the raw rendered file (not JSON) and still needs the normal Bearer auth, so it's fetched via the typed client with `parseAs: 'blob'` and saved through an object-URL anchor click rather than linked to directly like the token-authorized media routes
+- [x] `features/export/ExportControl.tsx`: an "Export" popover in `VideoWorkspace`'s header (next to `TranslationControl`) — pick which transcript (original or any translation, since translations export the same way per `docs/900_export.md` §7) and format (Markdown/SRT), "Generate" creates the export and polls it ("Preparing…"), then swaps to a "Download" button once ready that fetches and saves the file as `{video-name}-{language}.{md,srt}`; changing the transcript/format selection resets to "Generate" so a stale ready-state can't be downloaded under the wrong choice
+- [x] `test/setup.ts`: stub `URL.createObjectURL`/`revokeObjectURL` (unimplemented in jsdom), needed for the download flow
+- [x] Tests (`ExportControl`: requests an export with the selected format, polls to ready, downloads via a simulated anchor click; picking a different transcript/format targets the right endpoint); full frontend gate green (typecheck, lint, 51 tests, build, format)
 
 ### F10 — Keyboard controls & polish (docs §16)
 - [ ] Space (play/pause), Ctrl/Cmd+F (search), Ctrl/Cmd+S (save); desktop-responsive layout; consistent loading/empty/error states
