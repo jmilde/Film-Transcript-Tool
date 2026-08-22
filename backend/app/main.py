@@ -6,6 +6,7 @@ from app.api.routes import (
     exports,
     folders,
     jobs,
+    members,
     projects,
     search,
     speakers,
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(comments.router)
     app.include_router(search.router)
     app.include_router(exports.router)
+    app.include_router(members.router)
 
     return app
 

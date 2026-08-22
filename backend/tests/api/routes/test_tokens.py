@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from app.models.folder import Folder
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
@@ -19,7 +19,7 @@ def _seed(db: Session, user: User) -> Transcript:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
     db.add(folder)
     db.flush()
@@ -77,16 +77,36 @@ def test_edit_token(auth_client: TestClient, db_session: Session, user: User) ->
     transcript = _seed(db_session, user)
     token = _segment_tokens(db_session, transcript, 0)[0]
 
-    resp = auth_client.patch(f"/tokens/{token.id}", json={"edited_text": "Hi"})
+    resp = auth_client.patch(
+        f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 1}
+    )
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["edited_text"] == "Hi"
     assert body["original_text"] == "Hello"
     assert body["text"] == "Hi"
+    assert body["version"] == 2
     # Display in the full transcript reflects the edit.
     assert "Hi" in _transcript_texts(auth_client, transcript)
     assert "Hello" not in _transcript_texts(auth_client, transcript)
+
+
+def test_edit_token_stale_version_conflict(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+
+    resp = auth_client.patch(
+        f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 99}
+    )
+
+    assert resp.status_code == 409
+    body = resp.json()
+    assert body["error"]["code"] == "CONFLICT"
+    assert body["error"]["current_tokens"][0]["id"] == str(token.id)
+    assert body["error"]["current_tokens"][0]["version"] == 1
 
 
 def test_delete_token_excluded_from_transcript(
@@ -95,7 +115,7 @@ def test_delete_token_excluded_from_transcript(
     transcript = _seed(db_session, user)
     token = _segment_tokens(db_session, transcript, 0)[0]
 
-    resp = auth_client.delete(f"/tokens/{token.id}")
+    resp = auth_client.delete(f"/tokens/{token.id}", params={"expected_version": 1})
 
     assert resp.status_code == 200
     assert "Hello" not in _transcript_texts(auth_client, transcript)
@@ -103,6 +123,19 @@ def test_delete_token_excluded_from_transcript(
     persisted = db_session.get(TranscriptToken, token.id)
     assert persisted is not None
     assert persisted.is_deleted is True
+    assert persisted.version == 2
+
+
+def test_delete_token_stale_version_conflict(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+
+    resp = auth_client.delete(f"/tokens/{token.id}", params={"expected_version": 99})
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_merge_tokens(auth_client: TestClient, db_session: Session, user: User) -> None:
@@ -111,7 +144,13 @@ def test_merge_tokens(auth_client: TestClient, db_session: Session, user: User) 
 
     resp = auth_client.post(
         "/tokens/merge",
-        json={"token_ids": [str(tokens[0].id), str(tokens[1].id)], "text": "How are"},
+        json={
+            "tokens": [
+                {"token_id": str(tokens[0].id), "expected_version": 1},
+                {"token_id": str(tokens[1].id), "expected_version": 1},
+            ],
+            "text": "How are",
+        },
     )
 
     assert resp.status_code == 200
@@ -119,9 +158,31 @@ def test_merge_tokens(auth_client: TestClient, db_session: Session, user: User) 
     assert body["text"] == "How are"
     assert body["start_time"] == 1.2
     assert body["end_time"] == 1.6
+    assert body["version"] == 1
     texts = _transcript_texts(auth_client, transcript)
     assert "How are" in texts
     assert texts == ["Hello", "there.", "How are", "you?"]
+
+
+def test_merge_tokens_stale_version_conflict(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    transcript = _seed(db_session, user)
+    tokens = _segment_tokens(db_session, transcript, 1)
+
+    resp = auth_client.post(
+        "/tokens/merge",
+        json={
+            "tokens": [
+                {"token_id": str(tokens[0].id), "expected_version": 1},
+                {"token_id": str(tokens[1].id), "expected_version": 99},
+            ],
+            "text": "How are",
+        },
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_merge_tokens_across_segments_rejected(
@@ -133,7 +194,13 @@ def test_merge_tokens_across_segments_rejected(
 
     resp = auth_client.post(
         "/tokens/merge",
-        json={"token_ids": [str(seg0.id), str(seg1.id)], "text": "there. How"},
+        json={
+            "tokens": [
+                {"token_id": str(seg0.id), "expected_version": 1},
+                {"token_id": str(seg1.id), "expected_version": 1},
+            ],
+            "text": "there. How",
+        },
     )
 
     assert resp.status_code == 400
@@ -146,7 +213,7 @@ def test_split_token(auth_client: TestClient, db_session: Session, user: User) -
 
     resp = auth_client.post(
         f"/tokens/{token.id}/split",
-        json={"tokens": [{"text": "you"}, {"text": "?"}]},
+        json={"tokens": [{"text": "you"}, {"text": "?"}], "expected_version": 1},
     )
 
     assert resp.status_code == 200
@@ -154,8 +221,24 @@ def test_split_token(auth_client: TestClient, db_session: Session, user: User) -
     assert [t["text"] for t in body] == ["you", "?"]
     assert body[0]["start_time"] == 1.6
     assert body[1]["end_time"] == 1.9
+    assert all(t["version"] == 1 for t in body)
     texts = _transcript_texts(auth_client, transcript)
     assert texts == ["Hello", "there.", "How", "are", "you", "?"]
+
+
+def test_split_token_stale_version_conflict(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 1)[2]
+
+    resp = auth_client.post(
+        f"/tokens/{token.id}/split",
+        json={"tokens": [{"text": "you"}, {"text": "?"}], "expected_version": 99},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_edit_token_non_member_forbidden(
@@ -168,7 +251,27 @@ def test_edit_token_non_member_forbidden(
     token = _segment_tokens(db_session, transcript, 0)[0]
 
     other = app_client(other_user)
-    resp = other.patch(f"/tokens/{token.id}", json={"edited_text": "Hi"})
+    resp = other.patch(f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 1})
+    assert resp.status_code == 403
+
+
+def test_edit_token_viewer_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+    db_session.add(
+        ProjectMembership(
+            project_id=transcript.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
+
+    other = app_client(other_user)
+    resp = other.patch(f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 1})
     assert resp.status_code == 403
 
 
@@ -184,6 +287,12 @@ def test_merge_tokens_non_member_forbidden(
     other = app_client(other_user)
     resp = other.post(
         "/tokens/merge",
-        json={"token_ids": [str(tokens[0].id), str(tokens[1].id)], "text": "How are"},
+        json={
+            "tokens": [
+                {"token_id": str(tokens[0].id), "expected_version": 1},
+                {"token_id": str(tokens[1].id), "expected_version": 1},
+            ],
+            "text": "How are",
+        },
     )
     assert resp.status_code == 403

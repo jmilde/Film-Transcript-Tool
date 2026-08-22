@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
 import {
+  isTokenConflict,
   useDeleteTokens,
   useEditToken,
   useMergeTokens,
@@ -32,6 +34,10 @@ interface TranscriptViewerProps {
   isLoading: boolean
   onSeekToken: (seconds: number) => void
   onPlaySelection: (startTime: number, endTime: number) => void
+  /** Whether the caller's project role allows editing (editor/owner) — a
+   * viewer can still watch, select, and copy, but not edit/delete/merge/split
+   * tokens or comment. */
+  canEdit: boolean
 }
 
 interface SpeakerGroup {
@@ -60,6 +66,7 @@ export function TranscriptViewer({
   isLoading,
   onSeekToken,
   onPlaySelection,
+  canEdit,
 }: TranscriptViewerProps) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const autoFollow = usePlaybackStore((s) => s.autoFollow)
@@ -77,6 +84,17 @@ export function TranscriptViewer({
   const mergeTokens = useMergeTokens(transcriptId)
   const splitToken = useSplitToken(transcriptId)
   const createComment = useCreateComment(transcriptId)
+
+  // A 409 from any token mutation means someone else edited it first; the
+  // optimistic attempt is left on screen (see useTokens.ts) and a banner asks
+  // the user to reload rather than silently refetching out from under them.
+  const client = useQueryClient()
+  const tokenMutations = [editToken, deleteTokens, mergeTokens, splitToken]
+  const conflict = tokenMutations.find((m) => isTokenConflict(m.error))
+  function reloadAfterConflict() {
+    for (const mutation of tokenMutations) mutation.reset()
+    void client.invalidateQueries({ queryKey: ['transcript', transcriptId] })
+  }
 
   const [editingTokenId, setEditingTokenId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
@@ -152,6 +170,7 @@ export function TranscriptViewer({
   }, [selectedTokens])
 
   const canMerge =
+    canEdit &&
     selectedTokens.length >= 2 &&
     selectedTokens.every((t) => t.segment_id === selectedTokens[0].segment_id)
 
@@ -228,14 +247,20 @@ export function TranscriptViewer({
   function commitEdit() {
     if (!editingTokenId) return
     const tokenId = editingTokenId
+    const token = flatTokens.find((t) => t.id === tokenId)
     const trimmed = editingText.trim()
     setEditingTokenId(null)
+    if (!token) return
     if (trimmed === '') {
-      deleteTokens.mutate({ tokenIds: [tokenId] })
+      deleteTokens.mutate({ tokens: [{ tokenId, expectedVersion: token.version }] })
     } else if (/\s/.test(trimmed)) {
-      splitToken.mutate({ tokenId, texts: trimmed.split(/\s+/).filter(Boolean) })
+      splitToken.mutate({
+        tokenId,
+        expectedVersion: token.version,
+        texts: trimmed.split(/\s+/).filter(Boolean),
+      })
     } else {
-      editToken.mutate({ tokenId, text: trimmed })
+      editToken.mutate({ tokenId, text: trimmed, expectedVersion: token.version })
     }
   }
 
@@ -297,7 +322,10 @@ export function TranscriptViewer({
 
   function confirmMerge() {
     if (mergeDraft === null || mergeDraft.trim() === '') return
-    mergeTokens.mutate({ tokenIds: selectedTokens.map((t) => t.id), text: mergeDraft.trim() })
+    mergeTokens.mutate({
+      tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
+      text: mergeDraft.trim(),
+    })
     setMergeDraft(null)
     clearSelection()
   }
@@ -314,7 +342,9 @@ export function TranscriptViewer({
   }
 
   function deleteSelection() {
-    deleteTokens.mutate({ tokenIds: selectedTokens.map((t) => t.id) })
+    deleteTokens.mutate({
+      tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
+    })
     clearSelection()
   }
 
@@ -390,6 +420,19 @@ export function TranscriptViewer({
           Auto-follow
         </label>
       </div>
+
+      {conflict && (
+        <div className="flex items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+          <span>This was edited by someone else. Your change was not saved.</span>
+          <button
+            type="button"
+            onClick={reloadAfterConflict}
+            className="ml-auto rounded bg-red-600 px-2 py-1 font-medium text-white hover:bg-red-500"
+          >
+            Reload
+          </button>
+        </div>
+      )}
 
       {selectionInfo &&
         (mergeDraft !== null ? (
@@ -483,24 +526,28 @@ export function TranscriptViewer({
                 <EditIcon className="h-4 w-4" />
               </button>
             )}
-            <button
-              type="button"
-              aria-label="Comment"
-              title="Comment"
-              className="rounded border border-violet-300 p-1.5 text-violet-700 hover:bg-violet-50"
-              onClick={() => setCommentDraft('')}
-            >
-              <CommentIcon className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Delete"
-              title="Delete"
-              className="rounded border border-red-300 p-1.5 text-red-600 hover:bg-red-50"
-              onClick={deleteSelection}
-            >
-              <TrashIcon className="h-4 w-4" />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                aria-label="Comment"
+                title="Comment"
+                className="rounded border border-violet-300 p-1.5 text-violet-700 hover:bg-violet-50"
+                onClick={() => setCommentDraft('')}
+              >
+                <CommentIcon className="h-4 w-4" />
+              </button>
+            )}
+            {canEdit && (
+              <button
+                type="button"
+                aria-label="Delete"
+                title="Delete"
+                className="rounded border border-red-300 p-1.5 text-red-600 hover:bg-red-50"
+                onClick={deleteSelection}
+              >
+                <TrashIcon className="h-4 w-4" />
+              </button>
+            )}
             <button
               type="button"
               className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -567,8 +614,8 @@ export function TranscriptViewer({
                     }}
                     onMouseDown={() => handleTokenMouseDown(token)}
                     onMouseEnter={() => handleTokenMouseEnter(token)}
-                    onDoubleClick={() => beginEdit(token)}
-                    className={`cursor-text rounded px-0.5 ${bg} ${decoration}`}
+                    onDoubleClick={canEdit ? () => beginEdit(token) : undefined}
+                    className={`${canEdit ? 'cursor-text' : 'cursor-default'} rounded px-0.5 ${bg} ${decoration}`}
                   >
                     {token.text}{' '}
                   </span>

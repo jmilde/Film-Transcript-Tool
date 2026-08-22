@@ -26,6 +26,7 @@ def _token_read(token: TranscriptToken) -> TokenRead:
         text=token.edited_text if token.edited_text is not None else token.original_text,
         start_time=token.start_time,
         end_time=token.end_time,
+        version=token.version,
     )
 
 
@@ -36,7 +37,9 @@ def update_token(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TokenRead:
-    edit_token(db, token, payload.edited_text, user_id=user.id)
+    edit_token(
+        db, token, payload.edited_text, user_id=user.id, expected_version=payload.expected_version
+    )
     db.commit()
     db.refresh(token)
     return _token_read(token)
@@ -44,11 +47,12 @@ def update_token(
 
 @router.delete("/tokens/{token_id}", response_model=TokenRead)
 def remove_token(
+    expected_version: int,
     token: TranscriptToken = Depends(require_token_access),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TokenRead:
-    delete_token(db, token, user_id=user.id)
+    delete_token(db, token, user_id=user.id, expected_version=expected_version)
     db.commit()
     db.refresh(token)
     return _token_read(token)
@@ -60,7 +64,13 @@ def merge(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TokenRead:
-    replacement = merge_tokens(db, context.tokens, context.text, user_id=user.id)
+    replacement = merge_tokens(
+        db,
+        context.tokens,
+        context.text,
+        user_id=user.id,
+        expected_versions=context.expected_versions,
+    )
     db.commit()
     db.refresh(replacement)
     return _token_read(replacement)
@@ -73,7 +83,13 @@ def split(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[TokenRead]:
-    parts = split_token(db, token, [piece.text for piece in payload.tokens], user_id=user.id)
+    parts = split_token(
+        db,
+        token,
+        [piece.text for piece in payload.tokens],
+        user_id=user.id,
+        expected_version=payload.expected_version,
+    )
     db.commit()
     for part in parts:
         db.refresh(part)

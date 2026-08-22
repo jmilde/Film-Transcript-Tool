@@ -4,11 +4,17 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_folder_access, require_project_member
+from app.api.deps import (
+    require_folder_access,
+    require_min_role,
+    require_project_editor,
+    require_project_member,
+)
 from app.core.auth import get_current_user
 from app.core.errors import BadRequestError
 from app.db.session import get_db
 from app.models.folder import Folder
+from app.models.membership import MembershipRole
 from app.models.project import Project
 from app.models.user import User
 from app.models.video import Video
@@ -26,7 +32,7 @@ router = APIRouter(tags=["folders"])
 @router.post("/projects/{project_id}/folders", response_model=FolderRead, status_code=201)
 def create_folder(
     payload: FolderCreate,
-    project: Project = Depends(require_project_member),
+    project: Project = Depends(require_project_editor),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Folder:
@@ -113,7 +119,7 @@ def _apply_move(db: Session, folder: Folder, new_parent_id: uuid.UUID | None) ->
 @router.patch("/folders/{folder_id}", response_model=FolderRead)
 def update_folder(
     payload: FolderUpdate,
-    folder: Folder = Depends(require_folder_access),
+    folder: Folder = Depends(require_min_role(require_folder_access, MembershipRole.EDITOR)),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Folder:
@@ -130,7 +136,7 @@ def update_folder(
 
 @router.delete("/folders/{folder_id}", status_code=204)
 def delete_folder(
-    folder: Folder = Depends(require_folder_access),
+    folder: Folder = Depends(require_min_role(require_folder_access, MembershipRole.EDITOR)),
     db: Session = Depends(get_db),
 ) -> Response:
     db.delete(folder)

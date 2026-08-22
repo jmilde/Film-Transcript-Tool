@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 from app.models.folder import Folder
 from app.models.job import JobStatus, JobType, ProcessingJob
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.user import User
 from app.models.video import Video
@@ -76,7 +76,7 @@ def _make_video(db: Session, user: User) -> Video:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
     db.add(folder)
     db.flush()

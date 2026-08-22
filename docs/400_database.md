@@ -126,10 +126,17 @@ project_id
 
 user_id
 
+role
+
 created_at
 ```
 
-Roles are currently not defined separately.
+`role` is one of `owner`, `editor`, or `viewer`. Every project has at least one
+owner; a project's creator is granted `owner` on creation. `owner` and
+`editor` may create/edit/delete content; `viewer` is read-only. Only an
+`owner` can invite members, change roles, or remove members, and a project
+must always retain at least one `owner` (the last owner cannot be demoted or
+removed).
 
 ---
 
@@ -377,6 +384,8 @@ end_time
 
 is_deleted
 
+version
+
 created_by
 
 created_at
@@ -385,6 +394,11 @@ updated_by
 
 updated_at
 ```
+
+`version` is an optimistic-locking counter starting at 1, incremented on every
+edit/delete/merge/split of that row. A replacement token created by a merge
+or split starts at version 1 (it is a new row, not a continuation of the
+original's version history).
 
 ---
 
@@ -406,6 +420,14 @@ A token may be:
 - deleted
 - replaced by merged tokens
 - replaced by split tokens
+
+## Concurrency
+
+Every write (edit/delete/merge/split) requires the caller to supply the
+`version` it last read for each token it is modifying. If the current
+`version` in the database no longer matches, the write is rejected with a
+conflict rather than applied — two users editing the same token never
+silently overwrite one another.
 
 Deleted tokens remain stored.
 

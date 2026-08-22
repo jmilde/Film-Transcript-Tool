@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { createMemoryRouter, RouterProvider, useLocation, useParams } from 'react-router'
+import { createMemoryRouter, RouterProvider, useParams } from 'react-router'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
@@ -9,22 +9,10 @@ import { ProjectView } from './ProjectView'
 
 const PROJECT_ID = '00000000-0000-0000-0000-0000000000aa'
 const FOLDER_ID = '00000000-0000-0000-0000-0000000000f1'
-const VIDEO_ID = '00000000-0000-0000-0000-0000000000v1'
 
-function VideoRouteStub() {
-  const { videoId } = useParams<{ videoId: string }>()
-  const location = useLocation()
-  const state = location.state as { kind: string; text: string } | null
-  return (
-    <div>
-      <span>video:{videoId}</span>
-      {state && (
-        <span>
-          via search: {state.kind} / {state.text}
-        </span>
-      )}
-    </div>
-  )
+function SearchRouteStub() {
+  const { projectId } = useParams<{ projectId: string }>()
+  return <div>search page: {projectId}</div>
 }
 
 function renderProjectView() {
@@ -32,7 +20,7 @@ function renderProjectView() {
   const router = createMemoryRouter(
     [
       { path: '/projects/:projectId', element: <ProjectView /> },
-      { path: '/videos/:videoId', element: <VideoRouteStub /> },
+      { path: '/projects/:projectId/search', element: <SearchRouteStub /> },
     ],
     { initialEntries: [`/projects/${PROJECT_ID}`] },
   )
@@ -103,50 +91,23 @@ describe('ProjectView', () => {
     expect(await screen.findByText('Clip One')).toBeInTheDocument()
   })
 
-  it('opens search with Ctrl/Cmd+F, shows results, and navigates on select', async () => {
+  it('navigates to the search page with Ctrl/Cmd+F', async () => {
     baseHandlers()
-    server.use(
-      http.get(`http://localhost:8000/projects/${PROJECT_ID}/search`, ({ request }) => {
-        const q = new URL(request.url).searchParams.get('q')
-        expect(q).toBe('climate')
-        return HttpResponse.json([
-          {
-            kind: 'transcript',
-            id: 'tok-1',
-            video_id: VIDEO_ID,
-            transcript_id: 'transcript-1',
-            text: 'climate',
-            start_time: 12.5,
-            rank: 0.9,
-          },
-        ])
-      }),
-    )
     renderProjectView()
     await screen.findByRole('heading', { name: 'Documentary One' })
 
     await userEvent.keyboard('{Meta>}f{/Meta}')
-    const input = await screen.findByPlaceholderText(/Search transcripts/)
 
-    await userEvent.type(input, 'climate')
-    const result = await screen.findByText('climate')
-    await userEvent.click(result)
-
-    expect(await screen.findByText(`video:${VIDEO_ID}`)).toBeInTheDocument()
-    expect(await screen.findByText('via search: transcript / climate')).toBeInTheDocument()
+    expect(await screen.findByText(`search page: ${PROJECT_ID}`)).toBeInTheDocument()
   })
 
-  it('opens search via the Search button and closes on Escape', async () => {
+  it('navigates to the search page via the Search button', async () => {
     baseHandlers()
     renderProjectView()
     await screen.findByRole('heading', { name: 'Documentary One' })
 
     await userEvent.click(screen.getByRole('button', { name: /Search/ }))
-    expect(await screen.findByPlaceholderText(/Search transcripts/)).toBeInTheDocument()
 
-    await userEvent.keyboard('{Escape}')
-    await waitFor(() => {
-      expect(screen.queryByPlaceholderText(/Search transcripts/)).not.toBeInTheDocument()
-    })
+    expect(await screen.findByText(`search page: ${PROJECT_ID}`)).toBeInTheDocument()
   })
 })

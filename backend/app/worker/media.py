@@ -53,5 +53,9 @@ def waveform_key(video_id: uuid.UUID) -> str:
     return f"videos/{video_id}/waveform.json"
 
 
+def thumbnail_key(video_id: uuid.UUID) -> str:
+    return f"videos/{video_id}/thumbnail.jpg"
+
+
 def audio_key(video_id: uuid.UUID) -> str:
     return f"videos/{video_id}/audio.wav"

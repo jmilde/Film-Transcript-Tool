@@ -24,10 +24,33 @@ api.use({
   },
 })
 
-/** Narrow an openapi-fetch result to its data, throwing on transport/API error. */
-export function unwrap<T>(result: { data?: T; error?: unknown }): T {
+interface ErrorBody {
+  code?: string
+  message?: string
+  [key: string]: unknown
+}
+
+/** Thrown by `unwrap` on a non-2xx response, preserving status/code/body so
+ * callers can branch on them (e.g. a 409 token-edit conflict). */
+export class ApiError extends Error {
+  status: number
+  code: string | undefined
+  body: ErrorBody | undefined
+
+  constructor(status: number, message: string, code?: string, body?: ErrorBody) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+    this.body = body
+  }
+}
+
+/** Narrow an openapi-fetch result to its data, throwing an `ApiError` on failure. */
+export function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (result.error !== undefined || result.data === undefined) {
-    throw new Error('Request failed')
+    const body = (result.error as { error?: ErrorBody } | undefined)?.error
+    throw new ApiError(result.response.status, body?.message ?? 'Request failed', body?.code, body)
   }
   return result.data
 }

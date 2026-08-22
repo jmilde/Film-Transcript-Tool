@@ -14,6 +14,7 @@ from app.worker.handlers.export import handle_export
 from app.worker.handlers.metadata import handle_extract_metadata
 from app.worker.handlers.noop import handle_noop
 from app.worker.handlers.proxy import handle_generate_proxy
+from app.worker.handlers.thumbnail import handle_generate_thumbnail
 from app.worker.handlers.transcribe import handle_transcribe
 from app.worker.handlers.translate import handle_translate
 from app.worker.handlers.waveform import handle_generate_waveform
@@ -24,6 +25,7 @@ HANDLERS: dict[JobType, JobHandler] = {
     JobType.NOOP: handle_noop,
     JobType.EXTRACT_METADATA: handle_extract_metadata,
     JobType.GENERATE_PROXY: handle_generate_proxy,
+    JobType.GENERATE_THUMBNAIL: handle_generate_thumbnail,
     JobType.GENERATE_WAVEFORM: handle_generate_waveform,
     JobType.EXTRACT_AUDIO: handle_extract_audio,
     JobType.TRANSCRIBE: handle_transcribe,

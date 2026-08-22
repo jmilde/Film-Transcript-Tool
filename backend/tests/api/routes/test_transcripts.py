@@ -3,7 +3,7 @@ from collections.abc import Callable
 import pytest
 from app.models.folder import Folder
 from app.models.job import JobStatus, JobType, ProcessingJob
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.transcript import Transcript, TranscriptToken
 from app.models.user import User
@@ -30,7 +30,7 @@ def _seed_transcript(db: Session, user: User) -> tuple[Video, Transcript]:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
     db.add(folder)
     db.flush()
@@ -193,6 +193,25 @@ def test_create_translation_non_member_forbidden(
     other_user: User,
 ) -> None:
     _video, transcript = _seed_transcript(db_session, user)
+
+    other = app_client(other_user)
+    resp = other.post(f"/transcripts/{transcript.id}/translate", json={"target_language": "es"})
+    assert resp.status_code == 403
+
+
+def test_create_translation_viewer_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    video, transcript = _seed_transcript(db_session, user)
+    db_session.add(
+        ProjectMembership(
+            project_id=video.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
 
     other = app_client(other_user)
     resp = other.post(f"/transcripts/{transcript.id}/translate", json={"target_language": "es"})

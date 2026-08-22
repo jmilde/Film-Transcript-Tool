@@ -267,7 +267,16 @@ Exports MUST reflect the edited transcript.
 
 Authentication is provided by Supabase.
 
-Projects support multiple users.
+Projects support multiple users. Each member holds one role on a project:
+`owner`, `editor`, or `viewer`. `owner` and `editor` MAY create, edit, and
+delete content; `viewer` MAY only read. Only an `owner` MAY invite members,
+change a member's role, or remove a member. A project MUST always retain at
+least one `owner`. Any member MAY remove themselves (leave a project).
+
+Inviting a member by email REQUIRES that the invitee has already signed in
+at least once; inviting an unknown email MUST fail with a message telling
+the inviter the person needs to sign in first. Version 1 has no
+pending-invite or email-notification system.
 
 Editable objects MUST record:
 

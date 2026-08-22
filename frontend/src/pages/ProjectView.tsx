@@ -4,8 +4,7 @@ import { useProject } from '../api/hooks/useProjects'
 import { useCreateFolder } from '../api/hooks/useFolders'
 import { FolderTree } from '../features/folders/FolderTree'
 import { FolderPanel } from '../features/folders/FolderPanel'
-import { SearchOverlay } from '../features/search/SearchOverlay'
-import type { SearchResult } from '../api/hooks/useSearch'
+import { MembersPanel } from '../features/members/MembersPanel'
 
 export function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -16,24 +15,18 @@ export function ProjectView() {
 function ProjectViewInner({ projectId }: { projectId: string }) {
   const { data: project, isPending, isError } = useProject(projectId)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault()
-        setSearchOpen(true)
+        void navigate(`/projects/${projectId}/search`)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
-  function handleSelectResult(result: SearchResult) {
-    setSearchOpen(false)
-    void navigate(`/videos/${result.video_id}`, { state: result })
-  }
+  }, [navigate, projectId])
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -53,22 +46,17 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
             </>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setSearchOpen(true)}
-          className="shrink-0 rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
-        >
-          Search <span className="text-slate-400">⌘F</span>
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {project && <MembersPanel projectId={projectId} myRole={project.my_role} />}
+          <button
+            type="button"
+            onClick={() => void navigate(`/projects/${projectId}/search`)}
+            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+          >
+            Search <span className="text-slate-400">⌘F</span>
+          </button>
+        </div>
       </div>
-
-      {searchOpen && (
-        <SearchOverlay
-          projectId={projectId}
-          onClose={() => setSearchOpen(false)}
-          onSelect={handleSelectResult}
-        />
-      )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[16rem_1fr]">
         <aside className="rounded-lg border border-slate-200 bg-white p-3">

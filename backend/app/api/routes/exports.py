@@ -1,12 +1,18 @@
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_storage, require_export_access, require_transcript_access
+from app.api.deps import (
+    get_storage,
+    require_export_access,
+    require_min_role,
+    require_transcript_access,
+)
 from app.core.auth import get_current_user
 from app.core.errors import NotFoundError
 from app.db.session import get_db
 from app.models.export import Export, ExportType
 from app.models.job import JobStatus, JobType, ProcessingJob
+from app.models.membership import MembershipRole
 from app.models.transcript import Transcript
 from app.models.user import User
 from app.schemas.export import ExportCreate, ExportCreateResponse, ExportRead
@@ -23,7 +29,9 @@ _MEDIA_TYPES = {
 @router.post("/transcripts/{transcript_id}/exports", response_model=ExportCreateResponse)
 def create_export(
     payload: ExportCreate,
-    transcript: Transcript = Depends(require_transcript_access),
+    transcript: Transcript = Depends(
+        require_min_role(require_transcript_access, MembershipRole.EDITOR)
+    ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ExportCreateResponse:

@@ -2,6 +2,10 @@
 
 Persistent, git-tracked task checklist mirroring `/Users/jan/.claude/plans/okay-how-would-we-dreamy-squirrel.md` (the design record — read it for full context/rationale). Any agent picking up this repo should check the boxes below in order and pick up at the first unchecked item. Check items off (edit this file and commit) as they're completed — don't just remember it.
 
+Project roles/member management and token-edit optimistic locking are tracked separately in `TODO_USER_MANAGMENT.md` — check it too once the phases below are done.
+
+Semantic chat search (embeddings + reranking + a PydanticAI agent over transcripts) is tracked separately in `TODO_SEMANTIC_SEARCH.md` — an independent feature track, pick up any time after Phase 10 (Translation) since it embeds both original and translated transcripts.
+
 Three rules apply to every phase, not just some:
 - **Fully typed Python.** Every function/method/module-level variable is annotated; `uv run mypy app` must pass at the end of every phase.
 - **Linted and formatted.** `uv run ruff check .` and `uv run ruff format --check .` must pass at the end of every phase.

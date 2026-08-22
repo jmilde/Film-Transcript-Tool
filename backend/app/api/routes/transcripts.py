@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_transcript_access, require_video_access
+from app.api.deps import require_min_role, require_transcript_access, require_video_access
 from app.db.session import get_db
 from app.models.job import JobStatus, JobType, ProcessingJob
+from app.models.membership import MembershipRole
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.video import Video
 from app.schemas.transcript import (
@@ -89,6 +90,7 @@ def get_transcript(
                         else token.original_text,
                         start_time=token.start_time,
                         end_time=token.end_time,
+                        version=token.version,
                     )
                     for token in tokens_by_segment.get(segment.id, [])
                 ],
@@ -101,7 +103,9 @@ def get_transcript(
 @router.post("/transcripts/{transcript_id}/translate", response_model=TranslationResponse)
 def create_translation(
     payload: TranslationCreate,
-    transcript: Transcript = Depends(require_transcript_access),
+    transcript: Transcript = Depends(
+        require_min_role(require_transcript_access, MembershipRole.EDITOR)
+    ),
     db: Session = Depends(get_db),
 ) -> TranslationResponse:
     """Request a translation: enqueue the worker that produces it.

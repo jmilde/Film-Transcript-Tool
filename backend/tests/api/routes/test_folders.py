@@ -2,6 +2,7 @@ import uuid
 from collections.abc import Callable
 
 from app.models.folder import Folder
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.user import User
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -158,5 +159,25 @@ def test_folder_non_member_forbidden(
     rid = _make_folder(auth_client, pid, "A")
 
     resp = app_client(other_user).get(f"/folders/{rid}")
+
+    assert resp.status_code == 403
+
+
+def test_rename_folder_viewer_forbidden(
+    auth_client: TestClient,
+    app_client: Callable[[User], TestClient],
+    other_user: User,
+    db_session: Session,
+) -> None:
+    pid = _make_project(auth_client)
+    rid = _make_folder(auth_client, pid, "A")
+    db_session.add(
+        ProjectMembership(
+            project_id=uuid.UUID(pid), user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
+
+    resp = app_client(other_user).patch(f"/folders/{rid}", json={"name": "Hacked"})
 
     assert resp.status_code == 403

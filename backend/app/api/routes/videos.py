@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     get_storage,
     require_folder_access,
+    require_min_role,
     require_video_access,
     require_video_media_access,
 )
@@ -19,6 +20,7 @@ from app.db.session import get_db
 from app.models.asset import AssetType, VideoAsset
 from app.models.folder import Folder
 from app.models.job import JobStatus, ProcessingJob
+from app.models.membership import MembershipRole
 from app.models.user import User
 from app.models.video import Video
 from app.schemas.video import (
@@ -61,6 +63,7 @@ def _video_read(db: Session, video: Video) -> VideoRead:
     return VideoRead(
         id=video.id,
         folder_id=video.folder_id,
+        project_id=video.project_id,
         name=video.name,
         original_filename=video.original_filename,
         duration=video.duration,
@@ -79,7 +82,7 @@ def _video_read(db: Session, video: Video) -> VideoRead:
 )
 def upload_video(
     file: UploadFile,
-    folder: Folder = Depends(require_folder_access),
+    folder: Folder = Depends(require_min_role(require_folder_access, MembershipRole.EDITOR)),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     storage: Storage = Depends(get_storage),
@@ -135,7 +138,7 @@ def get_video(
 @router.patch("/videos/{video_id}", response_model=VideoRead)
 def update_video(
     payload: VideoUpdate,
-    video: Video = Depends(require_video_access),
+    video: Video = Depends(require_min_role(require_video_access, MembershipRole.EDITOR)),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> VideoRead:
@@ -187,6 +190,26 @@ def stream_proxy(
     return FileResponse(path, media_type=asset.mime_type or "video/mp4")
 
 
+@router.get("/videos/{video_id}/thumbnail")
+def get_thumbnail(
+    video: Video = Depends(require_video_media_access),
+    db: Session = Depends(get_db),
+    storage: Storage = Depends(get_storage),
+) -> FileResponse:
+    """Serve the generated thumbnail image, authorized by a signed ``?token=``.
+
+    Same media-token scheme as ``stream_proxy`` — this gets rendered as an
+    ``<img src>`` across many videos on the search page.
+    """
+    asset = _find_asset(db, video.id, AssetType.THUMBNAIL)
+    if asset is None:
+        raise NotFoundError("No thumbnail for this video")
+    path = storage.path_for(asset.storage_path)
+    if not path.is_file():
+        raise NotFoundError("Thumbnail file is missing from storage")
+    return FileResponse(path, media_type=asset.mime_type or "image/jpeg")
+
+
 @router.get("/videos/{video_id}/waveform")
 def get_waveform(
     video: Video = Depends(require_video_access),
@@ -209,7 +232,7 @@ def get_waveform(
 
 @router.delete("/videos/{video_id}", status_code=204)
 def delete_video(
-    video: Video = Depends(require_video_access),
+    video: Video = Depends(require_min_role(require_video_access, MembershipRole.EDITOR)),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
 ) -> Response:

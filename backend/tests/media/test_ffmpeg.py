@@ -8,11 +8,13 @@ from app.media.ffmpeg import (
     extract_audio,
     extract_audio_args,
     generate_proxy,
+    generate_thumbnail,
     generate_waveform,
     parse_probe,
     probe,
     probe_args,
     proxy_args,
+    thumbnail_args,
     waveform_pcm_args,
 )
 
@@ -79,6 +81,21 @@ def test_waveform_pcm_args_stream_to_stdout() -> None:
     assert args[args.index("-ar") + 1] == "8000"
     assert args[args.index("-f") + 1] == "s16le"
     assert args[args.index("-ac") + 1] == "1"
+
+
+def test_thumbnail_args_shape() -> None:
+    args = thumbnail_args(Path("/in.mp4"), Path("/out.jpg"), duration=100.0, width=240)
+    assert args[0] == "ffmpeg"
+    assert args[-1] == "/out.jpg"
+    assert args[args.index("-ss") + 1] == "10.000"
+    assert args[args.index("-i") + 1] == "/in.mp4"
+    assert "-frames:v" in args and args[args.index("-frames:v") + 1] == "1"
+    assert "scale=240:-2" in args
+
+
+def test_thumbnail_args_clamps_negative_duration() -> None:
+    args = thumbnail_args(Path("/in.mp4"), Path("/out.jpg"), duration=0.0)
+    assert args[args.index("-ss") + 1] == "0.000"
 
 
 def test_extract_audio_args_shape() -> None:
@@ -173,6 +190,14 @@ def test_generate_waveform_real_clip(sample_clip: Path, tmp_path: Path) -> None:
     assert written["version"] == 1
     assert written["sample_rate"] == 8000
     assert written["peaks"] == data.peaks
+
+
+def test_generate_thumbnail_real_clip(sample_clip: Path, tmp_path: Path) -> None:
+    out = tmp_path / "nested" / "thumb.jpg"
+    generate_thumbnail(sample_clip, out, duration=1.0, width=160)
+    assert out.exists() and out.stat().st_size > 0
+    thumb = probe(out)
+    assert thumb.width == 160
 
 
 def test_extract_audio_real_clip(sample_clip: Path, tmp_path: Path) -> None:

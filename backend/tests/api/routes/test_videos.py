@@ -5,7 +5,9 @@ from typing import cast
 
 from app.api.deps import get_storage
 from app.models.asset import AssetType, VideoAsset
+from app.models.folder import Folder
 from app.models.job import JobStatus, JobType, ProcessingJob
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.user import User
 from app.storage.local import LocalStorage
 from fastapi import FastAPI
@@ -85,6 +87,7 @@ def test_get_video_returns_assets_and_jobs(auth_client: TestClient, tmp_path: Pa
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == vid
+    assert uuid.UUID(body["project_id"])
     assert [a["type"] for a in body["assets"]] == ["original"]
     assert [j["type"] for j in body["jobs"]] == ["extract_metadata"]
 
@@ -165,6 +168,33 @@ def test_upload_non_member_forbidden(
 ) -> None:
     _use_tmp_storage(auth_client, tmp_path)
     fid = _make_folder(auth_client)
+
+    other = app_client(other_user)
+    _use_tmp_storage(other, tmp_path)
+    resp = other.post(
+        f"/folders/{fid}/videos",
+        files={"file": ("clip.mp4", b"x", "video/mp4")},
+    )
+    assert resp.status_code == 403
+
+
+def test_upload_viewer_forbidden(
+    auth_client: TestClient,
+    app_client: Callable[[User], TestClient],
+    other_user: User,
+    db_session: Session,
+    tmp_path: Path,
+) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+    folder = db_session.get(Folder, uuid.UUID(fid))
+    assert folder is not None
+    db_session.add(
+        ProjectMembership(
+            project_id=folder.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
 
     other = app_client(other_user)
     _use_tmp_storage(other, tmp_path)
@@ -287,6 +317,47 @@ def test_media_token_non_member_forbidden(
     resp = app_client(other_user).get(f"/videos/{vid}/media-token")
 
     assert resp.status_code == 403
+
+
+def test_thumbnail_returns_image(
+    auth_client: TestClient, tmp_path: Path, db_session: Session
+) -> None:
+    vid = _upload_video(auth_client, tmp_path)
+    _add_asset(
+        db_session,
+        tmp_path,
+        vid,
+        AssetType.THUMBNAIL,
+        f"videos/{vid}/thumbnail.jpg",
+        b"jpeg-bytes",
+        "image/jpeg",
+    )
+    token = auth_client.get(f"/videos/{vid}/media-token").json()["token"]
+
+    resp = auth_client.get(f"/videos/{vid}/thumbnail", params={"token": token})
+
+    assert resp.status_code == 200
+    assert resp.content == b"jpeg-bytes"
+    assert resp.headers["content-type"] == "image/jpeg"
+
+
+def test_thumbnail_missing_returns_404(
+    auth_client: TestClient, tmp_path: Path, db_session: Session
+) -> None:
+    vid = _upload_video(auth_client, tmp_path)
+    token = auth_client.get(f"/videos/{vid}/media-token").json()["token"]
+
+    resp = auth_client.get(f"/videos/{vid}/thumbnail", params={"token": token})
+
+    assert resp.status_code == 404
+
+
+def test_thumbnail_rejects_invalid_token(auth_client: TestClient, tmp_path: Path) -> None:
+    vid = _upload_video(auth_client, tmp_path)
+
+    resp = auth_client.get(f"/videos/{vid}/thumbnail", params={"token": "bogus.1.sig"})
+
+    assert resp.status_code == 401
 
 
 def test_waveform_returns_peaks(

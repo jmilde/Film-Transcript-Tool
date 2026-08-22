@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useVideo } from '../api/hooks/useVideos'
+import { useProject } from '../api/hooks/useProjects'
 import { proxyUrl, useMediaToken, useWaveform } from '../api/hooks/useMedia'
 import { useSpeakers } from '../api/hooks/useSpeakers'
 import { useTranscript, useTranscripts } from '../api/hooks/useTranscripts'
@@ -15,7 +16,7 @@ import { CommentsPanel } from '../features/comments/CommentsPanel'
 import { TranslationControl } from '../features/translation/TranslationControl'
 import { ExportControl } from '../features/export/ExportControl'
 import { CloseIcon } from '../components/icons'
-import type { SearchResult } from '../api/hooks/useSearch'
+import type { PendingSearchNav } from '../features/search/types'
 
 export function VideoWorkspace() {
   const { videoId } = useParams<{ videoId: string }>()
@@ -25,6 +26,10 @@ export function VideoWorkspace() {
 
 function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const { data: video, isError: videoError } = useVideo(videoId)
+  const { data: project } = useProject(video?.project_id)
+  // Viewers can watch/read but not edit; default to false until the
+  // project's role is known so edit controls don't flash on then off.
+  const canEdit = project ? project.my_role !== 'viewer' : false
   const { data: media } = useMediaToken(videoId)
   const waveform = useWaveform(videoId)
   const { data: transcripts } = useTranscripts(videoId)
@@ -34,11 +39,11 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const setSelectionRange = useSelectionStore((s) => s.setRange)
 
-  // Set via navigate(..., { state }) when arriving from a search result
-  // (SearchOverlay). Applied once below, after the transcript/comments it
+  // Set via navigate(..., { state }) when arriving from a search hit
+  // (SearchPage). Applied once below, after the transcript/comments it
   // targets have loaded.
   const location = useLocation()
-  const pendingSearch = location.state as SearchResult | null
+  const pendingSearch = location.state as PendingSearchNav | null
   const appliedSearchRef = useRef(false)
 
   // Reset playback state when switching videos.
@@ -108,12 +113,12 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     if (!pendingSearch || appliedSearchRef.current) return
     if (
       pendingSearch.kind === 'transcript' &&
-      pendingSearch.transcript_id &&
-      pendingSearch.start_time !== null
+      pendingSearch.transcriptId &&
+      pendingSearch.startTime !== null
     ) {
       appliedSearchRef.current = true
-      seek(pendingSearch.start_time)
-      setSelectionRange(pendingSearch.transcript_id, pendingSearch.id, pendingSearch.id)
+      seek(pendingSearch.startTime)
+      setSelectionRange(pendingSearch.transcriptId, pendingSearch.id, pendingSearch.id)
     } else if (pendingSearch.kind === 'comment' && comments) {
       const comment = comments.find((c) => c.id === pendingSearch.id)
       if (comment) {
@@ -142,9 +147,17 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
       <div className="mb-3 flex items-center gap-3">
-        <Link to="/" className="text-sm text-slate-500 hover:underline">
+        <Link
+          to={video ? `/projects/${video.project_id}` : '/'}
+          className="text-sm text-slate-500 hover:underline"
+        >
           ← Projects
         </Link>
+        {pendingSearch?.returnTo && (
+          <Link to={pendingSearch.returnTo} className="text-sm text-slate-500 hover:underline">
+            ← Back to search
+          </Link>
+        )}
         <h2 className="truncate text-lg font-semibold text-slate-800">{video?.name ?? 'Video'}</h2>
         <div className="ml-auto flex items-center gap-2">
           <TranslationControl
@@ -182,6 +195,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     isLoading={transcriptId !== null && transcriptLoading}
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
+                    canEdit={canEdit}
                   />
                 </div>
               </Panel>
@@ -207,6 +221,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     isLoading={secondTranscriptLoading}
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
+                    canEdit={canEdit}
                   />
                 </div>
               </Panel>
@@ -219,6 +234,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               isLoading={transcriptId !== null && transcriptLoading}
               onSeekToken={seek}
               onPlaySelection={playSelection}
+              canEdit={canEdit}
             />
           )}
         </Panel>

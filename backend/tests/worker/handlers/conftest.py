@@ -6,7 +6,7 @@ import pytest
 from app.models.asset import AssetType, VideoAsset
 from app.models.folder import Folder
 from app.models.job import JobStatus, JobType, ProcessingJob
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.user import User
 from app.models.video import Video
@@ -77,7 +77,9 @@ def media(
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db_session.add(project)
     db_session.flush()
-    db_session.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db_session.add(
+        ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER)
+    )
     folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
     db_session.add(folder)
     db_session.flush()

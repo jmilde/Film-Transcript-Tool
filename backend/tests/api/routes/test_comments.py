@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from app.models.folder import Folder
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
@@ -19,7 +19,7 @@ def _seed(db: Session, user: User, name: str = "clip") -> Transcript:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
     db.add(folder)
     db.flush()
@@ -155,6 +155,33 @@ def test_create_comment_non_member_forbidden(
 ) -> None:
     transcript = _seed(db_session, user)
     tokens = _tokens(db_session, transcript, 0)
+
+    other = app_client(other_user)
+    resp = other.post(
+        f"/transcripts/{transcript.id}/comments",
+        json={
+            "start_token_id": str(tokens[0].id),
+            "end_token_id": str(tokens[1].id),
+            "text": "sneaky",
+        },
+    )
+    assert resp.status_code == 403
+
+
+def test_create_comment_viewer_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    transcript = _seed(db_session, user)
+    tokens = _tokens(db_session, transcript, 0)
+    db_session.add(
+        ProjectMembership(
+            project_id=transcript.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
 
     other = app_client(other_user)
     resp = other.post(

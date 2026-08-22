@@ -1,20 +1,22 @@
 import uuid
 
 import pytest
-from app.api.deps import require_folder_access, require_project_member
+from app.api.deps import require_folder_access, require_min_role, require_project_member
 from app.core.errors import ForbiddenError, NotFoundError
 from app.models.folder import Folder
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.user import User
 from sqlalchemy.orm import Session
 
 
-def _project_with_member(db_session: Session, member: User) -> Project:
+def _project_with_member(
+    db_session: Session, member: User, *, role: MembershipRole = MembershipRole.OWNER
+) -> Project:
     project = Project(name="P", created_by=member.id, updated_by=member.id)
     db_session.add(project)
     db_session.flush()
-    db_session.add(ProjectMembership(project_id=project.id, user_id=member.id))
+    db_session.add(ProjectMembership(project_id=project.id, user_id=member.id, role=role))
     db_session.flush()
     return project
 
@@ -67,3 +69,36 @@ def test_require_folder_access_non_member_403(
 
     with pytest.raises(ForbiddenError):
         require_folder_access(folder.id, db_session, other_user)
+
+
+def test_require_min_role_viewer_forbidden(db_session: Session, user: User) -> None:
+    project = _project_with_member(db_session, user, role=MembershipRole.VIEWER)
+    folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
+    db_session.add(folder)
+    db_session.flush()
+
+    dependency = require_min_role(require_folder_access, MembershipRole.EDITOR)
+    with pytest.raises(ForbiddenError):
+        dependency(folder, db_session, user)
+
+
+def test_require_min_role_editor_allowed(db_session: Session, user: User) -> None:
+    project = _project_with_member(db_session, user, role=MembershipRole.EDITOR)
+    folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
+    db_session.add(folder)
+    db_session.flush()
+
+    dependency = require_min_role(require_folder_access, MembershipRole.EDITOR)
+
+    assert dependency(folder, db_session, user).id == folder.id
+
+
+def test_require_min_role_owner_allowed(db_session: Session, user: User) -> None:
+    project = _project_with_member(db_session, user, role=MembershipRole.OWNER)
+    folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
+    db_session.add(folder)
+    db_session.flush()
+
+    dependency = require_min_role(require_folder_access, MembershipRole.EDITOR)
+
+    assert dependency(folder, db_session, user).id == folder.id

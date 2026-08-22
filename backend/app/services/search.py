@@ -4,9 +4,15 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.asset import AssetType, VideoAsset
 from app.models.comment import Comment, CommentRange
 from app.models.speaker import Speaker
 from app.models.transcript import Transcript, TranscriptToken
+from app.models.video import Video
+from app.services.folders import build_folder_breadcrumbs
+
+# Hits shown per video group; the rest are still counted in ``hit_count``.
+MAX_HITS_PER_VIDEO = 20
 
 
 @dataclass
@@ -122,3 +128,82 @@ def search_project(session: Session, project_id: uuid.UUID, query: str) -> list[
 
     hits.sort(key=lambda hit: hit.rank, reverse=True)
     return hits
+
+
+@dataclass
+class SearchGroup:
+    """All matches within one video, plus the context needed to render a card."""
+
+    video_id: uuid.UUID
+    video_name: str
+    folder_path: list[str]
+    has_thumbnail: bool
+    hits: list[SearchHit]
+    hit_count: int
+
+
+@dataclass
+class PaginatedSearchGroups:
+    groups: list[SearchGroup]
+    total_videos: int
+
+
+def _hit_sort_key(hit: SearchHit) -> tuple[int, float]:
+    # Speaker hits have no start_time; sort them after every seekable hit.
+    return (0, hit.start_time) if hit.start_time is not None else (1, 0.0)
+
+
+def group_search_hits(
+    session: Session, project_id: uuid.UUID, query: str, *, limit: int, offset: int
+) -> PaginatedSearchGroups:
+    """Group ``search_project``'s flat hits by video, ranked and paginated.
+
+    Groups are ranked by their best hit's rank descending, then paginated as a
+    list (``limit``/``offset`` apply to videos, not individual hits). Within a
+    group, hits are sorted by ``start_time`` ascending and capped at
+    ``MAX_HITS_PER_VIDEO``, with ``hit_count`` tracking the true total.
+    """
+    hits = search_project(session, project_id, query)
+
+    by_video: dict[uuid.UUID, list[SearchHit]] = {}
+    for hit in hits:
+        by_video.setdefault(hit.video_id, []).append(hit)
+
+    ranked_video_ids = sorted(
+        by_video, key=lambda vid: max(h.rank for h in by_video[vid]), reverse=True
+    )
+    total_videos = len(ranked_video_ids)
+    page_ids = ranked_video_ids[offset : offset + limit]
+    if not page_ids:
+        return PaginatedSearchGroups(groups=[], total_videos=total_videos)
+
+    videos = {
+        video.id: video
+        for video in session.execute(select(Video).where(Video.id.in_(page_ids))).scalars()
+    }
+    thumbnail_video_ids = set(
+        session.execute(
+            select(VideoAsset.video_id).where(
+                VideoAsset.video_id.in_(page_ids), VideoAsset.type == AssetType.THUMBNAIL
+            )
+        ).scalars()
+    )
+    breadcrumbs = build_folder_breadcrumbs(session, (video.folder_id for video in videos.values()))
+
+    groups: list[SearchGroup] = []
+    for video_id in page_ids:
+        video = videos.get(video_id)
+        if video is None:
+            continue
+        video_hits = sorted(by_video[video_id], key=_hit_sort_key)
+        groups.append(
+            SearchGroup(
+                video_id=video_id,
+                video_name=video.name,
+                folder_path=breadcrumbs.get(video.folder_id, []),
+                has_thumbnail=video_id in thumbnail_video_ids,
+                hits=video_hits[:MAX_HITS_PER_VIDEO],
+                hit_count=len(video_hits),
+            )
+        )
+    return PaginatedSearchGroups(groups=groups, total_videos=total_videos)

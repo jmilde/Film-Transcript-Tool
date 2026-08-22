@@ -182,6 +182,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/videos/{video_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Thumbnail
+         * @description Serve the generated thumbnail image, authorized by a signed ``?token=``.
+         *
+         *     Same media-token scheme as ``stream_proxy`` — this gets rendered as an
+         *     ``<img src>`` across many videos on the search page.
+         */
+        get: operations["get_thumbnail_videos__video_id__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/videos/{video_id}/waveform": {
         parameters: {
             query?: never;
@@ -506,6 +529,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Project Members */
+        get: operations["list_project_members_projects__project_id__members_get"];
+        put?: never;
+        /** Invite */
+        post: operations["invite_projects__project_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove
+         * @description Remove a member, or let a member remove (leave) themselves.
+         *
+         *     Removing *another* member requires ``OWNER``; removing yourself is always
+         *     allowed (the service layer's last-owner guard still applies).
+         */
+        delete: operations["remove_projects__project_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change Role */
+        patch: operations["change_role_projects__project_id__members__user_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -743,7 +808,7 @@ export interface components {
          * JobType
          * @enum {string}
          */
-        JobType: "extract_metadata" | "generate_proxy" | "generate_waveform" | "extract_audio" | "transcribe" | "translate" | "export" | "noop";
+        JobType: "extract_metadata" | "generate_proxy" | "generate_thumbnail" | "generate_waveform" | "extract_audio" | "transcribe" | "translate" | "export" | "noop";
         /** MediaTokenResponse */
         MediaTokenResponse: {
             /** Token */
@@ -751,6 +816,39 @@ export interface components {
             /** Expires In */
             expires_in: number;
         };
+        /** MemberInvite */
+        MemberInvite: {
+            /** Email */
+            email: string;
+            role: components["schemas"]["MembershipRole"];
+        };
+        /** MemberRead */
+        MemberRead: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Display Name */
+            display_name: string | null;
+            role: components["schemas"]["MembershipRole"];
+        };
+        /** MemberRoleUpdate */
+        MemberRoleUpdate: {
+            role: components["schemas"]["MembershipRole"];
+        };
+        /**
+         * MembershipRole
+         * @description A member's permission tier on a project.
+         *
+         *     Kept on ``ProjectMembership`` (not named ``ProjectRole``) and the
+         *     membership-check helpers kept composable so a future multi-tenant
+         *     ``Organization`` layer can reuse the same shape without renaming this.
+         * @enum {string}
+         */
+        MembershipRole: "owner" | "editor" | "viewer";
         /** ProjectCreate */
         ProjectCreate: {
             /** Name */
@@ -781,6 +879,7 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            my_role: components["schemas"]["MembershipRole"];
         };
         /** ProjectUpdate */
         ProjectUpdate: {
@@ -792,15 +891,14 @@ export interface components {
             archived?: boolean | null;
         };
         /**
-         * SearchResult
-         * @description One matching location returned by project search.
+         * SearchHitRead
+         * @description One matching location within a video, returned inside a ``SearchVideoGroup``.
          *
          *     ``kind`` is ``transcript`` (a token), ``speaker``, or ``comment``.
-         *     ``video_id`` locates the result for navigation; ``start_time`` is the video
-         *     position to seek to (``None`` for speaker matches, which are video-level).
-         *     Results are ordered by ``rank`` (descending) across all three sources.
+         *     ``start_time`` is the video position to seek to (``None`` for speaker
+         *     matches, which are video-level).
          */
-        SearchResult: {
+        SearchHitRead: {
             /** Kind */
             kind: string;
             /**
@@ -808,11 +906,6 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Video Id
-             * Format: uuid
-             */
-            video_id: string;
             /** Transcript Id */
             transcript_id: string | null;
             /** Text */
@@ -821,6 +914,41 @@ export interface components {
             start_time: number | null;
             /** Rank */
             rank: number;
+        };
+        /**
+         * SearchResponse
+         * @description A page of video groups, ranked by each group's best-hit rank descending.
+         */
+        SearchResponse: {
+            /** Groups */
+            groups: components["schemas"]["SearchVideoGroup"][];
+            /** Total Videos */
+            total_videos: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * SearchVideoGroup
+         * @description All matches within a single video, with enough context to render a card.
+         */
+        SearchVideoGroup: {
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+            /** Video Name */
+            video_name: string;
+            /** Folder Path */
+            folder_path: string[];
+            /** Thumbnail Token */
+            thumbnail_token: string | null;
+            /** Hits */
+            hits: components["schemas"]["SearchHitRead"][];
+            /** Hit Count */
+            hit_count: number;
         };
         /** SegmentRead */
         SegmentRead: {
@@ -864,11 +992,23 @@ export interface components {
         TokenEdit: {
             /** Edited Text */
             edited_text: string | null;
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** TokenMergeItem */
+        TokenMergeItem: {
+            /**
+             * Token Id
+             * Format: uuid
+             */
+            token_id: string;
+            /** Expected Version */
+            expected_version: number;
         };
         /** TokenMergeRequest */
         TokenMergeRequest: {
-            /** Token Ids */
-            token_ids: string[];
+            /** Tokens */
+            tokens: components["schemas"]["TokenMergeItem"][];
             /** Text */
             text: string;
         };
@@ -894,6 +1034,8 @@ export interface components {
             start_time: number;
             /** End Time */
             end_time: number;
+            /** Version */
+            version: number;
         };
         /** TokenSplitPiece */
         TokenSplitPiece: {
@@ -904,6 +1046,8 @@ export interface components {
         TokenSplitRequest: {
             /** Tokens */
             tokens: components["schemas"]["TokenSplitPiece"][];
+            /** Expected Version */
+            expected_version: number;
         };
         /** TranscriptRead */
         TranscriptRead: {
@@ -1021,6 +1165,11 @@ export interface components {
              * Format: uuid
              */
             folder_id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
             /** Name */
             name: string;
             /** Original Filename */
@@ -1571,6 +1720,39 @@ export interface operations {
             };
         };
     };
+    get_thumbnail_videos__video_id__thumbnail_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_waveform_videos__video_id__waveform_get: {
         parameters: {
             query?: never;
@@ -1829,7 +2011,9 @@ export interface operations {
     };
     remove_token_tokens__token_id__delete: {
         parameters: {
-            query?: never;
+            query: {
+                expected_version: number;
+            };
             header?: never;
             path: {
                 token_id: string;
@@ -2101,6 +2285,8 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
+                limit?: number;
+                offset?: number;
             };
             header?: never;
             path: {
@@ -2116,7 +2302,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SearchResult"][];
+                    "application/json": components["schemas"]["SearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2214,6 +2400,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_project_members_projects__project_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_projects__project_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberInvite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_projects__project_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_role_projects__project_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberRoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRead"];
                 };
             };
             /** @description Validation Error */

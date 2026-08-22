@@ -13,6 +13,7 @@ from app.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 class JobType(enum.StrEnum):
     EXTRACT_METADATA = "extract_metadata"
     GENERATE_PROXY = "generate_proxy"
+    GENERATE_THUMBNAIL = "generate_thumbnail"
     GENERATE_WAVEFORM = "generate_waveform"
     EXTRACT_AUDIO = "extract_audio"
     TRANSCRIBE = "transcribe"

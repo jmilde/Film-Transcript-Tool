@@ -9,7 +9,8 @@ def test_first_stage_is_metadata() -> None:
 
 def test_stage_order() -> None:
     assert next_stage(JobType.EXTRACT_METADATA) is JobType.GENERATE_PROXY
-    assert next_stage(JobType.GENERATE_PROXY) is JobType.GENERATE_WAVEFORM
+    assert next_stage(JobType.GENERATE_PROXY) is JobType.GENERATE_THUMBNAIL
+    assert next_stage(JobType.GENERATE_THUMBNAIL) is JobType.GENERATE_WAVEFORM
     assert next_stage(JobType.GENERATE_WAVEFORM) is JobType.EXTRACT_AUDIO
     assert next_stage(JobType.EXTRACT_AUDIO) is JobType.TRANSCRIBE
 

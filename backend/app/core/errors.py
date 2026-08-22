@@ -12,11 +12,18 @@ class AppError(Exception):
     status_code: int = 400
     code: str = "ERROR"
 
-    def __init__(self, message: str, *, code: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        details: dict[str, object] | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         if code is not None:
             self.code = code
+        self.details = details
 
 
 class BadRequestError(AppError):
@@ -39,12 +46,20 @@ class NotFoundError(AppError):
     code = "NOT_FOUND"
 
 
+class ConflictError(AppError):
+    status_code = 409
+    code = "CONFLICT"
+
+
 def register_error_handlers(app: FastAPI) -> None:
     async def handle_app_error(request: Request, exc: Exception) -> JSONResponse:
         assert isinstance(exc, AppError)
+        body: dict[str, object] = {"code": exc.code, "message": exc.message}
+        if exc.details is not None:
+            body.update(exc.details)
         return JSONResponse(
             status_code=exc.status_code,
-            content={"error": {"code": exc.code, "message": exc.message}},
+            content={"error": body},
         )
 
     app.add_exception_handler(AppError, handle_app_error)

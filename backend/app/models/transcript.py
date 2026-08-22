@@ -96,6 +96,10 @@ class TranscriptToken(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     start_time: Mapped[float]
     end_time: Mapped[float]
     is_deleted: Mapped[bool] = mapped_column(default=False)
+    # Optimistic-locking counter, bumped on every edit/delete/merge/split;
+    # writers must supply the version they last saw or the write is rejected
+    # with a 409 CONFLICT rather than silently overwriting a concurrent edit.
+    version: Mapped[int] = mapped_column(default=1, server_default="1")
     # Fractional ordering within the segment; NUMERIC lets merge/split insert
     # replacement tokens between existing positions without renumbering.
     position: Mapped[Decimal] = mapped_column(Numeric)

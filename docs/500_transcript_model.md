@@ -160,7 +160,11 @@ start_time
 end_time
 
 is_deleted
+
+version
 ```
+
+`version` starts at 1 and is incremented on every write to that row (see §8.5).
 
 ---
 
@@ -397,16 +401,26 @@ The new tokens belong to the same segment as the original token.
 
 # 8.5 Concurrent Edits
 
-Version 1 does not provide real-time collaborative editing.
+Version 1 does not provide real-time collaborative editing, but it DOES
+detect and reject conflicting concurrent edits — it never silently overwrites
+one user's change with another's.
 
-Multiple users MAY still edit the same transcript at different times.
+Each token carries a `version` counter. Every write (replace/delete/merge/
+split) MUST include the `version` the client last read for each token it
+modifies:
 
-Token edits use last-write-wins:
+- If the token's current `version` still matches, the write proceeds:
+  `updated_by`/`updated_at` are set and `version` is incremented.
+- If it no longer matches (someone else wrote to it first), the write is
+  rejected with a conflict response carrying the token's current
+  server-side state. Nothing is mutated.
 
-- Each write updates `updated_by` and `updated_at`.
-- A later write replaces an earlier write's `edited_text` without merging changes.
+A replacement token created by a merge or split starts at `version` 1 — it
+is a new row, not a continuation of an original token's version history.
 
-The application does not detect or warn about overwritten edits in version 1.
+The client MUST NOT auto-retry or auto-merge on a conflict; it surfaces the
+conflict to the user (showing the current server state) with a manual reload
+action before any further edit to that token is accepted.
 
 ---
 

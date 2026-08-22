@@ -6,6 +6,7 @@ from app.models.job import JobType
 UPLOAD_PIPELINE: list[JobType] = [
     JobType.EXTRACT_METADATA,
     JobType.GENERATE_PROXY,
+    JobType.GENERATE_THUMBNAIL,
     JobType.GENERATE_WAVEFORM,
     JobType.EXTRACT_AUDIO,
     JobType.TRANSCRIBE,

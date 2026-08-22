@@ -32,6 +32,11 @@ export function proxyUrl(videoId: string, token: string): string {
   return `${API_URL}/videos/${videoId}/proxy?token=${encodeURIComponent(token)}`
 }
 
+/** Build the authenticated thumbnail URL for an <img src>. */
+export function thumbnailUrl(videoId: string, token: string): string {
+  return `${API_URL}/videos/${videoId}/thumbnail?token=${encodeURIComponent(token)}`
+}
+
 /** Precomputed waveform peaks for the timeline; absent (404) until generated. */
 export function useWaveform(videoId: string) {
   return useQuery({

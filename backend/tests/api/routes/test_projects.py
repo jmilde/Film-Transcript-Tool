@@ -1,8 +1,10 @@
 import uuid
 from collections.abc import Callable
 
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.user import User
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 
 def test_create_project(auth_client: TestClient) -> None:
@@ -13,6 +15,7 @@ def test_create_project(auth_client: TestClient) -> None:
     assert body["name"] == "Doc"
     assert body["description"] == "d"
     assert body["archived_at"] is None
+    assert body["my_role"] == "owner"
     assert uuid.UUID(body["id"])
 
 
@@ -77,6 +80,25 @@ def test_update_non_member_forbidden(
     other_user: User,
 ) -> None:
     pid = auth_client.post("/projects", json={"name": "P"}).json()["id"]
+
+    resp = app_client(other_user).patch(f"/projects/{pid}", json={"name": "hijack"})
+
+    assert resp.status_code == 403
+
+
+def test_update_viewer_forbidden(
+    auth_client: TestClient,
+    app_client: Callable[[User], TestClient],
+    other_user: User,
+    db_session: Session,
+) -> None:
+    pid = auth_client.post("/projects", json={"name": "P"}).json()["id"]
+    db_session.add(
+        ProjectMembership(
+            project_id=uuid.UUID(pid), user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
 
     resp = app_client(other_user).patch(f"/projects/{pid}", json={"name": "hijack"})
 

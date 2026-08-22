@@ -1,7 +1,7 @@
 import { useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useFolderContents } from '../../api/hooks/useFolders'
-import { useUploadVideo, useVideoProcessing } from '../../api/hooks/useVideos'
+import { useMoveVideo, useUploadVideo, useVideoProcessing } from '../../api/hooks/useVideos'
 import { FolderIcon, VideoIcon } from '../../components/icons'
 import { VIDEO_DND_TYPE } from './FolderTree'
 
@@ -34,9 +34,11 @@ function FolderPanelInner({
   onSelectFolder: (folderId: string) => void
 }) {
   const { data, isPending, isError } = useFolderContents(folderId)
+  const moveVideo = useMoveVideo()
   // Videos uploaded in this session, tracked for live processing status.
   const [uploaded, setUploaded] = useState<string[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const lastClickedRef = useRef<string | null>(null)
   const navigate = useNavigate()
 
@@ -84,8 +86,28 @@ function FolderPanelInner({
 
   function handleVideoDrop(e: DragEvent) {
     // Dropping selected videos back onto their own folder's list is a no-op;
-    // cross-folder drops happen on FolderTree nodes, not here.
+    // drops onto a subfolder row are handled by that row's own onDrop below.
     e.preventDefault()
+  }
+
+  function handleSubfolderDragOver(e: DragEvent) {
+    if (!e.dataTransfer.types.includes(VIDEO_DND_TYPE)) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  function handleSubfolderDrop(e: DragEvent, targetFolderId: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverFolderId(null)
+    const raw = e.dataTransfer.getData(VIDEO_DND_TYPE)
+    if (!raw) return
+    const payload = JSON.parse(raw) as { videoIds: string[]; fromFolderId: string }
+    if (payload.fromFolderId === targetFolderId) return
+    for (const videoId of payload.videoIds) {
+      moveVideo.mutate({ videoId, folderId: targetFolderId, fromFolderId: payload.fromFolderId })
+    }
   }
 
   return (
@@ -107,14 +129,24 @@ function FolderPanelInner({
           onDrop={handleVideoDrop}
         >
           {folders.map((f) => (
-            <li key={f.id}>
+            <li
+              key={f.id}
+              onDragOver={(e) => {
+                handleSubfolderDragOver(e)
+                setDragOverFolderId(f.id)
+              }}
+              onDragLeave={() => setDragOverFolderId((id) => (id === f.id ? null : id))}
+              onDrop={(e) => handleSubfolderDrop(e, f.id)}
+            >
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   onSelectFolder(f.id)
                 }}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50"
+                className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-slate-700 ${
+                  dragOverFolderId === f.id ? 'bg-slate-100 ring-1 ring-inset ring-slate-400' : 'hover:bg-slate-50'
+                }`}
               >
                 <FolderIcon className="h-4 w-4 shrink-0 text-slate-400" />
                 <span className="truncate">{f.name}</span>
@@ -128,13 +160,15 @@ function FolderPanelInner({
               onDragStart={(e) => handleVideoDragStart(e, v.id)}
               onClick={(e) => {
                 e.stopPropagation()
-                handleVideoClick(e, v.id)
+                // Plain click opens the video, matching folder click-to-open;
+                // a modifier click instead extends the selection for dragging.
+                if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                  handleVideoClick(e, v.id)
+                } else {
+                  void navigate(`/videos/${v.id}`)
+                }
               }}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                void navigate(`/videos/${v.id}`)
-              }}
-              className={`flex cursor-default items-center gap-2 px-4 py-2.5 ${
+              className={`flex cursor-pointer items-center gap-2 px-4 py-2.5 ${
                 selected.has(v.id) ? 'bg-slate-200' : 'hover:bg-slate-50'
               }`}
             >

@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.membership import MembershipRole
+
 
 class ProjectCreate(BaseModel):
     name: str
@@ -24,3 +26,4 @@ class ProjectRead(BaseModel):
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    my_role: MembershipRole

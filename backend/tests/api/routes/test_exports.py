@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from app.api import deps
 from app.models.folder import Folder
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.transcript import Transcript
 from app.models.user import User
@@ -38,7 +38,7 @@ def _seed(db: Session, user: User) -> Transcript:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
     db.add(folder)
     db.flush()

@@ -112,9 +112,11 @@ function FolderTreeNode({
 }: NodeProps) {
   const [expanded, setExpanded] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  // Only fetch children once the node is opened.
-  const { data } = useFolderContents(expanded ? folder.id : null)
+  // Fetched eagerly (not gated on `expanded`) so we know whether this folder
+  // has subfolders and can hide the expand arrow when it doesn't.
+  const { data } = useFolderContents(folder.id)
   const isSelected = folder.id === selectedFolderId
+  const hasSubfolders = (data?.folders.length ?? 0) > 0
 
   function handleDragStart(e: DragEvent) {
     e.stopPropagation()
@@ -186,14 +188,18 @@ function FolderTreeNode({
         }`}
         style={{ paddingLeft: depth * 14 }}
       >
-        <button
-          type="button"
-          aria-label={expanded ? 'Collapse' : 'Expand'}
-          onClick={() => setExpanded((e) => !e)}
-          className="w-5 shrink-0 text-slate-400"
-        >
-          {expanded ? '▾' : '▸'}
-        </button>
+        {hasSubfolders ? (
+          <button
+            type="button"
+            aria-label={expanded ? 'Collapse' : 'Expand'}
+            onClick={() => setExpanded((e) => !e)}
+            className="w-5 shrink-0 text-slate-400"
+          >
+            {expanded ? '▾' : '▸'}
+          </button>
+        ) : (
+          <span className="w-5 shrink-0" />
+        )}
         <FolderIcon className="mr-1 h-4 w-4 shrink-0 text-slate-400" />
         <button
           type="button"

@@ -1,7 +1,7 @@
 import pytest
 from app.models.comment import CommentRange, CommentReply
 from app.models.folder import Folder
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
@@ -24,7 +24,7 @@ def _project(db: Session, user: User) -> Project:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     return project
 
 

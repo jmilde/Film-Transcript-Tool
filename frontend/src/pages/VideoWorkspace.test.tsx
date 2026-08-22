@@ -8,9 +8,10 @@ import { server } from '../test/server'
 import { AuthProvider } from '../auth/AuthProvider'
 import { useSelectionStore } from '../store/selection'
 import { VideoWorkspace } from './VideoWorkspace'
-import type { SearchResult } from '../api/hooks/useSearch'
+import type { PendingSearchNav } from '../features/search/types'
 
 const VIDEO_ID = '00000000-0000-0000-0000-0000000000v1'
+const PROJECT_ID = '00000000-0000-0000-0000-0000000000p1'
 const TRANSCRIPT_ID = '00000000-0000-0000-0000-0000000000t1'
 const TRANSLATION_ID = '00000000-0000-0000-0000-0000000000t2'
 const SPEAKER_ID = '00000000-0000-0000-0000-0000000000s1'
@@ -19,10 +20,10 @@ beforeEach(() => {
   useSelectionStore.getState().clear()
 })
 
-function renderWorkspace(searchResult?: SearchResult) {
+function renderWorkspace(pendingSearch?: PendingSearchNav) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([{ path: '/videos/:videoId', element: <VideoWorkspace /> }], {
-    initialEntries: [{ pathname: `/videos/${VIDEO_ID}`, state: searchResult ?? null }],
+    initialEntries: [{ pathname: `/videos/${VIDEO_ID}`, state: pendingSearch ?? null }],
   })
   return render(
     <QueryClientProvider client={client}>
@@ -33,12 +34,13 @@ function renderWorkspace(searchResult?: SearchResult) {
   )
 }
 
-function handlers() {
+function handlers(myRole: 'owner' | 'editor' | 'viewer' = 'editor') {
   server.use(
     http.get(`http://localhost:8000/videos/${VIDEO_ID}`, () =>
       HttpResponse.json({
         id: VIDEO_ID,
         folder_id: '00000000-0000-0000-0000-0000000000f1',
+        project_id: PROJECT_ID,
         name: 'Interview A',
         original_filename: 'a.mp4',
         duration: 12.5,
@@ -47,6 +49,17 @@ function handlers() {
         height: 1080,
         assets: [],
         jobs: [],
+      }),
+    ),
+    http.get(`http://localhost:8000/projects/${PROJECT_ID}`, () =>
+      HttpResponse.json({
+        id: PROJECT_ID,
+        name: 'P',
+        description: null,
+        archived_at: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        my_role: myRole,
       }),
     ),
     http.get(`http://localhost:8000/videos/${VIDEO_ID}/media-token`, () =>
@@ -210,11 +223,9 @@ describe('VideoWorkspace', () => {
     renderWorkspace({
       kind: 'transcript',
       id: tokenId,
-      video_id: VIDEO_ID,
-      transcript_id: TRANSCRIPT_ID,
-      text: 'world',
-      start_time: 1,
-      rank: 1,
+      transcriptId: TRANSCRIPT_ID,
+      startTime: 1,
+      returnTo: `/projects/${PROJECT_ID}/search?q=world`,
     })
 
     await screen.findByText('Hello', { exact: false })
@@ -252,11 +263,9 @@ describe('VideoWorkspace', () => {
     renderWorkspace({
       kind: 'comment',
       id: 'comment-1',
-      video_id: VIDEO_ID,
-      transcript_id: TRANSCRIPT_ID,
-      text: 'Check this',
-      start_time: 0,
-      rank: 1,
+      transcriptId: TRANSCRIPT_ID,
+      startTime: 0,
+      returnTo: `/projects/${PROJECT_ID}/search?q=check`,
     })
 
     await screen.findByText('Hello')
@@ -268,6 +277,37 @@ describe('VideoWorkspace', () => {
         focusTokenId: '00000000-0000-0000-0000-0000000000k2',
       })
     })
+  })
+
+  it('shows a back-to-search link pointing at the search page when arriving from search', async () => {
+    handlers()
+    const returnTo = `/projects/${PROJECT_ID}/search?q=world`
+    renderWorkspace({
+      kind: 'transcript',
+      id: '00000000-0000-0000-0000-0000000000k2',
+      transcriptId: TRANSCRIPT_ID,
+      startTime: 1,
+      returnTo,
+    })
+
+    const link = await screen.findByRole('link', { name: '← Back to search' })
+    expect(link).toHaveAttribute('href', returnTo)
+  })
+
+  it('does not show a back-to-search link on a normal visit', async () => {
+    handlers()
+    renderWorkspace()
+
+    await screen.findByRole('heading', { name: 'Interview A' })
+    expect(screen.queryByRole('link', { name: '← Back to search' })).not.toBeInTheDocument()
+  })
+
+  it('links "← Projects" to the video\'s project once loaded', async () => {
+    handlers()
+    renderWorkspace()
+
+    const link = await screen.findByRole('link', { name: '← Projects' })
+    await waitFor(() => expect(link).toHaveAttribute('href', `/projects/${PROJECT_ID}`))
   })
 
   it('shows a dual-pane original/translation view once a translation is selected', async () => {
@@ -371,5 +411,15 @@ describe('VideoWorkspace', () => {
       play.mockRestore()
       pause.mockRestore()
     }
+  })
+
+  it('does not allow editing the transcript for a viewer-role project member', async () => {
+    handlers('viewer')
+    renderWorkspace()
+
+    const worldToken = await screen.findByText('world', { exact: false })
+    fireEvent.dblClick(worldToken)
+
+    expect(screen.queryByDisplayValue('world')).not.toBeInTheDocument()
   })
 })

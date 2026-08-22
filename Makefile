@@ -55,27 +55,34 @@ run-backend: ## Run the FastAPI dev server with autoreload (http://localhost:800
 run-worker: ## Run the job-queue worker (polls Postgres, runs FFmpeg/Deepgram/DeepL jobs)
 	$(UV) run python -m app.worker.runner
 
-# --- Frontend (needs Node 20+; with nvm run `nvm use` in frontend/ first) ---
+# --- Frontend (needs Node 20+; version pinned in frontend/.nvmrc) ---
+# `nvm use` only switches PATH when a shell explicitly calls it — sourcing
+# nvm.sh on shell startup does not apply it automatically. So each target
+# below loads nvm and runs `nvm use` itself instead of relying on whatever
+# node happens to already be on PATH.
+NVM_USE := export NVM_DIR="$$HOME/.nvm"; \
+	{ [ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh"; } || { [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && . "/opt/homebrew/opt/nvm/nvm.sh"; }; \
+	command -v nvm >/dev/null 2>&1 && nvm use --silent
 
 openapi: ## Regenerate the frontend typed API client from the backend OpenAPI schema
-	cd $(FRONTEND) && npm run gen:api
+	cd $(FRONTEND) && $(NVM_USE) && npm run gen:api
 
 fe-install: ## Install frontend dependencies
-	cd $(FRONTEND) && npm install
+	cd $(FRONTEND) && $(NVM_USE) && npm install
 
 fe-dev: ## Run the frontend dev server (Vite)
-	cd $(FRONTEND) && npm run dev
+	cd $(FRONTEND) && $(NVM_USE) && npm run dev
 
 run-frontend: fe-dev ## Alias for fe-dev, to match run-backend/run-worker naming
 
 fe-build: ## Build the frontend for production
-	cd $(FRONTEND) && npm run build
+	cd $(FRONTEND) && $(NVM_USE) && npm run build
 
 fe-lint: ## Lint the frontend (oxlint)
-	cd $(FRONTEND) && npm run lint
+	cd $(FRONTEND) && $(NVM_USE) && npm run lint
 
 fe-test: ## Run the frontend test suite (vitest)
-	cd $(FRONTEND) && npm run test
+	cd $(FRONTEND) && $(NVM_USE) && npm run test
 
 fe-check: ## Full frontend gate: lint + typecheck + test + build
-	cd $(FRONTEND) && npm run lint && npm run typecheck && npm run test && npm run build
+	cd $(FRONTEND) && $(NVM_USE) && npm run lint && npm run typecheck && npm run test && npm run build

@@ -37,6 +37,7 @@ const TRANSCRIPT: Transcript = {
           text: 'Hello',
           start_time: 0,
           end_time: 1,
+          version: 1,
         },
         {
           id: 'tok-b',
@@ -46,6 +47,7 @@ const TRANSCRIPT: Transcript = {
           text: 'world',
           start_time: 1,
           end_time: 2,
+          version: 1,
         },
         {
           id: 'tok-c',
@@ -55,6 +57,7 @@ const TRANSCRIPT: Transcript = {
           text: 'again',
           start_time: 2,
           end_time: 3,
+          version: 1,
         },
       ],
     },
@@ -67,7 +70,7 @@ beforeEach(() => {
   useSelectionStore.getState().clear()
 })
 
-function renderViewer(onPlaySelection = vi.fn()) {
+function renderViewer(onPlaySelection = vi.fn(), canEdit = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
@@ -77,6 +80,7 @@ function renderViewer(onPlaySelection = vi.fn()) {
         isLoading={false}
         onSeekToken={vi.fn()}
         onPlaySelection={onPlaySelection}
+        canEdit={canEdit}
       />
     </QueryClientProvider>,
   )
@@ -103,6 +107,7 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={onSeekToken}
           onPlaySelection={vi.fn()}
+          canEdit={true}
         />
       </QueryClientProvider>,
     )
@@ -131,6 +136,7 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          canEdit={true}
         />
       </QueryClientProvider>,
     )
@@ -210,7 +216,7 @@ describe('TranscriptViewer', () => {
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
-    await waitFor(() => expect(body).toEqual({ edited_text: 'earth' }))
+    await waitFor(() => expect(body).toEqual({ edited_text: 'earth', expected_version: 1 }))
   })
 
   it('escape cancels an in-progress edit without sending a request', () => {
@@ -255,7 +261,7 @@ describe('TranscriptViewer', () => {
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(document, { key: 's', metaKey: true })
 
-    await waitFor(() => expect(body).toEqual({ edited_text: 'earth' }))
+    await waitFor(() => expect(body).toEqual({ edited_text: 'earth', expected_version: 1 }))
   })
 
   it('deletes a token by clearing its text', async () => {
@@ -318,7 +324,12 @@ describe('TranscriptViewer', () => {
     fireEvent.change(input, { target: { value: 'He llo' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
-    await waitFor(() => expect(body).toEqual({ tokens: [{ text: 'He' }, { text: 'llo' }] }))
+    await waitFor(() =>
+      expect(body).toEqual({
+        tokens: [{ text: 'He' }, { text: 'llo' }],
+        expected_version: 1,
+      }),
+    )
   })
 
   it('deletes the whole selection via the Delete button', async () => {
@@ -366,7 +377,15 @@ describe('TranscriptViewer', () => {
     fireEvent.change(mergeInput, { target: { value: "don't" } })
     await userEvent.click(screen.getByText('Confirm'))
 
-    await waitFor(() => expect(body).toEqual({ token_ids: ['tok-a', 'tok-b'], text: "don't" }))
+    await waitFor(() =>
+      expect(body).toEqual({
+        tokens: [
+          { token_id: 'tok-a', expected_version: 1 },
+          { token_id: 'tok-b', expected_version: 1 },
+        ],
+        text: "don't",
+      }),
+    )
   })
 
   it('creates a comment for the selection via the Comment button', async () => {
@@ -443,6 +462,7 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          canEdit={true}
         />
       </QueryClientProvider>,
     )
@@ -489,6 +509,7 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          canEdit={true}
         />
       </QueryClientProvider>,
     )
@@ -515,5 +536,123 @@ describe('TranscriptViewer', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Close search' }))
     expect(screen.queryByPlaceholderText('Find in transcript…')).not.toBeInTheDocument()
+  })
+
+  describe('viewer role (canEdit=false)', () => {
+    it('does not start an inline edit on double-click', () => {
+      renderViewer(vi.fn(), false)
+
+      fireEvent.dblClick(screen.getByText('world'))
+
+      expect(screen.queryByDisplayValue('world')).not.toBeInTheDocument()
+    })
+
+    it('hides Edit, Comment, and Delete from the selection toolbar, keeping Play/Copy', () => {
+      renderViewer(vi.fn(), false)
+
+      fireEvent.mouseDown(screen.getByText('Hello'))
+      fireEvent.mouseEnter(screen.getByText('world'))
+      fireEvent.mouseUp(document)
+
+      expect(screen.getByRole('button', { name: 'Play selection' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('token version conflicts (409)', () => {
+    const CONFLICT_BODY = {
+      error: { code: 'CONFLICT', message: 'This token was edited by someone else' },
+    }
+    const BANNER_TEXT = 'This was edited by someone else. Your change was not saved.'
+
+    it('shows a conflict banner instead of silently retrying on a 409 edit conflict', async () => {
+      server.use(
+        http.patch('http://localhost:8000/tokens/tok-b', () =>
+          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
+        ),
+      )
+      renderViewer()
+
+      fireEvent.dblClick(screen.getByText('world'))
+      const input = screen.getByDisplayValue('world')
+      fireEvent.change(input, { target: { value: 'earth' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
+    })
+
+    it('dismisses the banner when "Reload" is clicked', async () => {
+      server.use(
+        http.patch('http://localhost:8000/tokens/tok-b', () =>
+          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
+        ),
+      )
+      renderViewer()
+
+      fireEvent.dblClick(screen.getByText('world'))
+      const input = screen.getByDisplayValue('world')
+      fireEvent.change(input, { target: { value: 'earth' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await screen.findByText(BANNER_TEXT)
+
+      await userEvent.click(screen.getByRole('button', { name: 'Reload' }))
+
+      await waitFor(() => expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument())
+    })
+
+    it('shows a conflict banner on a 409 delete conflict', async () => {
+      server.use(
+        http.delete('http://localhost:8000/tokens/tok-c', () =>
+          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
+        ),
+      )
+      renderViewer()
+
+      fireEvent.dblClick(screen.getByText('again'))
+      const input = screen.getByDisplayValue('again')
+      fireEvent.change(input, { target: { value: '' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
+    })
+
+    it('shows a conflict banner on a 409 merge conflict', async () => {
+      server.use(
+        http.post('http://localhost:8000/tokens/merge', () =>
+          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
+        ),
+      )
+      renderViewer()
+
+      fireEvent.mouseDown(screen.getByText('Hello'))
+      fireEvent.mouseEnter(screen.getByText('world'))
+      fireEvent.mouseUp(document)
+      await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      const mergeInput = screen.getByDisplayValue('Hello world')
+      fireEvent.change(mergeInput, { target: { value: "don't" } })
+      await userEvent.click(screen.getByText('Confirm'))
+
+      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
+    })
+
+    it('shows a conflict banner on a 409 split conflict', async () => {
+      server.use(
+        http.post('http://localhost:8000/tokens/tok-a/split', () =>
+          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
+        ),
+      )
+      renderViewer()
+
+      fireEvent.dblClick(screen.getByText('Hello'))
+      const input = screen.getByDisplayValue('Hello')
+      fireEvent.change(input, { target: { value: 'He llo' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
+    })
   })
 })

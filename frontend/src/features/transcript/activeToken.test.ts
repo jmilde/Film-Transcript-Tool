@@ -11,6 +11,7 @@ function token(id: string, start: number, end: number) {
     text: id,
     start_time: start,
     end_time: end,
+    version: 1,
   }
 }
 

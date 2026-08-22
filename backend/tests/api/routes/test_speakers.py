@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from app.models.folder import Folder
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.speaker import Speaker
 from app.models.user import User
@@ -19,7 +19,7 @@ def _seed(db: Session, user: User) -> Video:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     folder = Folder(project_id=project.id, name="F", created_by=user.id, updated_by=user.id)
     db.add(folder)
     db.flush()
@@ -85,6 +85,26 @@ def test_rename_speaker_non_member_forbidden(
 ) -> None:
     video = _seed(db_session, user)
     speaker = _first_speaker(db_session, video)
+
+    other = app_client(other_user)
+    resp = other.patch(f"/speakers/{speaker.id}", json={"name": "Mallory"})
+    assert resp.status_code == 403
+
+
+def test_rename_speaker_viewer_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    video = _seed(db_session, user)
+    speaker = _first_speaker(db_session, video)
+    db_session.add(
+        ProjectMembership(
+            project_id=video.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
 
     other = app_client(other_user)
     resp = other.patch(f"/speakers/{speaker.id}", json={"name": "Mallory"})

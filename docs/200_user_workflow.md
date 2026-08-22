@@ -274,14 +274,39 @@ The exported transcript reflects the edited transcript.
 
 ## Goal
 
-Allow multiple users to work on the same project.
+Allow multiple users to work on the same project, with permissions matched
+to what each collaborator should be allowed to change.
 
-## Users may
+## Roles
 
-- edit transcripts
-- rename speakers
-- leave comments
-- reply to comments
+Each member holds one role on a project: `owner`, `editor`, or `viewer`. A
+project's creator becomes its first `owner`.
+
+- `viewer` can view everything but cannot make changes.
+- `editor` can edit transcripts, rename speakers, leave/reply to comments,
+  manage videos and folders, translate, and export.
+- `owner` can additionally rename/archive the project and manage membership.
+
+A project always keeps at least one `owner`.
+
+## Inviting members
+
+An `owner` invites a collaborator by email from the project's Members panel,
+choosing their role. The invitee must have signed into the application at
+least once already; inviting someone who hasn't yet is rejected with a
+message asking the inviter to have them sign in first. There is no
+pending-invite/email-notification system in Version 1.
+
+An `owner` can change a member's role or remove them at any time (as long as
+a project always keeps at least one owner). Any member can leave a project
+themselves.
+
+## Editing conflicts
+
+If two collaborators edit the same transcript token at the same time,
+whoever saves second sees a conflict notice showing the token's current
+server state, with a manual option to reload before retrying — edits are
+never silently overwritten or auto-merged.
 
 The application records:
 

@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_comment_access, require_transcript_access
+from app.api.deps import require_comment_access, require_min_role, require_transcript_access
 from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.models.comment import Comment, CommentRange, CommentReply
+from app.models.membership import MembershipRole
 from app.models.transcript import Transcript, TranscriptToken
 from app.models.user import User
 from app.schemas.comment import (
@@ -62,7 +63,9 @@ def _comment_read(db: Session, comment: Comment) -> CommentRead:
 @router.post("/transcripts/{transcript_id}/comments", response_model=CommentRead)
 def create(
     payload: CommentCreate,
-    transcript: Transcript = Depends(require_transcript_access),
+    transcript: Transcript = Depends(
+        require_min_role(require_transcript_access, MembershipRole.EDITOR)
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> CommentRead:

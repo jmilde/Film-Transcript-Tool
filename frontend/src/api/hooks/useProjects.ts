@@ -11,12 +11,15 @@ export function useProjects() {
   })
 }
 
-export function useProject(projectId: string) {
+export function useProject(projectId: string | undefined) {
   return useQuery({
     queryKey: ['project', projectId],
+    enabled: projectId !== undefined,
     queryFn: async () =>
       unwrap(
-        await api.GET('/projects/{project_id}', { params: { path: { project_id: projectId } } }),
+        await api.GET('/projects/{project_id}', {
+          params: { path: { project_id: projectId as string } },
+        }),
       ),
   })
 }

@@ -31,6 +31,7 @@ class VideoRead(BaseModel):
 
     id: uuid.UUID
     folder_id: uuid.UUID
+    project_id: uuid.UUID
     name: str
     original_filename: str
     duration: float | None

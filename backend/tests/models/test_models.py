@@ -5,7 +5,7 @@ from decimal import Decimal
 from app.models.asset import AssetType, VideoAsset
 from app.models.folder import Folder
 from app.models.job import JobStatus, JobType, ProcessingJob
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.speaker import Speaker
 from app.models.transcript import (
@@ -45,12 +45,15 @@ def test_project_membership_links_user_and_project(db_session: Session, user: Us
     db_session.add(project)
     db_session.flush()
 
-    membership = ProjectMembership(project_id=project.id, user_id=user.id)
+    membership = ProjectMembership(
+        project_id=project.id, user_id=user.id, role=MembershipRole.OWNER
+    )
     db_session.add(membership)
     db_session.flush()
 
     assert membership.project_id == project.id
     assert membership.user_id == user.id
+    assert membership.role is MembershipRole.OWNER
     assert isinstance(membership.created_at, datetime)
 
 

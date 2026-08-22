@@ -26,6 +26,8 @@ WAVEFORM_PEAKS = 1000
 # Transcription audio: mono 16 kHz PCM WAV — small, lossless enough for ASR, and
 # avoids sending the full video to the transcription provider.
 AUDIO_SAMPLE_RATE = 16000
+# Thumbnail target width (height derived, kept even via ``-2``).
+THUMBNAIL_WIDTH = 480
 
 
 class FFmpegError(RuntimeError):
@@ -255,3 +257,34 @@ def extract_audio(
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _run(extract_audio_args(input_path, output_path, sample_rate))
+
+
+# ----- thumbnail --------------------------------------------------------------
+
+
+def thumbnail_args(
+    input_path: Path, output_path: Path, duration: float, width: int = THUMBNAIL_WIDTH
+) -> list[str]:
+    # Seeking before -i is fast (keyframe-based); 10% in tends to skip
+    # black/title frames without depending on the far end of the clip.
+    timestamp = max(duration * 0.1, 0.0)
+    return [
+        FFMPEG,
+        "-y",
+        "-ss",
+        f"{timestamp:.3f}",
+        "-i",
+        str(input_path),
+        "-frames:v",
+        "1",
+        "-vf",
+        f"scale={width}:-2",
+        str(output_path),
+    ]
+
+
+def generate_thumbnail(
+    input_path: Path, output_path: Path, duration: float, width: int = THUMBNAIL_WIDTH
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _run(thumbnail_args(input_path, output_path, duration, width))

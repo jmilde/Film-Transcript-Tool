@@ -1,12 +1,16 @@
+import uuid
+from decimal import Decimal
+
+from app.models.asset import AssetType, VideoAsset
 from app.models.folder import Folder
-from app.models.membership import ProjectMembership
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.speaker import Speaker
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
 from app.models.video import Video
 from app.services.comments import create_comment
-from app.services.search import search_project
+from app.services.search import MAX_HITS_PER_VIDEO, group_search_hits, search_project
 from app.services.transcripts import create_transcript_from_normalized
 from app.transcription.normalize import normalize
 from sqlalchemy import select
@@ -19,7 +23,7 @@ def _project(db: Session, user: User) -> Project:
     project = Project(name="P", created_by=user.id, updated_by=user.id)
     db.add(project)
     db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user.id))
+    db.add(ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER))
     return project
 
 
@@ -140,3 +144,166 @@ def test_search_is_project_scoped(db_session: Session, user: User) -> None:
 
     assert all(hit.video_id is not None for hit in hits)
     assert len([hit for hit in hits if hit.kind == "transcript"]) == 1
+
+
+def _add_matching_tokens(
+    db: Session,
+    transcript: Transcript,
+    segment_id: uuid.UUID,
+    project: Project,
+    user: User,
+    count: int,
+    text: str = "matchword",
+    start: float = 0.0,
+) -> None:
+    for i in range(count):
+        db.add(
+            TranscriptToken(
+                transcript_id=transcript.id,
+                segment_id=segment_id,
+                project_id=project.id,
+                original_text=text,
+                edited_text=None,
+                start_time=start + i,
+                end_time=start + i + 0.5,
+                position=Decimal(i + 100),
+                created_by=user.id,
+                updated_by=user.id,
+            )
+        )
+    db.flush()
+
+
+def test_group_search_hits_groups_by_video(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    _transcript(db_session, project, user, "clip-a")
+    _transcript(db_session, project, user, "clip-b")
+
+    result = group_search_hits(db_session, project.id, "hello", limit=10, offset=0)
+
+    assert result.total_videos == 2
+    assert len(result.groups) == 2
+    assert {g.video_name for g in result.groups} == {"clip-a", "clip-b"}
+    assert all(g.hit_count == 1 for g in result.groups)
+
+
+def test_group_search_hits_sorts_hits_by_start_time_with_speaker_last(
+    db_session: Session, user: User
+) -> None:
+    project = _project(db_session, user)
+    transcript = _transcript(db_session, project, user, "clip")
+    tokens = _tokens(db_session, transcript)
+    segment_id = tokens[0].segment_id
+    # Two more matching tokens, out of chronological order, plus a speaker hit.
+    _add_matching_tokens(db_session, transcript, segment_id, project, user, 1, "echo", start=50.0)
+    _add_matching_tokens(db_session, transcript, segment_id, project, user, 1, "echo", start=10.0)
+    db_session.add(
+        Speaker(
+            video_id=transcript.video_id,
+            project_id=project.id,
+            provider_identifier="speaker_echo",
+            name="Echo",
+        )
+    )
+    db_session.flush()
+
+    result = group_search_hits(db_session, project.id, "echo", limit=10, offset=0)
+
+    assert len(result.groups) == 1
+    start_times = [hit.start_time for hit in result.groups[0].hits]
+    assert start_times == [10.0, 50.0, None]
+
+
+def test_group_search_hits_caps_per_video_and_reports_true_count(
+    db_session: Session, user: User
+) -> None:
+    project = _project(db_session, user)
+    transcript = _transcript(db_session, project, user, "clip")
+    tokens = _tokens(db_session, transcript)
+    segment_id = tokens[0].segment_id
+    _add_matching_tokens(
+        db_session, transcript, segment_id, project, user, MAX_HITS_PER_VIDEO + 5, "matchword"
+    )
+
+    result = group_search_hits(db_session, project.id, "matchword", limit=10, offset=0)
+
+    assert len(result.groups) == 1
+    group = result.groups[0]
+    assert group.hit_count == MAX_HITS_PER_VIDEO + 5
+    assert len(group.hits) == MAX_HITS_PER_VIDEO
+
+
+def test_group_search_hits_ranks_by_best_hit_and_paginates(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    # More repeated matches -> higher ts_rank for that video's best hit.
+    strong = _transcript(db_session, project, user, "strong")
+    strong_segment = _tokens(db_session, strong)[0].segment_id
+    _add_matching_tokens(db_session, strong, strong_segment, project, user, 5, "unique")
+    weak = _transcript(db_session, project, user, "weak")
+    weak_segment = _tokens(db_session, weak)[0].segment_id
+    _add_matching_tokens(db_session, weak, weak_segment, project, user, 1, "unique")
+
+    first_page = group_search_hits(db_session, project.id, "unique", limit=1, offset=0)
+    second_page = group_search_hits(db_session, project.id, "unique", limit=1, offset=1)
+
+    assert first_page.total_videos == 2
+    assert len(first_page.groups) == 1
+    assert first_page.groups[0].video_name == "strong"
+    assert second_page.total_videos == 2
+    assert len(second_page.groups) == 1
+    assert second_page.groups[0].video_name == "weak"
+
+
+def test_group_search_hits_includes_folder_breadcrumb(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    root = Folder(project_id=project.id, name="Root", created_by=user.id, updated_by=user.id)
+    db_session.add(root)
+    db_session.flush()
+    child = Folder(
+        project_id=project.id,
+        parent_folder_id=root.id,
+        name="Child",
+        created_by=user.id,
+        updated_by=user.id,
+    )
+    db_session.add(child)
+    db_session.flush()
+    video = Video(
+        folder_id=child.id,
+        project_id=project.id,
+        name="nested-clip",
+        original_filename="nested-clip.mp4",
+        created_by=user.id,
+        updated_by=user.id,
+    )
+    db_session.add(video)
+    db_session.flush()
+    raw = load_deepgram_sample()
+    create_transcript_from_normalized(db_session, video, normalize(raw), raw, created_by=user.id)
+    db_session.flush()
+
+    result = group_search_hits(db_session, project.id, "hello", limit=10, offset=0)
+
+    assert len(result.groups) == 1
+    assert result.groups[0].folder_path == ["Root", "Child"]
+
+
+def test_group_search_hits_thumbnail_flag(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    with_thumb = _transcript(db_session, project, user, "with-thumb")
+    without_thumb = _transcript(db_session, project, user, "without-thumb")
+    db_session.add(
+        VideoAsset(
+            video_id=with_thumb.video_id,
+            type=AssetType.THUMBNAIL,
+            storage_path=f"videos/{with_thumb.video_id}/thumbnail.jpg",
+            mime_type="image/jpeg",
+        )
+    )
+    db_session.flush()
+
+    result = group_search_hits(db_session, project.id, "hello", limit=10, offset=0)
+
+    by_video = {g.video_id: g.has_thumbnail for g in result.groups}
+    assert by_video[with_thumb.video_id] is True
+    assert by_video[without_thumb.video_id] is False

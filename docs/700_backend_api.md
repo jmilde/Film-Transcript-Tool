@@ -60,7 +60,19 @@ The backend validates the authenticated user before performing actions.
 
 Every request MUST verify that the user has permission to access the requested resource.
 
-Permissions are evaluated at the project level.
+Permissions are evaluated at the project level, via a member's role on that
+project's `ProjectMembership`: `owner`, `editor`, or `viewer`.
+
+- `viewer` MAY read: list/get projects, folders, videos, transcripts,
+  comments, speakers, exports, and stream media.
+- `editor` MAY additionally create/edit/delete content: folders, videos,
+  transcript tokens (edit/delete/merge/split), comments (create/reply/
+  resolve), exports, translations, and rename speakers.
+- `owner` MAY additionally update the project itself and manage membership
+  (invite members, change roles, remove members).
+
+A request below the required role receives `403 FORBIDDEN`, same as a
+non-member. A project always retains at least one `owner`.
 
 ---
 
@@ -127,7 +139,9 @@ Returns projects available to the user.
 GET /projects/{project_id}
 ```
 
-Returns project details.
+Returns project details, including `my_role` — the requesting user's role
+(`owner`/`editor`/`viewer`) on this project. `List Projects` and `Create
+Project` responses include `my_role` too.
 
 ---
 
@@ -137,7 +151,43 @@ Returns project details.
 PATCH /projects/{project_id}
 ```
 
-Updates project information.
+Updates project information. Requires `editor` or `owner`.
+
+---
+
+## Project Members
+
+```
+GET /projects/{project_id}/members
+```
+
+Lists members of a project: `user_id`, `email`, `display_name`, `role`.
+Requires `viewer` or above (any member).
+
+```
+POST /projects/{project_id}/members
+```
+
+Adds an existing user to the project by email, with a given role. Requires
+`owner`. The invitee MUST already have signed in at least once (which
+provisions their local user record) — inviting an email with no such user
+returns `404` telling the inviter the person needs to sign in first. There is
+no pending-invite system in this version.
+
+```
+PATCH /projects/{project_id}/members/{user_id}
+```
+
+Changes a member's role. Requires `owner`. Rejected with `400 LAST_OWNER` if
+it would demote the project's last remaining owner.
+
+```
+DELETE /projects/{project_id}/members/{user_id}
+```
+
+Removes a member. Requires `owner`, **except** a member MAY always remove
+themselves (leave the project). Rejected with `400 LAST_OWNER` if it would
+remove the project's last remaining owner, including on self-removal.
 
 ---
 
@@ -381,6 +431,11 @@ Response:
 
 # 10. Transcript Tokens
 
+Every token response includes `version`. Every mutating request below MUST
+include the `expected_version` the client last read for each token it is
+modifying — a stale version is rejected (see Concurrency Conflicts below)
+rather than applied.
+
 ## Update Token
 
 ```
@@ -393,7 +448,8 @@ Request:
 
 ```json
 {
-	"edited_text": "there"
+	"edited_text": "there",
+	"expected_version": 3
 }
 ```
 
@@ -402,7 +458,7 @@ Request:
 ## Delete Token
 
 ```
-DELETE /tokens/{token_id}
+DELETE /tokens/{token_id}?expected_version=3
 ```
 
 Marks token as deleted.
@@ -419,9 +475,9 @@ Request:
 
 ```json
 {
-	"token_ids": [
-		"uuid1",
-		"uuid2"
+	"tokens": [
+		{ "token_id": "uuid1", "expected_version": 3 },
+		{ "token_id": "uuid2", "expected_version": 1 }
 	],
 	"text": "don't"
 }
@@ -448,9 +504,41 @@ Request:
 		{
 			"text": "not"
 		}
-	]
+	],
+	"expected_version": 3
 }
 ```
+
+---
+
+## Concurrency Conflicts
+
+Any token write above returns `409 CONFLICT` if the supplied
+`expected_version` no longer matches the token's current version:
+
+```json
+{
+	"error": {
+		"code": "CONFLICT",
+		"message": "This token was edited by someone else",
+		"current_tokens": [
+			{
+				"id": "uuid",
+				"version": 4,
+				"original_text": "...",
+				"edited_text": "...",
+				"is_deleted": false,
+				"start_time": 1.2,
+				"end_time": 1.6
+			}
+		]
+	}
+}
+```
+
+The write is rejected before anything is mutated. Clients MUST NOT silently
+retry or overwrite on a conflict — surface it and let the user reload before
+trying again.
 
 ---
 
