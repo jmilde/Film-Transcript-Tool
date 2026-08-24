@@ -23,6 +23,10 @@ The Python backend lives in `backend/` and uses `uv` (Python 3.12+, per `.python
 
 The underlying tools (`pytest`, `ruff`, `mypy`) are declared in `backend/pyproject.toml`; to invoke one directly, `cd backend` first (e.g. `cd backend && uv run pytest -k tokens`). Add a dependency with `cd backend && uv add <package>`.
 
+## Git workflow
+
+Never commit directly to `main`. Do all new development on a feature branch, and open a PR when the work is ready.
+
 ## Documentation is the spec
 
 `/docs` contains the numbered functional/technical specification for the whole system (product spec, user workflows, architecture, database, transcript model, processing pipeline, backend API, frontend, export). Read the relevant doc before implementing in that area — these files define required behavior (MUST/SHOULD/MAY) rather than describing existing code:
