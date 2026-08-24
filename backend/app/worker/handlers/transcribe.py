@@ -3,7 +3,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.job import ProcessingJob
+from app.models.job import JobStatus, JobType, ProcessingJob
 from app.models.transcript import Transcript, TranscriptType
 from app.services.transcripts import create_transcript_from_normalized
 from app.storage import factory as storage_factory
@@ -43,6 +43,19 @@ def handle_transcribe(session: Session, job: ProcessingJob) -> dict[str, Any] | 
     normalized = normalize(raw)
     transcript = create_transcript_from_normalized(
         session, video, normalized, raw, created_by=video.created_by
+    )
+
+    # Not part of the auto-chained upload pipeline (see services/pipeline.py) —
+    # triggered explicitly here so a fresh transcript is searchable without a
+    # manual reindex.
+    session.add(
+        ProcessingJob(
+            video_id=video.id,
+            project_id=video.project_id,
+            type=JobType.GENERATE_EMBEDDINGS,
+            status=JobStatus.PENDING,
+            result={"transcript_id": str(transcript.id)},
+        )
     )
 
     return {

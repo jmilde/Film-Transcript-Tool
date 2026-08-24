@@ -50,6 +50,13 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
           {project && <MembersPanel projectId={projectId} myRole={project.my_role} />}
           <button
             type="button"
+            onClick={() => void navigate(`/projects/${projectId}/chat`)}
+            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+          >
+            Ask
+          </button>
+          <button
+            type="button"
             onClick={() => void navigate(`/projects/${projectId}/search`)}
             className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
           >

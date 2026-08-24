@@ -573,7 +573,126 @@ srt
 
 ---
 
-# 18. Relationships
+# 18. Transcript Chunk
+
+The retrievable, embedded unit for semantic chat search (see
+`docs/1000_semantic_search.md`). One row per transcript segment, sub-split
+for length; every transcript (original and translations) is chunked and
+embedded independently.
+
+## Fields
+
+```
+id
+
+transcript_id
+
+video_id
+
+project_id
+
+language
+
+segment_id
+
+start_token_id
+
+end_token_id
+
+start_time
+
+end_time
+
+speaker_name
+
+chunk_index
+
+text
+
+search_vector
+
+embedding
+
+embedding_model
+
+created_at
+
+updated_at
+```
+
+`text` is the chunk's displayed text (edited text over original, joined
+across its tokens). `search_vector` is populated by the embedding job using
+a text-search config chosen by `language`, not a fixed one, since a chunk's
+transcript may not be English. `embedding` is a fixed-dimension vector for
+approximate nearest-neighbor search. `start_token_id`/`end_token_id` anchor
+the chunk to a token range so the frontend can highlight the full span.
+
+---
+
+# 19. Chat Conversation
+
+A semantic-search chat thread scoped to one project.
+
+## Fields
+
+```
+id
+
+project_id
+
+title
+
+agent_message_history
+
+created_by
+
+created_at
+
+updated_by
+
+updated_at
+```
+
+`agent_message_history` is the chat agent's own serialized conversation
+state, opaque to the frontend, fed back to the agent on the next turn so it
+remembers what it already searched. Display content lives on Chat Message
+instead.
+
+---
+
+# 20. Chat Message
+
+One turn (user question or assistant answer) in a Chat Conversation.
+
+## Fields
+
+```
+id
+
+conversation_id
+
+project_id
+
+role
+
+content
+
+citations
+
+created_by
+
+created_at
+
+updated_at
+```
+
+`role` is `user` or `assistant`. `citations` is assistant-only: the resolved
+citation payload (chunk, video, timecode, excerpt) the frontend renders as
+citation cards — distinct from `agent_message_history`.
+
+---
+
+# 21. Relationships
 
 Main relationships:
 
@@ -607,7 +726,7 @@ Comments attach to transcript token ranges.
 
 ---
 
-# 19. Data Not Stored
+# 22. Data Not Stored
 
 The database does not store:
 
@@ -619,12 +738,10 @@ These belong in storage.
 
 ---
 
-# 20. Future Extensions
+# 23. Future Extensions
 
 The schema should allow future additions:
 
-- AI metadata
-- transcript embeddings
 - topic extraction
 - editing software integrations
 - additional export formats

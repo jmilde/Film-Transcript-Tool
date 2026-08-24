@@ -199,6 +199,54 @@ def test_create_translation_non_member_forbidden(
     assert resp.status_code == 403
 
 
+def test_reindex_transcript_enqueues_job(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    _video, transcript = _seed_transcript(db_session, user)
+
+    resp = auth_client.post(f"/transcripts/{transcript.id}/reindex")
+
+    assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+    job = db_session.get(ProcessingJob, job_id)
+    assert job is not None
+    assert job.type is JobType.GENERATE_EMBEDDINGS
+    assert job.status is JobStatus.PENDING
+    assert job.result == {"transcript_id": str(transcript.id), "force": True}
+
+
+def test_reindex_transcript_non_member_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    _video, transcript = _seed_transcript(db_session, user)
+
+    other = app_client(other_user)
+    resp = other.post(f"/transcripts/{transcript.id}/reindex")
+    assert resp.status_code == 403
+
+
+def test_reindex_transcript_viewer_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    video, transcript = _seed_transcript(db_session, user)
+    db_session.add(
+        ProjectMembership(
+            project_id=video.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
+
+    other = app_client(other_user)
+    resp = other.post(f"/transcripts/{transcript.id}/reindex")
+    assert resp.status_code == 403
+
+
 def test_create_translation_viewer_forbidden(
     app_client: Callable[[User], TestClient],
     db_session: Session,

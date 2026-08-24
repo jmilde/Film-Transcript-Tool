@@ -18,6 +18,7 @@ class JobType(enum.StrEnum):
     EXTRACT_AUDIO = "extract_audio"
     TRANSCRIBE = "transcribe"
     TRANSLATE = "translate"
+    GENERATE_EMBEDDINGS = "generate_embeddings"
     EXPORT = "export"
     NOOP = "noop"
 

@@ -14,6 +14,16 @@ class Settings(BaseSettings):
     deepgram_api_key: str
     deepl_api_key: str
     storage_root: str
+    # Semantic chat search: all AI calls (agent, embeddings, rerank) go through
+    # OpenRouter with this one key.
+    openrouter_api_key: str
+    embeddings_model: str = "openai/text-embedding-3-small"
+    embeddings_dimension: int = 1536
+    rerank_model: str = "cohere/rerank-v3.5"
+    # The leading `~` is OpenRouter's "latest" alias marker (its model listing
+    # exposes `google/gemini-flash-latest` only as `~google/gemini-flash-latest`
+    # — the bare, unprefixed id 400s).
+    chat_agent_model: str = "openrouter:~google/gemini-flash-latest"
     # Browser origins allowed to call the API (the frontend dev server by
     # default). Override via CORS_ALLOW_ORIGINS as a JSON array.
     cors_allow_origins: list[str] = ["http://localhost:5173"]

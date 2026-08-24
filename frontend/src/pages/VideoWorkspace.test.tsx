@@ -239,6 +239,30 @@ describe('VideoWorkspace', () => {
     })
   })
 
+  it('highlights the full range for a pending nav that carries an endTokenId', async () => {
+    handlers()
+    const startTokenId = '00000000-0000-0000-0000-0000000000k1'
+    const endTokenId = '00000000-0000-0000-0000-0000000000k2'
+    renderWorkspace({
+      kind: 'transcript',
+      id: startTokenId,
+      transcriptId: TRANSCRIPT_ID,
+      startTime: 0,
+      endTokenId,
+      returnTo: `/projects/${PROJECT_ID}/chat`,
+    })
+
+    await screen.findByRole('heading', { name: 'Interview A' })
+
+    await waitFor(() => {
+      expect(useSelectionStore.getState().range).toEqual({
+        transcriptId: TRANSCRIPT_ID,
+        anchorTokenId: startTokenId,
+        focusTokenId: endTokenId,
+      })
+    })
+  })
+
   it('resolves a pending comment search result against the loaded comment range', async () => {
     handlers()
     server.use(
@@ -279,7 +303,7 @@ describe('VideoWorkspace', () => {
     })
   })
 
-  it('shows a back-to-search link pointing at the search page when arriving from search', async () => {
+  it('shows a back link pointing at the origin page when arriving via pending-nav', async () => {
     handlers()
     const returnTo = `/projects/${PROJECT_ID}/search?q=world`
     renderWorkspace({
@@ -290,16 +314,16 @@ describe('VideoWorkspace', () => {
       returnTo,
     })
 
-    const link = await screen.findByRole('link', { name: '← Back to search' })
+    const link = await screen.findByRole('link', { name: '← Back' })
     expect(link).toHaveAttribute('href', returnTo)
   })
 
-  it('does not show a back-to-search link on a normal visit', async () => {
+  it('does not show a back link on a normal visit', async () => {
     handlers()
     renderWorkspace()
 
     await screen.findByRole('heading', { name: 'Interview A' })
-    expect(screen.queryByRole('link', { name: '← Back to search' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '← Back' })).not.toBeInTheDocument()
   })
 
   it('links "← Projects" to the video\'s project once loaded', async () => {

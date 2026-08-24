@@ -1,4 +1,4 @@
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 EXPECTED_TABLES = {
@@ -9,6 +9,9 @@ EXPECTED_TABLES = {
     "videos",
     "video_assets",
     "processing_jobs",
+    "transcript_chunks",
+    "chat_conversations",
+    "chat_messages",
 }
 
 
@@ -24,6 +27,19 @@ def test_video_assets_has_composite_index(db_session: Session) -> None:
     index_columns = [tuple(ix["column_names"]) for ix in inspector.get_indexes("video_assets")]
 
     assert ("video_id", "type") in index_columns
+
+
+def test_transcript_chunks_has_search_and_vector_indexes(db_session: Session) -> None:
+    indexes = db_session.execute(
+        text("SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'transcript_chunks'")
+    ).all()
+    index_defs = {row[0]: row[1] for row in indexes}
+
+    assert "ix_transcript_chunks_search_vector" in index_defs
+    assert "USING gin" in index_defs["ix_transcript_chunks_search_vector"]
+    assert "ix_transcript_chunks_embedding" in index_defs
+    assert "USING hnsw" in index_defs["ix_transcript_chunks_embedding"]
+    assert "vector_cosine_ops" in index_defs["ix_transcript_chunks_embedding"]
 
 
 def test_project_memberships_has_role_column(db_session: Session) -> None:

@@ -15,12 +15,18 @@ function SearchRouteStub() {
   return <div>search page: {projectId}</div>
 }
 
+function ChatRouteStub() {
+  const { projectId } = useParams<{ projectId: string }>()
+  return <div>chat page: {projectId}</div>
+}
+
 function renderProjectView() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
       { path: '/projects/:projectId', element: <ProjectView /> },
       { path: '/projects/:projectId/search', element: <SearchRouteStub /> },
+      { path: '/projects/:projectId/chat', element: <ChatRouteStub /> },
     ],
     { initialEntries: [`/projects/${PROJECT_ID}`] },
   )
@@ -109,5 +115,15 @@ describe('ProjectView', () => {
     await userEvent.click(screen.getByRole('button', { name: /Search/ }))
 
     expect(await screen.findByText(`search page: ${PROJECT_ID}`)).toBeInTheDocument()
+  })
+
+  it('navigates to the chat page via the Ask button', async () => {
+    baseHandlers()
+    renderProjectView()
+    await screen.findByRole('heading', { name: 'Documentary One' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+
+    expect(await screen.findByText(`chat page: ${PROJECT_ID}`)).toBeInTheDocument()
   })
 })

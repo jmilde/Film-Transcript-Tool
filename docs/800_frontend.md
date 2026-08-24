@@ -310,7 +310,29 @@ Selecting a result:
 
 ---
 
-# 15. Export UI
+# 15. Chat UI
+
+Project-scoped chat for asking questions about a project's videos, entered
+via an "Ask" button alongside Search.
+
+Chat should provide:
+
+- a question input, disabled with a "Thinking…" state while a request is in
+  flight (synchronous — no streaming)
+- a synthesized prose answer with inline citation cards (not plain links),
+  interleaved at the point in the answer text they support
+- reload of a past conversation without re-asking
+
+Selecting a citation card:
+
+- opens the relevant video
+- seeks to the location
+- highlights the full cited token range in the **original** transcript pane,
+  even when the citation matched via a translation
+
+---
+
+# 16. Export UI
 
 Users can export transcripts.
 
@@ -328,7 +350,7 @@ Export flow:
 
 ---
 
-# 16. Keyboard Controls
+# 17. Keyboard Controls
 
 Version 1 supports:
 
@@ -352,7 +374,7 @@ Additional shortcuts may be added later.
 
 ---
 
-# 17. Frontend State
+# 18. Frontend State
 
 Important UI state includes:
 
@@ -387,12 +409,10 @@ Important UI state includes:
 
 ---
 
-# 18. Future Extensions
+# 19. Future Extensions
 
 The frontend should allow future additions:
 
-- AI assistant panel
-- semantic search
 - transcript summaries
 - collaborative editing
 - Resolve integration

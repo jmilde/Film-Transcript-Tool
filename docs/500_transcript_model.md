@@ -583,6 +583,5 @@ The model should allow:
 
 - transcript versioning
 - AI annotations
-- semantic search
 - topic extraction
 - editor integration

@@ -53,3 +53,7 @@ class TranslationCreate(BaseModel):
 
 class TranslationResponse(BaseModel):
     job_id: uuid.UUID
+
+
+class ReindexResponse(BaseModel):
+    job_id: uuid.UUID

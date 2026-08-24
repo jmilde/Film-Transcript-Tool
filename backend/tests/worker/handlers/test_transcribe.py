@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from app.models.job import JobType
+from app.models.job import JobType, ProcessingJob
 from app.models.transcript import Transcript, TranscriptToken, TranscriptType
 from app.transcription import factory as transcription_factory
 from app.worker.handlers.transcribe import handle_transcribe
@@ -62,6 +62,17 @@ def test_transcribe_populates_transcript(
     ).scalar_one()
     assert token_count == 5
 
+    # A fresh transcript enqueues its own embedding job so it's searchable
+    # without a manual reindex.
+    embed_job = media.db.execute(
+        select(ProcessingJob).where(
+            ProcessingJob.type == JobType.GENERATE_EMBEDDINGS,
+            ProcessingJob.video_id == media.video.id,
+        )
+    ).scalar_one()
+    assert embed_job.project_id == media.video.project_id
+    assert embed_job.result == {"transcript_id": str(transcript.id)}
+
 
 def test_transcribe_is_idempotent(media: MediaFixture, monkeypatch: pytest.MonkeyPatch) -> None:
     _seed_audio(media)
@@ -82,6 +93,16 @@ def test_transcribe_is_idempotent(media: MediaFixture, monkeypatch: pytest.Monke
         )
     ).scalar_one()
     assert originals == 1
+    # Skip path: only the first (real) transcription enqueued an embedding job.
+    embed_job_count = media.db.execute(
+        select(func.count())
+        .select_from(ProcessingJob)
+        .where(
+            ProcessingJob.type == JobType.GENERATE_EMBEDDINGS,
+            ProcessingJob.video_id == media.video.id,
+        )
+    ).scalar_one()
+    assert embed_job_count == 1
 
 
 def test_transcribe_missing_audio_raises(
