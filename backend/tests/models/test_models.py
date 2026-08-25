@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from app.models.asset import AssetType, VideoAsset
 from app.models.chat import ChatConversation, ChatMessage
+from app.models.document import Document
 from app.models.embedding import EMBEDDING_DIMENSION, TranscriptChunk
 from app.models.folder import Folder
 from app.models.job import JobStatus, JobType, ProcessingJob
@@ -283,6 +284,28 @@ def test_chat_conversation_and_message(db_session: Session, user: User) -> None:
     assert user_message.citations is None
     assert assistant_message.citations is not None
     assert assistant_message.citations[0]["marker"] == 1
+
+
+def test_document_defaults(db_session: Session, user: User) -> None:
+    project = Project(name="Doc", created_by=user.id, updated_by=user.id)
+    db_session.add(project)
+    db_session.flush()
+
+    document = Document(
+        project_id=project.id,
+        title="Narration draft",
+        content={"type": "doc", "content": []},
+        created_by=user.id,
+        updated_by=user.id,
+    )
+    db_session.add(document)
+    db_session.flush()
+    db_session.refresh(document)
+
+    assert isinstance(document.id, uuid.UUID)
+    assert document.version == 1
+    assert document.content == {"type": "doc", "content": []}
+    assert isinstance(document.created_at, datetime)
 
 
 def test_processing_job_defaults(db_session: Session) -> None:
