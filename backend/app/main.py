@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import (
     chat,
     comments,
+    documents,
     exports,
     folders,
     jobs,
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(exports.router)
     app.include_router(members.router)
     app.include_router(chat.router)
+    app.include_router(documents.router)
 
     return app
 
