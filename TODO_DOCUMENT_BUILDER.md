@@ -102,8 +102,8 @@ not re-litigate these while implementing):
 - [x] Verify: `make check` green; all six routes present in the generated OpenAPI schema
 
 ## Phase D3 — Frontend API hooks + panel store
-- [ ] `frontend/src/api/hooks/useDocuments.ts` (modeled on `useComments.ts`): `useDocuments(projectId)`, `useDocument(documentId)`, `useCreateDocument()`, `useUpdateDocument()` (accepts `expected_version`, surfaces 409 distinctly so callers can show a conflict banner), `useDeleteDocument()`, `useResolveClipBlock()`. Regenerate `frontend/src/api/schema.d.ts` via the existing `npm run gen:api` script once the backend routes exist
-- [ ] `frontend/src/store/documentPanel.ts` (Zustand, same shape family as `store/selection.ts`/`store/comments.ts`):
+- [x] `frontend/src/api/hooks/useDocuments.ts` (modeled on `useComments.ts`): `useDocuments(projectId)`, `useDocument(documentId)`, `useCreateDocument()`, `useUpdateDocument()` (accepts `expected_version`, surfaces 409 distinctly so callers can show a conflict banner), `useDeleteDocument()`, `useResolveClipBlock()`. Regenerate `frontend/src/api/schema.d.ts` via the existing `npm run gen:api` script once the backend routes exist
+- [x] `frontend/src/store/documentPanel.ts` (Zustand, same shape family as `store/selection.ts`/`store/comments.ts`):
   ```ts
   interface DocumentPanelState {
     isOpen: boolean
@@ -118,8 +118,8 @@ not re-litigate these while implementing):
   }
   ```
   where `ClipInsertPayload = { transcriptId: string; videoId: string; startTokenId: string; endTokenId: string }`
-- [ ] Tests: `useDocuments.test.ts`/equivalent MSW-backed hook tests (mirroring `useComments`/`useChat` test conventions); `documentPanel.test.ts` for the store's open/close/queue/consume transitions
-- [ ] Verify: no UI yet — this phase is pure plumbing, verify via its own tests plus `typecheck`/`lint` green
+- [x] Tests: `useDocuments.test.ts`/equivalent MSW-backed hook tests (mirroring `useComments`/`useChat` test conventions); `documentPanel.test.ts` for the store's open/close/queue/consume transitions
+- [x] Verify: no UI yet — this phase is pure plumbing, verify via its own tests plus `typecheck`/`lint` green
 
 ## Phase D4 — Editor skeleton (TipTap, standalone)
 - [ ] Add `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/core` to `frontend/package.json`
