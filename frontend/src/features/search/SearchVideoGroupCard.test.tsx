@@ -38,7 +38,7 @@ beforeEach(() => {
 describe('SearchVideoGroupCard', () => {
   it('queues a single-token clip insert for a transcript hit, without seeking', async () => {
     const onSelectHit = vi.fn()
-    render(<SearchVideoGroupCard group={GROUP} onSelectHit={onSelectHit} />)
+    render(<SearchVideoGroupCard group={GROUP} onSelectHit={onSelectHit} canEdit />)
 
     await userEvent.click(screen.getByRole('button', { name: 'Add to Document' }))
 
@@ -52,8 +52,14 @@ describe('SearchVideoGroupCard', () => {
   })
 
   it('does not offer Add to Document for a speaker hit (no token to anchor to)', () => {
-    render(<SearchVideoGroupCard group={GROUP} onSelectHit={vi.fn()} />)
+    render(<SearchVideoGroupCard group={GROUP} onSelectHit={vi.fn()} canEdit />)
 
     expect(screen.getAllByRole('button', { name: 'Add to Document' })).toHaveLength(1)
+  })
+
+  it('does not offer Add to Document for a viewer', () => {
+    render(<SearchVideoGroupCard group={GROUP} onSelectHit={vi.fn()} canEdit={false} />)
+
+    expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
   })
 })

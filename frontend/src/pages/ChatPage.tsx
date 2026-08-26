@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAskChat, useChatConversation } from '../api/hooks/useChat'
 import type { ChatCitation } from '../api/hooks/useChat'
+import { useProject } from '../api/hooks/useProjects'
 import { ChatInput } from '../features/chat/ChatInput'
 import { ChatMessageList } from '../features/chat/ChatMessageList'
 import type { PendingSearchNav } from '../features/search/types'
@@ -26,6 +27,8 @@ function ChatPageInner({
   const navigate = useNavigate()
   const { data: messages } = useChatConversation(projectId, conversationId)
   const ask = useAskChat(projectId)
+  const { data: project } = useProject(projectId)
+  const canEdit = project ? project.my_role !== 'viewer' : false
 
   const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
   useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
@@ -71,7 +74,11 @@ function ChatPageInner({
 
       <div className="flex-1 space-y-4 overflow-y-auto">
         {messages && messages.length > 0 ? (
-          <ChatMessageList messages={messages} onSelectCitation={handleSelectCitation} />
+          <ChatMessageList
+            messages={messages}
+            onSelectCitation={handleSelectCitation}
+            canEdit={canEdit}
+          />
         ) : (
           <p className="text-sm text-slate-400">Ask a question about this project's videos.</p>
         )}

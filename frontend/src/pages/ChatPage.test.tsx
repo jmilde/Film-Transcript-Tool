@@ -40,6 +40,19 @@ function VideoRouteStub() {
 }
 
 function renderChatPage(initialPath = `/projects/${PROJECT_ID}/chat`) {
+  server.use(
+    http.get(`http://localhost:8000/projects/${PROJECT_ID}`, () =>
+      HttpResponse.json({
+        id: PROJECT_ID,
+        name: 'Project',
+        description: null,
+        archived_at: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        my_role: 'editor',
+      }),
+    ),
+  )
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
@@ -96,25 +109,23 @@ describe('ChatPage', () => {
           },
         })
       }),
-      http.get(
-        `http://localhost:8000/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`,
-        () =>
-          HttpResponse.json([
-            {
-              id: 'msg-1',
-              role: 'user',
-              content: 'What did the keeper do?',
-              citations: null,
-              created_at: '2026-01-01T00:00:00Z',
-            },
-            {
-              id: 'msg-2',
-              role: 'assistant',
-              content: 'The keeper lit the lamp at dusk [1].',
-              citations: [citation()],
-              created_at: '2026-01-01T00:00:00Z',
-            },
-          ]),
+      http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, () =>
+        HttpResponse.json([
+          {
+            id: 'msg-1',
+            role: 'user',
+            content: 'What did the keeper do?',
+            citations: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+          {
+            id: 'msg-2',
+            role: 'assistant',
+            content: 'The keeper lit the lamp at dusk [1].',
+            citations: [citation()],
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ]),
       ),
     )
     const { router } = renderChatPage()

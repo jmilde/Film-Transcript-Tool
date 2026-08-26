@@ -166,6 +166,12 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
           </button>
         </div>
       )}
+      {updateDocument.isError && !isDocumentConflict(updateDocument.error) && (
+        <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+          Your last change could not be saved. Check your connection and permissions, then try
+          again.
+        </div>
+      )}
       <EditorContent
         editor={editor}
         className="prose prose-sm max-w-none flex-1 overflow-y-auto px-4 py-3"

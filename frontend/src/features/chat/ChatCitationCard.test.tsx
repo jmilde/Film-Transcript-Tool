@@ -30,7 +30,7 @@ beforeEach(() => {
 describe('ChatCitationCard', () => {
   it('queues a clip insert without triggering the seek action', async () => {
     const onClick = vi.fn()
-    render(<ChatCitationCard citation={CITATION} onClick={onClick} />)
+    render(<ChatCitationCard citation={CITATION} onClick={onClick} canEdit />)
 
     await userEvent.click(screen.getByRole('button', { name: 'Add to Document' }))
 
@@ -45,10 +45,16 @@ describe('ChatCitationCard', () => {
 
   it('still seeks on the main card click', async () => {
     const onClick = vi.fn()
-    render(<ChatCitationCard citation={CITATION} onClick={onClick} />)
+    render(<ChatCitationCard citation={CITATION} onClick={onClick} canEdit />)
 
     await userEvent.click(screen.getByText('Interview A'))
 
     expect(onClick).toHaveBeenCalled()
+  })
+
+  it('does not offer Add to Document for a viewer', () => {
+    render(<ChatCitationCard citation={CITATION} onClick={vi.fn()} canEdit={false} />)
+
+    expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
   })
 })

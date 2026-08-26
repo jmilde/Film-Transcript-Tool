@@ -5,6 +5,7 @@ import type { ChatCitation, ChatMessage } from '../../api/hooks/useChat'
 interface ChatMessageListProps {
   messages: ChatMessage[]
   onSelectCitation: (citation: ChatCitation) => void
+  canEdit: boolean
 }
 
 const MARKER_RE = /\[(\d+)\]/g
@@ -22,6 +23,7 @@ function renderAnswer(
   content: string,
   citations: ChatCitation[] | null,
   onSelectCitation: (citation: ChatCitation) => void,
+  canEdit: boolean,
 ): ReactNode[] {
   const byMarker = new Map((citations ?? []).map((citation) => [citation.marker, citation]))
   const parts: ReactNode[] = []
@@ -40,6 +42,7 @@ function renderAnswer(
           key={key++}
           citation={citation}
           onClick={() => onSelectCitation(citation)}
+          canEdit={canEdit}
         />
       ) : (
         <span key={key++}>{match[0]}</span>
@@ -54,7 +57,7 @@ function renderAnswer(
 }
 
 /** Renders a conversation's messages, interleaving citation cards into assistant answers. */
-export function ChatMessageList({ messages, onSelectCitation }: ChatMessageListProps) {
+export function ChatMessageList({ messages, onSelectCitation, canEdit }: ChatMessageListProps) {
   return (
     <div className="space-y-4">
       {messages.map((message) =>
@@ -66,7 +69,7 @@ export function ChatMessageList({ messages, onSelectCitation }: ChatMessageListP
           </div>
         ) : (
           <div key={message.id} className="max-w-lg space-y-1 text-sm text-slate-800">
-            {renderAnswer(message.content, message.citations, onSelectCitation)}
+            {renderAnswer(message.content, message.citations, onSelectCitation, canEdit)}
           </div>
         ),
       )}

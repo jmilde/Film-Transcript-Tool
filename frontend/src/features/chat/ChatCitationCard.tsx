@@ -7,6 +7,7 @@ import type { ChatCitation } from '../../api/hooks/useChat'
 interface ChatCitationCardProps {
   citation: ChatCitation
   onClick: () => void
+  canEdit: boolean
 }
 
 /**
@@ -19,7 +20,7 @@ interface ChatCitationCardProps {
  * nested in another) since they trigger different actions — seek vs. queue
  * a clip insert.
  */
-export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
+export function ChatCitationCard({ citation, onClick, canEdit }: ChatCitationCardProps) {
   const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
 
   return (
@@ -58,22 +59,24 @@ export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
           <p className="truncate text-xs text-slate-500">{citation.excerpt}</p>
         </div>
       </button>
-      <button
-        type="button"
-        aria-label="Add to Document"
-        title="Add to Document"
-        onClick={() =>
-          queueInsert({
-            transcriptId: citation.transcript_id,
-            videoId: citation.video_id,
-            startTokenId: citation.start_token_id,
-            endTokenId: citation.end_token_id,
-          })
-        }
-        className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-      >
-        <DocumentIcon className="h-4 w-4" />
-      </button>
+      {canEdit && (
+        <button
+          type="button"
+          aria-label="Add to Document"
+          title="Add to Document"
+          onClick={() =>
+            queueInsert({
+              transcriptId: citation.transcript_id,
+              videoId: citation.video_id,
+              startTokenId: citation.start_token_id,
+              endTokenId: citation.end_token_id,
+            })
+          }
+          className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        >
+          <DocumentIcon className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
 }

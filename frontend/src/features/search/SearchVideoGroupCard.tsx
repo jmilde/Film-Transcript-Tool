@@ -7,6 +7,7 @@ import type { SearchHit, SearchVideoGroup } from '../../api/hooks/useSearch'
 interface SearchVideoGroupCardProps {
   group: SearchVideoGroup
   onSelectHit: (hit: SearchHit) => void
+  canEdit: boolean
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -16,7 +17,7 @@ const KIND_LABEL: Record<string, string> = {
 }
 
 /** One video's search matches (docs §14): thumbnail, name, folder path, then every hit. */
-export function SearchVideoGroupCard({ group, onSelectHit }: SearchVideoGroupCardProps) {
+export function SearchVideoGroupCard({ group, onSelectHit, canEdit }: SearchVideoGroupCardProps) {
   const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
 
   return (
@@ -64,7 +65,7 @@ export function SearchVideoGroupCard({ group, onSelectHit }: SearchVideoGroupCar
                 </span>
               )}
             </button>
-            {hit.kind === 'transcript' && hit.transcript_id && (
+            {canEdit && hit.kind === 'transcript' && hit.transcript_id && (
               <button
                 type="button"
                 aria-label="Add to Document"
