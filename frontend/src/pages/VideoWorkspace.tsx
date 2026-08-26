@@ -110,6 +110,17 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     void videoRef.current.play()
   }
 
+  // Lets the document panel reuse this page's own player for a clip from
+  // this video, instead of spawning a second one (see store/playback.ts).
+  // `playSelection` only closes over refs, so capturing it once per video
+  // (rather than re-setting every render) is safe — it always reads the
+  // current ref values regardless of which render's closure gets stored.
+  const setActiveVideo = usePlaybackStore((s) => s.setActiveVideo)
+  useEffect(() => {
+    setActiveVideo(videoId, playSelection)
+    return () => setActiveVideo(null, null)
+  }, [videoId, setActiveVideo])
+
   // Applies a pending search-result navigation: seek to it and highlight its
   // range. Transcript-kind results carry their own token id/time directly;
   // comment-kind results only carry the comment id, so its anchor range is

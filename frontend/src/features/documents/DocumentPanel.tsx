@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useCreateDocument, useDeleteDocument, useDocuments } from '../../api/hooks/useDocuments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { DocumentEditor } from './DocumentEditor'
+import { ClipPreviewPlayer } from './ClipPreviewPlayer'
 import { CloseIcon, DocumentIcon, TrashIcon } from '../../components/icons'
 
 /**
@@ -18,6 +19,8 @@ export function DocumentPanel() {
   const openPanel = useDocumentPanelStore((s) => s.open)
   const close = useDocumentPanelStore((s) => s.close)
   const setActiveDocument = useDocumentPanelStore((s) => s.setActiveDocument)
+  const previewClip = useDocumentPanelStore((s) => s.previewClip)
+  const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
 
   const { data: documents } = useDocuments(activeProjectId)
   const createDocument = useCreateDocument(activeProjectId ?? '')
@@ -76,6 +79,25 @@ export function DocumentPanel() {
           <CloseIcon className="h-4 w-4" />
         </button>
       </div>
+
+      {previewClip && (
+        <div className="relative border-b border-slate-100">
+          <button
+            type="button"
+            aria-label="Close preview"
+            title="Close preview"
+            onClick={() => setPreviewClip(null)}
+            className="absolute top-1 right-1 z-10 rounded bg-black/50 p-1 text-white hover:bg-black/70"
+          >
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+          <ClipPreviewPlayer
+            videoId={previewClip.videoId}
+            startTime={previewClip.startTime}
+            endTime={previewClip.endTime}
+          />
+        </div>
+      )}
 
       <div className="flex items-center gap-1 border-b border-slate-100 px-2 py-2">
         <select

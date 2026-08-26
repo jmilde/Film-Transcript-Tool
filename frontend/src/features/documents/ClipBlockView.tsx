@@ -3,6 +3,8 @@ import type { ReactNodeViewProps } from '@tiptap/react'
 import { FolderIcon, PlayIcon, VideoIcon } from '../../components/icons'
 import { thumbnailUrl } from '../../api/hooks/useMedia'
 import { formatTime } from '../player/format'
+import { usePlaybackStore } from '../../store/playback'
+import { useDocumentPanelStore } from '../../store/documentPanel'
 import type { ClipBlockAttrs } from './clipBlockNode'
 
 /** Read-only display fields the backend injects into `attrs` on every read
@@ -29,6 +31,25 @@ type ClipBlockNodeAttrs = ClipBlockAttrs & ResolvedClipFields
  */
 export function ClipBlockView({ node, updateAttributes, selected }: ReactNodeViewProps) {
   const attrs = node.attrs as ClipBlockNodeAttrs
+  const activeVideoId = usePlaybackStore((s) => s.activeVideoId)
+  const playSelection = usePlaybackStore((s) => s.playSelection)
+  const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
+
+  // Reuses VideoWorkspace's own player when it's already open on this clip's
+  // video (so there's never two players for the same video); otherwise asks
+  // the panel to preview the clip in its own player (see ClipPreviewPlayer).
+  function handlePlay() {
+    if (attrs.start_time === undefined || attrs.end_time === undefined) return
+    if (attrs.videoId === activeVideoId && playSelection) {
+      playSelection(attrs.start_time, attrs.end_time)
+    } else {
+      setPreviewClip({
+        videoId: attrs.videoId,
+        startTime: attrs.start_time,
+        endTime: attrs.end_time,
+      })
+    }
+  }
 
   return (
     <NodeViewWrapper
@@ -62,8 +83,7 @@ export function ClipBlockView({ node, updateAttributes, selected }: ReactNodeVie
               aria-label="Play clip"
               title="Play clip"
               className="ml-auto shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              // Wired up in Phase D6 (panel/page player coordination).
-              onClick={() => {}}
+              onClick={handlePlay}
             >
               <PlayIcon className="h-3.5 w-3.5" />
             </button>

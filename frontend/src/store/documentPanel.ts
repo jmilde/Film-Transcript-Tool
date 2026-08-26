@@ -9,6 +9,15 @@ export interface ClipInsertPayload {
   endTokenId: string
 }
 
+/** A clip the panel should preview with its own player — set when a clip
+ * block's play button is clicked for a video that isn't already open in
+ * `VideoWorkspace` (see `store/playback.ts`'s `activeVideoId`). */
+export interface ClipPreview {
+  videoId: string
+  startTime: number
+  endTime: number
+}
+
 /**
  * Global state (§17-equivalent "Document Panel State") for the persistent
  * document-builder panel docked in `AppShell`. Unlike page-scoped stores, this
@@ -23,12 +32,14 @@ interface DocumentPanelState {
   activeProjectId: string | null
   activeDocumentId: string | null
   pendingInsert: ClipInsertPayload | null
+  previewClip: ClipPreview | null
   open: (projectId: string) => void
   close: () => void
   setActiveProject: (projectId: string | null) => void
   setActiveDocument: (documentId: string | null) => void
   queueInsert: (payload: ClipInsertPayload) => void
   consumePendingInsert: () => ClipInsertPayload | null
+  setPreviewClip: (clip: ClipPreview | null) => void
 }
 
 export const useDocumentPanelStore = create<DocumentPanelState>((set, get) => ({
@@ -36,6 +47,7 @@ export const useDocumentPanelStore = create<DocumentPanelState>((set, get) => ({
   activeProjectId: null,
   activeDocumentId: null,
   pendingInsert: null,
+  previewClip: null,
   open: (projectId) => set({ isOpen: true, activeProjectId: projectId }),
   close: () => set({ isOpen: false }),
   setActiveProject: (projectId) => set({ activeProjectId: projectId }),
@@ -46,4 +58,5 @@ export const useDocumentPanelStore = create<DocumentPanelState>((set, get) => ({
     if (payload !== null) set({ pendingInsert: null })
     return payload
   },
+  setPreviewClip: (clip) => set({ previewClip: clip }),
 }))
