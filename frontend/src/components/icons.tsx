@@ -199,3 +199,11 @@ export function TranslateIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function DocumentIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M5 2a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7.41a1 1 0 0 0-.3-.7l-4.4-4.42A1 1 0 0 0 10.6 2H5Zm1.5 8.5h7v1.5h-7V10.5Zm0 3.5h7v1.5h-7V14Zm0-7h3v1.5h-3V7Z" />
+    </svg>
+  )
+}

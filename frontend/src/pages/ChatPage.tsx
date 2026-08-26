@@ -1,9 +1,11 @@
+import { useEffect } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAskChat, useChatConversation } from '../api/hooks/useChat'
 import type { ChatCitation } from '../api/hooks/useChat'
 import { ChatInput } from '../features/chat/ChatInput'
 import { ChatMessageList } from '../features/chat/ChatMessageList'
 import type { PendingSearchNav } from '../features/search/types'
+import { useDocumentPanelStore } from '../store/documentPanel'
 
 export function ChatPage() {
   const { projectId, conversationId } = useParams<{
@@ -24,6 +26,9 @@ function ChatPageInner({
   const navigate = useNavigate()
   const { data: messages } = useChatConversation(projectId, conversationId)
   const ask = useAskChat(projectId)
+
+  const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
+  useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
 
   function handleSubmit(question: string) {
     ask.mutate(

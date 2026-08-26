@@ -1,8 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { isDocumentConflict, useDocument, useUpdateDocument } from '../../api/hooks/useDocuments'
+import {
+  isDocumentConflict,
+  useDocument,
+  useResolveClipBlock,
+  useUpdateDocument,
+} from '../../api/hooks/useDocuments'
+import { useDocumentPanelStore } from '../../store/documentPanel'
 import { ClipBlock, stripResolvedClipFields } from './clipBlockNode'
 import type { Document } from '../../api/hooks/useDocuments'
 
@@ -17,16 +23,24 @@ interface DocumentEditorProps {
  * Loads a document and mounts a TipTap editor over its content, debouncing
  * saves and surfacing a stale-`expected_version` conflict the same way
  * `TranscriptViewer` does for token edits (see its `reloadAfterConflict`).
+ *
+ * Also owns consuming the panel store's queued "Add to Document" insert
+ * (rather than `DocumentPanel`, which doesn't have an editor instance to call
+ * `insertClipBlockAt` on) once this document's editor has finished loading.
  */
 export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const { data: doc, isLoading } = useDocument(documentId)
   const updateDocument = useUpdateDocument(projectId, documentId)
+  const resolveClipBlock = useResolveClipBlock(documentId)
+  const pendingInsert = useDocumentPanelStore((s) => s.pendingInsert)
+  const consumePendingInsert = useDocumentPanelStore((s) => s.consumePendingInsert)
   const client = useQueryClient()
 
   // The version to send with the next save; kept outside React state since
   // updating it must never itself trigger a re-render/editor reset.
   const versionRef = useRef(1)
-  const initializedRef = useRef(false)
+  const [initialized, setInitialized] = useState(false)
+  const [title, setTitle] = useState('')
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const editor = useEditor(
@@ -64,15 +78,56 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // A document switch needs a fresh initial load even though `doc` itself
   // may briefly hold the previous document's data while the new one fetches.
   useEffect(() => {
-    initializedRef.current = false
+    setInitialized(false)
   }, [documentId])
 
   useEffect(() => {
-    if (!editor || !doc || initializedRef.current) return
+    if (!editor || !doc || initialized) return
     editor.commands.setContent(doc.content, { emitUpdate: false })
     versionRef.current = doc.version
-    initializedRef.current = true
-  }, [editor, doc])
+    setTitle(doc.title)
+    setInitialized(true)
+  }, [editor, doc, initialized])
+
+  // Renames on blur, sharing this same version-tracking with content saves —
+  // splitting title/content into separately-versioned mutations would let one
+  // silently invalidate the other's `expected_version`.
+  function saveTitle() {
+    if (!initialized || title === doc?.title) return
+    updateDocument.mutate(
+      { title, expectedVersion: versionRef.current },
+      { onSuccess: (updated) => (versionRef.current = updated.version) },
+    )
+  }
+
+  // Insert a queued clip once there's an initialized editor to receive it —
+  // resolve its display fields first so the card renders correctly right
+  // away, without waiting on a full document refetch.
+  useEffect(() => {
+    if (!editor || !initialized || pendingInsert === null) return
+    const payload = consumePendingInsert()
+    if (!payload) return
+    resolveClipBlock.mutate(
+      {
+        transcriptId: payload.transcriptId,
+        startTokenId: payload.startTokenId,
+        endTokenId: payload.endTokenId,
+      },
+      {
+        onSuccess: (clip) => {
+          editor.commands.insertClipBlockAt(editor.state.doc.content.size, {
+            nodeId: crypto.randomUUID(),
+            transcriptId: payload.transcriptId,
+            videoId: payload.videoId,
+            startTokenId: payload.startTokenId,
+            endTokenId: payload.endTokenId,
+            note: null,
+            ...clip,
+          })
+        },
+      },
+    )
+  }, [editor, initialized, pendingInsert, consumePendingInsert, resolveClipBlock])
 
   useEffect(() => {
     return () => {
@@ -82,7 +137,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
 
   function reloadAfterConflict() {
     updateDocument.reset()
-    initializedRef.current = false
+    setInitialized(false)
     void client.invalidateQueries({ queryKey: ['document', documentId] })
   }
 
@@ -92,6 +147,13 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
 
   return (
     <div className="flex h-full flex-col">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={saveTitle}
+        aria-label="Document title"
+        className="border-b border-slate-200 px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none"
+      />
       {isDocumentConflict(updateDocument.error) && (
         <div className="flex items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
           <span>This document was edited by someone else. Your change was not saved.</span>

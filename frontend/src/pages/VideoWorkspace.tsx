@@ -9,6 +9,7 @@ import { useTranscript, useTranscripts } from '../api/hooks/useTranscripts'
 import { useComments } from '../api/hooks/useComments'
 import { usePlaybackStore } from '../store/playback'
 import { useSelectionStore } from '../store/selection'
+import { useDocumentPanelStore } from '../store/documentPanel'
 import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
@@ -48,6 +49,11 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
 
   // Reset playback state when switching videos.
   useEffect(() => resetPlayback, [videoId, resetPlayback])
+
+  const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
+  useEffect(() => {
+    if (project) setActiveProject(project.id)
+  }, [project, setActiveProject])
 
   // Pauses playback once it reaches the end of a "play selection" request.
   const selectionEndRef = useRef<number | null>(null)

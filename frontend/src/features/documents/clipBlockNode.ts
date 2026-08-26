@@ -45,7 +45,13 @@ export function stripResolvedClipFields(content: JSONContent): JSONContent {
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     clipBlock: {
-      insertClipBlockAt: (pos: number, attrs: ClipBlockAttrs) => ReturnType
+      insertClipBlockAt: (
+        pos: number,
+        // Accepts the resolved display fields (video_name, excerpt, ...)
+        // alongside the persisted attrs, so a freshly inserted clip renders
+        // immediately without waiting for a full document refetch.
+        attrs: ClipBlockAttrs & Record<string, unknown>,
+      ) => ReturnType
     }
   }
 }
