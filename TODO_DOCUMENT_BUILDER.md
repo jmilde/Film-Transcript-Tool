@@ -151,13 +151,13 @@ not re-litigate these while implementing):
 - [x] Verify: full frontend gate green; manual click-through inserting one clip from each of the three entry points into the same document and confirming correct rendering/order
 
 ## Phase D8 — Docs updates
-- [ ] New file `docs/1100_document_builder.md` (mirrors `docs/1000_semantic_search.md`'s structure): Purpose, Data Model (`Document`, `content` JSON shape, `clipBlock` node contract), Clip Block Anchoring & Resolution Rules (original-vs-translation decision and rationale, excerpt-always-resolved-fresh rule), Editor Contract (TipTap node schema, allowed marks/nodes), Global Panel UX (open/pin behavior, insert-queue flow, player coordination rule from D6), API Contract (route table), Frontend Rendering Contract (`ClipBlockView` visual spec)
-- [ ] `docs/100_product_spec.md`: add a Document Builder section describing the user-facing feature (multiple named documents per project, clip blocks, global panel)
-- [ ] `docs/300_architecture.md`: add Document Builder to the backend responsibilities list; note it's synchronous CRUD, no worker involvement
-- [ ] `docs/400_database.md`: document the `documents` table (following the existing table-by-table convention), including the `content` JSONB shape since there's no second table to describe it via schema
-- [ ] `docs/700_backend_api.md`: add a Documents section listing the six routes, in the same terse format as the existing Comments/Chat sections
-- [ ] `docs/800_frontend.md`: update the Application Layout section/diagram to show the third (document panel) column; add a Document Builder UI section before Future Extensions; add a "Document Panel State" subsection alongside the existing Workspace/Transcript/Playback/Comment state descriptions
-- [ ] Verify: docs read coherently end-to-end; no remaining "future annotations"/"AI annotations" mention in `docs/500_transcript_model.md` that should now instead point at `docs/1100_document_builder.md`
+- [x] New file `docs/1100_document_builder.md` (mirrors `docs/1000_semantic_search.md`'s structure): Purpose, Data Model (`Document`, `content` JSON shape, `clipBlock` node contract), Clip Block Anchoring & Resolution Rules (original-vs-translation decision and rationale, excerpt-always-resolved-fresh rule), Editor Contract (TipTap node schema, allowed marks/nodes), Global Panel UX (open/pin behavior, insert-queue flow, player coordination rule from D6), API Contract (route table), Frontend Rendering Contract (`ClipBlockView` visual spec)
+- [x] `docs/100_product_spec.md`: add a Document Builder section describing the user-facing feature (multiple named documents per project, clip blocks, global panel)
+- [x] `docs/300_architecture.md`: add Document Builder to the backend responsibilities list; note it's synchronous CRUD, no worker involvement
+- [x] `docs/400_database.md`: document the `documents` table (following the existing table-by-table convention), including the `content` JSONB shape since there's no second table to describe it via schema
+- [x] `docs/700_backend_api.md`: add a Documents section listing the six routes, in the same terse format as the existing Comments/Chat sections
+- [x] `docs/800_frontend.md`: update the Application Layout section/diagram to show the third (document panel) column; add a Document Builder UI section before Future Extensions; add a "Document Panel State" subsection alongside the existing Workspace/Transcript/Playback/Comment state descriptions
+- [x] Verify: docs read coherently end-to-end; no remaining "future annotations"/"AI annotations" mention in `docs/500_transcript_model.md` that should now instead point at `docs/1100_document_builder.md`
 
 ## Phase D9 — (optional, later) Export document to Markdown
 - [ ] Only build if requested. Reuse the existing async export-job pattern exactly: `JobType.EXPORT_DOCUMENT`, a `handle_export_document` worker handler under `backend/app/worker/handlers/`, `POST /documents/{id}/exports` → `job_id` → `GET /exports/{id}` (same shape as the existing transcript export flow)
