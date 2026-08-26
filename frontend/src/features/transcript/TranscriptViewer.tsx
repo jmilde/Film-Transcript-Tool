@@ -10,6 +10,7 @@ import {
   useSplitToken,
 } from '../../api/hooks/useTokens'
 import { useCreateComment } from '../../api/hooks/useComments'
+import { useDocumentPanelStore } from '../../store/documentPanel'
 import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
 import {
@@ -18,6 +19,7 @@ import {
   CloseIcon,
   CommentIcon,
   CopyIcon,
+  DocumentIcon,
   EditIcon,
   PlayIcon,
   SearchIcon,
@@ -38,6 +40,9 @@ interface TranscriptViewerProps {
    * viewer can still watch, select, and copy, but not edit/delete/merge/split
    * tokens or comment. */
   canEdit: boolean
+  /** The video this transcript belongs to — needed to anchor an inserted
+   * clip block to a video, not just a transcript. */
+  videoId: string
 }
 
 interface SpeakerGroup {
@@ -67,6 +72,7 @@ export function TranscriptViewer({
   onSeekToken,
   onPlaySelection,
   canEdit,
+  videoId,
 }: TranscriptViewerProps) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const autoFollow = usePlaybackStore((s) => s.autoFollow)
@@ -77,6 +83,7 @@ export function TranscriptViewer({
   const extendSelection = useSelectionStore((s) => s.extend)
   const finishSelection = useSelectionStore((s) => s.finish)
   const clearSelection = useSelectionStore((s) => s.clear)
+  const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
 
   const transcriptId = transcript?.id ?? ''
   const editToken = useEditToken(transcriptId)
@@ -341,6 +348,20 @@ export function TranscriptViewer({
     clearSelection()
   }
 
+  // Anchors the clip to whichever transcript (original or translation) is
+  // currently on screen — not forced to the original, unlike chat citations
+  // (see docs/1100_document_builder.md's anchor-resolution rationale).
+  function addSelectionToDocument() {
+    if (!transcript || selectedTokens.length === 0) return
+    queueInsert({
+      transcriptId: transcript.id,
+      videoId,
+      startTokenId: selectedTokens[0].id,
+      endTokenId: selectedTokens[selectedTokens.length - 1].id,
+    })
+    clearSelection()
+  }
+
   function deleteSelection() {
     deleteTokens.mutate({
       tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
@@ -535,6 +556,17 @@ export function TranscriptViewer({
                 onClick={() => setCommentDraft('')}
               >
                 <CommentIcon className="h-4 w-4" />
+              </button>
+            )}
+            {canEdit && (
+              <button
+                type="button"
+                aria-label="Add to Document"
+                title="Add to Document"
+                className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
+                onClick={addSelectionToDocument}
+              >
+                <DocumentIcon className="h-4 w-4" />
               </button>
             )}
             {canEdit && (

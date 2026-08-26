@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TranscriptViewer } from './TranscriptViewer'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
+import { useDocumentPanelStore } from '../../store/documentPanel'
 import { server } from '../../test/server'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Transcript } from '../../api/hooks/useTranscripts'
@@ -68,6 +69,7 @@ beforeEach(() => {
   usePlaybackStore.getState().reset()
   usePlaybackStore.setState({ autoFollow: true })
   useSelectionStore.getState().clear()
+  useDocumentPanelStore.setState({ isOpen: false, pendingInsert: null })
 })
 
 function renderViewer(onPlaySelection = vi.fn(), canEdit = true) {
@@ -81,6 +83,7 @@ function renderViewer(onPlaySelection = vi.fn(), canEdit = true) {
         onSeekToken={vi.fn()}
         onPlaySelection={onPlaySelection}
         canEdit={canEdit}
+        videoId="vid-1"
       />
     </QueryClientProvider>,
   )
@@ -108,6 +111,7 @@ describe('TranscriptViewer', () => {
           onSeekToken={onSeekToken}
           onPlaySelection={vi.fn()}
           canEdit={true}
+          videoId="vid-1"
         />
       </QueryClientProvider>,
     )
@@ -137,6 +141,7 @@ describe('TranscriptViewer', () => {
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
           canEdit={true}
+          videoId="vid-1"
         />
       </QueryClientProvider>,
     )
@@ -424,6 +429,25 @@ describe('TranscriptViewer', () => {
     )
   })
 
+  it('queues a clip insert for the selection via the Add to Document button', async () => {
+    renderViewer()
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Document' }))
+
+    expect(useDocumentPanelStore.getState().pendingInsert).toEqual({
+      transcriptId: 't-1',
+      videoId: 'vid-1',
+      startTokenId: 'tok-a',
+      endTokenId: 'tok-b',
+    })
+    expect(useDocumentPanelStore.getState().isOpen).toBe(true)
+    expect(useSelectionStore.getState().range).toBeNull()
+  })
+
   it('underlines tokens covered by a comment, gray once resolved', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
@@ -463,6 +487,7 @@ describe('TranscriptViewer', () => {
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
           canEdit={true}
+          videoId="vid-1"
         />
       </QueryClientProvider>,
     )
@@ -510,6 +535,7 @@ describe('TranscriptViewer', () => {
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
           canEdit={true}
+          videoId="vid-1"
         />
       </QueryClientProvider>,
     )
@@ -547,7 +573,7 @@ describe('TranscriptViewer', () => {
       expect(screen.queryByDisplayValue('world')).not.toBeInTheDocument()
     })
 
-    it('hides Edit, Comment, and Delete from the selection toolbar, keeping Play/Copy', () => {
+    it('hides Edit, Comment, Add to Document, and Delete from the selection toolbar, keeping Play/Copy', () => {
       renderViewer(vi.fn(), false)
 
       fireEvent.mouseDown(screen.getByText('Hello'))
@@ -558,6 +584,7 @@ describe('TranscriptViewer', () => {
       expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
     })
   })

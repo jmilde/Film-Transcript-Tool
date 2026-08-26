@@ -1,6 +1,7 @@
-import { FolderIcon, VideoIcon } from '../../components/icons'
+import { DocumentIcon, FolderIcon, VideoIcon } from '../../components/icons'
 import { thumbnailUrl } from '../../api/hooks/useMedia'
 import { formatTime } from '../player/format'
+import { useDocumentPanelStore } from '../../store/documentPanel'
 import type { SearchHit, SearchVideoGroup } from '../../api/hooks/useSearch'
 
 interface SearchVideoGroupCardProps {
@@ -16,6 +17,8 @@ const KIND_LABEL: Record<string, string> = {
 
 /** One video's search matches (docs §14): thumbnail, name, folder path, then every hit. */
 export function SearchVideoGroupCard({ group, onSelectHit }: SearchVideoGroupCardProps) {
+  const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
@@ -42,22 +45,44 @@ export function SearchVideoGroupCard({ group, onSelectHit }: SearchVideoGroupCar
       </div>
       <div>
         {group.hits.map((hit) => (
-          <button
+          <div
             key={`${hit.kind}-${hit.id}`}
-            type="button"
-            onClick={() => onSelectHit(hit)}
-            className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+            className="flex items-center border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
           >
-            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
-              {KIND_LABEL[hit.kind] ?? hit.kind}
-            </span>
-            <span className="flex-1 truncate text-slate-800">{hit.text}</span>
-            {hit.start_time !== null && (
-              <span className="shrink-0 font-mono text-xs text-slate-400">
-                {formatTime(hit.start_time)}
+            <button
+              type="button"
+              onClick={() => onSelectHit(hit)}
+              className="flex min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left text-sm"
+            >
+              <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+                {KIND_LABEL[hit.kind] ?? hit.kind}
               </span>
+              <span className="flex-1 truncate text-slate-800">{hit.text}</span>
+              {hit.start_time !== null && (
+                <span className="shrink-0 font-mono text-xs text-slate-400">
+                  {formatTime(hit.start_time)}
+                </span>
+              )}
+            </button>
+            {hit.kind === 'transcript' && hit.transcript_id && (
+              <button
+                type="button"
+                aria-label="Add to Document"
+                title="Add to Document"
+                onClick={() =>
+                  queueInsert({
+                    transcriptId: hit.transcript_id as string,
+                    videoId: group.video_id,
+                    startTokenId: hit.id,
+                    endTokenId: hit.id,
+                  })
+                }
+                className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <DocumentIcon className="h-4 w-4" />
+              </button>
             )}
-          </button>
+          </div>
         ))}
         {group.hit_count > group.hits.length && (
           <div className="px-4 py-2 text-xs text-slate-400">

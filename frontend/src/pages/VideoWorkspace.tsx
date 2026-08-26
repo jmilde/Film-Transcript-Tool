@@ -217,6 +217,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
                     canEdit={canEdit}
+                    videoId={videoId}
                   />
                 </div>
               </Panel>
@@ -243,6 +244,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
                     canEdit={canEdit}
+                    videoId={videoId}
                   />
                 </div>
               </Panel>
@@ -256,6 +258,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               onSeekToken={seek}
               onPlaySelection={playSelection}
               canEdit={canEdit}
+              videoId={videoId}
             />
           )}
         </Panel>
