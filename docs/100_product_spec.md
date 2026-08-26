@@ -26,6 +26,7 @@ The application MUST allow users to:
 - Edit transcripts.
 - Search transcripts.
 - Leave comments on transcript ranges.
+- Build documents combining their own prose with clip references to transcripts.
 - Export transcripts.
 - Collaborate with multiple users.
 
@@ -263,7 +264,26 @@ Exports MUST reflect the edited transcript.
 
 ---
 
-# 15. Authentication
+# 15. Document Builder
+
+Users MAY create one or more named documents per project, mixing their own
+prose with embedded clip blocks — non-editable references to a transcript
+token range and video, rendered as a small playable card whose excerpt is
+resolved fresh from the transcript on every read (so it can never drift
+from the source, even after later edits).
+
+Clip blocks MUST be insertable from a transcript selection, a search
+result, or a chat citation, via a persistent panel that stays open across
+navigation so users can browse, search, or ask questions while writing.
+
+Users MAY add their own editable note per clip block, kept separate from
+the clip's excerpt.
+
+See `docs/1100_document_builder.md` for the full design.
+
+---
+
+# 16. Authentication
 
 Authentication is provided by Supabase.
 
@@ -287,7 +307,7 @@ Editable objects MUST record:
 
 ---
 
-# 16. Out of Scope
+# 17. Out of Scope
 
 Plan change: this document originally excluded AI-assisted/semantic search
 from Version 1; it now ships as project-scoped semantic chat search over

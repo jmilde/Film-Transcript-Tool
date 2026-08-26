@@ -21,6 +21,7 @@ The database stores:
 - transcripts
 - transcript editing data
 - comments
+- documents
 - processing state
 
 The database uses PostgreSQL.
@@ -692,7 +693,52 @@ citation cards — distinct from `agent_message_history`.
 
 ---
 
-# 21. Relationships
+# 21. Document
+
+A user-authored document mixing prose with embedded clip blocks, scoped to
+a project (see `docs/1100_document_builder.md`). A project may have
+multiple documents.
+
+## Fields
+
+```
+id
+
+project_id
+
+title
+
+content
+
+version
+
+created_by
+
+created_at
+
+updated_by
+
+updated_at
+```
+
+`content` is the whole document as one opaque JSON tree (a TipTap/
+ProseMirror document): prose nodes plus custom `clipBlock` nodes, each
+carrying `{nodeId, transcriptId, videoId, startTokenId, endTokenId, note}`.
+There is no separate block/position table — a rich-text tree doesn't fit
+the flat fractional-`position` pattern Transcript Segment/Transcript Token
+use. A clip block's excerpt, timecode, speaker, thumbnail, and folder path
+are never stored in `content` — like Transcript Chunk citations, they are
+resolved fresh from the referenced transcript's live tokens on every read,
+so a clip can never drift from later edits to its source.
+
+`version` is a whole-document optimistic-locking counter (same pattern as
+Transcript Token's `version`), incremented on every write; a `PATCH` must
+supply the `version` it last read or the write is rejected with a conflict
+rather than applied.
+
+---
+
+# 22. Relationships
 
 Main relationships:
 
@@ -726,7 +772,7 @@ Comments attach to transcript token ranges.
 
 ---
 
-# 22. Data Not Stored
+# 23. Data Not Stored
 
 The database does not store:
 
@@ -738,7 +784,7 @@ These belong in storage.
 
 ---
 
-# 23. Future Extensions
+# 24. Future Extensions
 
 The schema should allow future additions:
 

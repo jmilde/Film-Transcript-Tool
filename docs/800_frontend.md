@@ -19,6 +19,7 @@ The frontend is responsible for:
 - video playback
 - transcript editing
 - comments
+- documents
 - search
 - exports
 
@@ -83,17 +84,24 @@ Mobile support is not a Version 1 goal.
 
 # 4. Application Layout
 
-The application consists of three main areas.
+The application consists of a navigation bar, the routed main workspace,
+and a persistent document panel docked as a sibling column — mounted once
+in the top-level app shell (not per page), so it stays open across
+navigation instead of resetting when the user moves between pages.
 
 ```
 ------------------------------------------------
 | Navigation                                   |
 ------------------------------------------------
-|                                              |
-| Main Workspace                               |
-|                                              |
+|                                    |         |
+| Main Workspace                     | Document|
+|                                    | Panel   |
+|                                    |         |
 ------------------------------------------------
 ```
+
+The document panel collapses to a thin toggle rail when closed. See §19
+Document Builder UI.
 
 ---
 
@@ -193,6 +201,8 @@ Available actions:
 - comment
 - edit
 - copy
+- add to document (queues a clip block insert into the document panel's
+  active document — see §19)
 
 ---
 
@@ -308,6 +318,10 @@ Selecting a result:
 - seeks to the location
 - highlights the transcript range
 
+A transcript-text result also offers "add to document" (§19), queuing a
+single-token clip insert — speaker/comment results have no token range to
+anchor to, so they don't.
+
 ---
 
 # 15. Chat UI
@@ -329,6 +343,9 @@ Selecting a citation card:
 - seeks to the location
 - highlights the full cited token range in the **original** transcript pane,
   even when the citation matched via a translation
+
+A citation card also offers "add to document" (§19), queuing the cited
+range as a clip insert.
 
 ---
 
@@ -409,7 +426,57 @@ Important UI state includes:
 
 ---
 
-# 19. Future Extensions
+## Document Panel State
+
+- open/closed
+- active project (synced from whichever project-scoped page is current)
+- active document
+- pending clip insert (queued until the editor is ready to receive it)
+- preview clip (set when a clip's video isn't already open in the video
+  workspace, so the panel renders its own preview player)
+
+---
+
+# 19. Document Builder UI
+
+A persistent, project-scoped panel (§4) for building documents that mix
+prose with clip blocks. Docked as a resizable column, not an overlay — an
+overlay covering page content would defeat the point of writing while
+still able to browse/search/ask.
+
+Panel contents:
+
+- a document switcher: list, create, rename, delete, select the active
+  document
+- a rich-text editor (TipTap) over the active document's content
+- each clip block renders as a card: thumbnail, video name, timecode,
+  non-editable excerpt, an editable note, and a play button
+
+Add-to-document entry points (§10 Transcript Selection, §15 Chat UI's
+citation cards, §14 Search UI's results) queue a clip insert; if the panel
+or its editor isn't mounted yet, the insert is queued and applied once it
+is, so nothing is silently dropped.
+
+## Player Coordination
+
+Clicking a clip block's play button:
+
+- reuses the video workspace's existing player if that page is already
+  open on the clip's video, seeking within it — never a second player for
+  the same video at once
+- otherwise, the panel plays the clip in its own lightweight preview
+  player (no waveform/transcript sync, unlike the full workspace player)
+
+## Concurrency
+
+A stale save (the document was edited elsewhere since this client last
+read it) shows the same conflict banner pattern used for token edits
+(§12) — the local attempt is not overwritten or silently retried; the
+user must reload before continuing.
+
+---
+
+# 20. Future Extensions
 
 The frontend should allow future additions:
 
