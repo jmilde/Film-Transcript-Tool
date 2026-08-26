@@ -307,3 +307,40 @@ def test_update_document_rejects_clip_block_outside_project(
         raise AssertionError("expected DocumentContentInvalidError")
     except DocumentContentInvalidError:
         pass
+
+
+def test_resolve_document_content_survives_deleted_boundary_token(
+    db_session: Session, user: User
+) -> None:
+    """A clip's start/end token can be soft-deleted later (direct delete, or
+    replaced by a merge/split) without a document read ever crashing. Deleted
+    tokens keep their original position, so they still work as slice bounds
+    for building the excerpt from the surviving non-deleted tokens."""
+    transcript = _seed_transcript(db_session, user)
+    tokens = _flat_tokens(db_session, transcript)  # Hello there. | How are you?
+
+    document = create_document(db_session, transcript.project_id, user.id, "Doc")
+    document.content = {
+        "type": "doc",
+        "content": [
+            _clip_node(
+                node_id="0",
+                transcript_id=transcript.id,
+                video_id=transcript.video_id,
+                start_token_id=tokens[0].id,
+                end_token_id=tokens[-1].id,
+            )
+        ],
+    }
+    db_session.flush()
+
+    tokens[0].is_deleted = True
+    tokens[-1].is_deleted = True
+    db_session.flush()
+
+    resolved = resolve_document_content(db_session, document)
+    clip_attrs = resolved["content"][0]["attrs"]
+
+    assert "Hello" not in clip_attrs["excerpt"]
+    assert clip_attrs["start_time"] == tokens[0].start_time
+    assert clip_attrs["end_time"] == tokens[-1].end_time

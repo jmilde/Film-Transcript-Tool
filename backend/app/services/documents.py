@@ -296,16 +296,19 @@ def resolve_document_content(session: Session, document: Document) -> dict[str, 
 
     # One ordered token list per transcript; every node's range is a slice of
     # it, so this is one query per transcript rather than one per clip.
+    #
+    # Includes deleted tokens (unlike resolve_clip_block's per-node query),
+    # so a clip whose boundary token was later soft-deleted or replaced by a
+    # merge/split still has a valid index to slice from instead of raising
+    # KeyError on read. Deleted tokens are filtered out only when building
+    # the excerpt text itself (see `resolve` below).
     ordered_tokens_by_transcript: dict[uuid.UUID, list[TranscriptToken]] = {}
     for transcript_id in transcript_ids:
         ordered_tokens_by_transcript[transcript_id] = list(
             session.execute(
                 select(TranscriptToken)
                 .join(TranscriptSegment, TranscriptSegment.id == TranscriptToken.segment_id)
-                .where(
-                    TranscriptToken.transcript_id == transcript_id,
-                    TranscriptToken.is_deleted.is_(False),
-                )
+                .where(TranscriptToken.transcript_id == transcript_id)
                 .order_by(TranscriptSegment.position, TranscriptToken.position)
             ).scalars()
         )
@@ -351,7 +354,9 @@ def resolve_document_content(session: Session, document: Document) -> dict[str, 
         ordered = ordered_tokens_by_transcript[transcript_id]
         start_index = token_position[start_token.id]
         end_index = token_position[end_token.id]
-        excerpt = _excerpt(ordered[start_index : end_index + 1])
+        excerpt = _excerpt(
+            [token for token in ordered[start_index : end_index + 1] if not token.is_deleted]
+        )
         transcript = transcripts[transcript_id]
         video = videos[transcript.video_id]
         start_segment = segments[start_token.segment_id]
