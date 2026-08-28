@@ -1,7 +1,10 @@
+import json
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,15 +20,18 @@ from app.models.user import User
 from app.models.video import Video
 from app.schemas.chat import (
     ChatAskRequest,
-    ChatAskResponse,
     ChatCitation,
     ChatConversationSummary,
     ChatMessageRead,
 )
-from app.services.chat import answer_question
+from app.services.chat import stream_answer_question
 from app.services.folders import build_folder_breadcrumbs
 
 router = APIRouter(tags=["chat"])
+
+
+def _sse(payload: dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
 
 
 def _enrich_citations(db: Session, citations: list[dict[str, Any]] | None) -> list[ChatCitation]:
@@ -78,20 +84,55 @@ def _to_message_read(db: Session, message: ChatMessage) -> ChatMessageRead:
     )
 
 
-@router.post("/projects/{project_id}/chat", response_model=ChatAskResponse)
+@router.post("/projects/{project_id}/chat")
 def ask(
     payload: ChatAskRequest,
     project: Project = Depends(require_project_member),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> ChatAskResponse:
-    """Ask a question over the project's transcripts; enqueues no job — synchronous."""
-    message = answer_question(
-        db, project.id, payload.conversation_id, payload.question, user_id=user.id
-    )
-    db.commit()
-    return ChatAskResponse(
-        conversation_id=message.conversation_id, message=_to_message_read(db, message)
+) -> StreamingResponse:
+    """Ask a question over the project's transcripts; enqueues no job.
+
+    Streams server-sent events on the same request/response rather than a
+    single JSON body: a ``status`` event each time the agent starts a search
+    (so the UI can show "Searching for ..." live), then one terminal event —
+    ``done`` with the persisted message, or ``error``.
+
+    A bad ``conversation_id`` is checked here, before the stream starts, so
+    it can still be a normal 404 — once ``StreamingResponse`` sends headers
+    (200), the status code can no longer change, so ``stream_answer_question``
+    turns that same case into an ``error`` event instead as a defensive
+    fallback (e.g. a delete racing this request).
+    """
+    if payload.conversation_id is not None:
+        conversation = db.get(ChatConversation, payload.conversation_id)
+        if conversation is None or conversation.project_id != project.id:
+            raise NotFoundError("Conversation not found")
+
+    async def event_source() -> AsyncIterator[str]:
+        async for event in stream_answer_question(
+            db, project.id, payload.conversation_id, payload.question, user_id=user.id
+        ):
+            if event["type"] == "status":
+                yield _sse({"type": "status", "message": event["message"]})
+            elif event["type"] == "error":
+                db.rollback()
+                yield _sse({"type": "error", "message": event["message"]})
+            elif event["type"] == "done":
+                db.commit()
+                message = event["assistant_message"]
+                yield _sse(
+                    {
+                        "type": "done",
+                        "conversation_id": str(event["conversation_id"]),
+                        "message": _to_message_read(db, message).model_dump(mode="json"),
+                    }
+                )
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

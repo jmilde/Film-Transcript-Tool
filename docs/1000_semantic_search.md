@@ -130,13 +130,22 @@ One agent, one tool, per chat turn:
   chunk id, and returns each chunk's video name, speaker, start time, and
   text for the model to read.
 - **Agent**: decides when and how to query. There is no separate
-  deterministic query-reformulation step — if the first search doesn't turn
-  up enough to answer confidently, the agent calls the tool again with
-  different phrasing itself.
+  deterministic query-reformulation step. The system prompt biases it toward
+  a single search: if the top result is clearly relevant, it answers from it
+  immediately rather than re-searching to double-check; it searches again
+  (at most once more) only when the first search came back empty or clearly
+  off-topic. `MAX_SEARCH_TOOL_CALLS` (`app/agents/transcript_search.py`) is a
+  hard backstop independent of prompt compliance — the run is aborted past
+  that many tool calls, and `answer_question`/`stream_answer_question`
+  degrade to a plain apology rather than surfacing the resulting
+  `UsageLimitExceeded` as a 500.
 - **Output**: a structured `{answer: str, citations: [{marker, chunk_id}]}`.
   The answer's prose marks every claim it supports with an inline bracketed
   number at the point it appears (`"...at dusk [1]."`), and every inline
   marker has a matching `citations` entry with that same `marker` number.
+- **Progress**: each `search_transcripts` call is relayed to the frontend
+  live as a `status` server-sent event before the final answer — see **Ask**
+  in `docs/700_backend_api.md` §13.
 
 ## Hallucination Guard
 

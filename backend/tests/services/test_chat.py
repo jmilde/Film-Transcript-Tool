@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import AsyncIterator
 from decimal import Decimal
 
 import pytest
@@ -15,7 +16,7 @@ from app.models.user import User
 from app.models.video import Video
 from app.services.chat import answer_question
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
-from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
 from pydantic_ai.models.test import TestModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -262,8 +263,17 @@ def test_answer_question_degrades_gracefully_past_the_search_call_limit(
     def never_stop_searching(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         return ModelResponse(parts=[ToolCallPart("search_transcripts", {"query": "again"})])
 
+    # answer_question always sets an event_stream_handler (to relay live
+    # search-status events), which forces pydantic-ai into streaming request
+    # mode — FunctionModel needs a matching stream_function for that, not
+    # just `function`.
+    async def never_stop_searching_stream(
+        messages: list[ModelMessage], info: AgentInfo
+    ) -> AsyncIterator[DeltaToolCalls]:
+        yield {0: DeltaToolCall(name="search_transcripts", json_args='{"query": "again"}')}
+
     assistant_message = _answer_with(
-        FunctionModel(never_stop_searching),
+        FunctionModel(never_stop_searching, stream_function=never_stop_searching_stream),
         db_session,
         project.id,
         None,

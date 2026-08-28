@@ -2,10 +2,26 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider, useLocation, useParams } from 'react-router'
-import { delay, http, HttpResponse } from 'msw'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
 import { ChatPage } from './ChatPage'
+
+/** A `text/event-stream` response body from a list of already-serializable
+ * event payloads. `hang: true` never closes the stream (simulating a still-
+ * in-flight ask, for asserting on transient UI like the typing indicator). */
+function sseResponse(events: Record<string, unknown>[], { hang = false } = {}) {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+      }
+      if (!hang) controller.close()
+    },
+  })
+  return new HttpResponse(stream, { headers: { 'Content-Type': 'text/event-stream' } })
+}
 
 const PROJECT_ID = '00000000-0000-0000-0000-0000000000aa'
 const CONVERSATION_ID = '00000000-0000-0000-0000-0000000000c1'
@@ -102,16 +118,20 @@ describe('ChatPage', () => {
         const body = (await request.json()) as { question: string; conversation_id: unknown }
         expect(body.question).toBe('What did the keeper do?')
         expect(body.conversation_id).toBeNull()
-        return HttpResponse.json({
-          conversation_id: CONVERSATION_ID,
-          message: {
-            id: 'msg-2',
-            role: 'assistant',
-            content: 'The keeper lit the lamp at dusk [1].',
-            citations: [citation()],
-            created_at: '2026-01-01T00:00:00Z',
+        return sseResponse([
+          { type: 'status', message: 'Searching for "keeper"…' },
+          {
+            type: 'done',
+            conversation_id: CONVERSATION_ID,
+            message: {
+              id: 'msg-2',
+              role: 'assistant',
+              content: 'The keeper lit the lamp at dusk [1].',
+              citations: [citation()],
+              created_at: '2026-01-01T00:00:00Z',
+            },
           },
-        })
+        ])
       }),
       http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, () =>
         HttpResponse.json([
@@ -197,12 +217,11 @@ describe('ChatPage', () => {
     expect(screen.getByText('[1]', { exact: false })).toBeInTheDocument()
   })
 
-  it('shows the question and a typing indicator immediately, before the answer arrives', async () => {
+  it('shows the question and live search status before the answer arrives', async () => {
     server.use(
-      http.post(`http://localhost:8000/projects/${PROJECT_ID}/chat`, async () => {
-        await delay('infinite')
-        return HttpResponse.json({})
-      }),
+      http.post(`http://localhost:8000/projects/${PROJECT_ID}/chat`, () =>
+        sseResponse([{ type: 'status', message: 'Searching for "keeper"…' }], { hang: true }),
+      ),
     )
     renderChatPage()
 
@@ -214,6 +233,7 @@ describe('ChatPage', () => {
 
     expect(await screen.findByText('What did the keeper do?')).toBeInTheDocument()
     expect(screen.getByLabelText('Assistant is answering')).toBeInTheDocument()
+    expect(await screen.findByText('Searching for "keeper"…')).toBeInTheDocument()
   })
 
   it('lists past conversations in the sidebar and navigates to the one clicked', async () => {

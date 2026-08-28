@@ -1,6 +1,8 @@
+import json
 import uuid
 from collections.abc import Callable
 from decimal import Decimal
+from typing import Any
 
 import pytest
 from app.agents import transcript_search as agent_module
@@ -15,7 +17,7 @@ from app.models.user import User
 from app.models.video import Video
 from fastapi.testclient import TestClient
 from pydantic_ai.models.test import TestModel
-from sqlalchemy import func, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 
@@ -93,6 +95,18 @@ def _seed_chunk(db: Session, user: User) -> tuple[Project, TranscriptChunk]:
     return project, chunk
 
 
+def _sse_events(response: Any) -> list[dict[str, Any]]:
+    """Parse a `POST /chat` response body's `data: {...}\\n\\n` SSE events."""
+    return [json.loads(chunk[len("data: ") :]) for chunk in response.text.split("\n\n") if chunk]
+
+
+def _sse_done(response: Any) -> dict[str, Any]:
+    """The one `done` event from a successful ask, or raise on `error`."""
+    events = _sse_events(response)
+    (done,) = [event for event in events if event["type"] == "done"]
+    return done
+
+
 def test_ask_returns_answer_and_persists_conversation(
     auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -106,7 +120,7 @@ def test_ask_returns_answer_and_persists_conversation(
         )
 
     assert resp.status_code == 200
-    body = resp.json()
+    body = _sse_done(resp)
     assert body["message"]["role"] == "assistant"
     assert body["message"]["content"] == "Hello there."
     assert body["message"]["citations"] == []
@@ -134,10 +148,50 @@ def test_ask_enriches_citations_with_folder_path_and_thumbnail_token(
         resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "What?"})
 
     assert resp.status_code == 200
-    citation = resp.json()["message"]["citations"][0]
+    citation = _sse_done(resp)["message"]["citations"][0]
     assert citation["folder_path"] == ["F"]
     # No thumbnail asset was seeded for the video.
     assert citation["thumbnail_token"] is None
+
+
+def test_ask_streams_a_status_event_for_the_search_before_the_answer(
+    auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, chunk = _seed_chunk(db_session, user)
+    monkeypatch.setattr(agent_module, "search_chunks", lambda session, project_id, query: [chunk])
+    model = TestModel(custom_output_args={"answer": "It says hello.", "citations": []})
+
+    with transcript_agent.override(model=model):
+        resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "What?"})
+
+    events = _sse_events(resp)
+    assert [event["type"] for event in events] == ["status", "done"]
+    assert "Searching" in events[0]["message"]
+
+
+def test_ask_streams_an_error_event_on_unexpected_failure_and_does_not_persist(
+    auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(db_session, user)
+
+    def boom(session: Session, project_id: uuid.UUID, query: str) -> list[TranscriptChunk]:
+        raise RuntimeError("openrouter is down")
+
+    monkeypatch.setattr(agent_module, "search_chunks", boom)
+    model = TestModel(custom_output_args={"answer": "Hi.", "citations": []})
+
+    with transcript_agent.override(model=model):
+        resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "What?"})
+
+    events = _sse_events(resp)
+    assert events[-1]["type"] == "error"
+    # Nothing was committed — this project still has no conversations.
+    conversations = list(
+        db_session.execute(
+            select(ChatConversation).where(ChatConversation.project_id == project.id)
+        ).scalars()
+    )
+    assert conversations == []
 
 
 def test_ask_non_member_forbidden(
@@ -191,7 +245,7 @@ def test_get_conversation_round_trips_citations(
         ask_resp = auth_client.post(
             f"/projects/{project.id}/chat", json={"question": "What's in this project?"}
         )
-    conversation_id = ask_resp.json()["conversation_id"]
+    conversation_id = _sse_done(ask_resp)["conversation_id"]
 
     resp = auth_client.get(f"/projects/{project.id}/chat/{conversation_id}")
 

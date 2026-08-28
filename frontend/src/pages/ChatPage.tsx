@@ -110,6 +110,7 @@ function ChatPageInner({
               onSelectCitation={handleSelectCitation}
               pendingQuestion={pendingQuestion}
               isAnswering={ask.isPending}
+              statusMessage={ask.statusMessage}
             />
           ) : (
             <p className="text-sm text-slate-400">Ask a question about this project's videos.</p>

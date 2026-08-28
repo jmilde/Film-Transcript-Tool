@@ -650,29 +650,42 @@ Request:
 }
 ```
 
-Synchronous — no job, no polling. Response:
+One request, no job/polling, but the response is `text/event-stream`
+(server-sent events) rather than a single JSON body — the agent may run
+several searches before answering, and each one is relayed live so the UI
+can show what it's doing. Each event is one `data: <json>\n\n` line:
 
-```json
-{
-	"conversation_id": "uuid",
-	"message": {
-		"id": "uuid",
-		"role": "assistant",
-		"content": "The keeper lit the lamp at dusk [1].",
-		"citations": [
-			{
-				"marker": 1,
-				"chunk_id": "uuid",
-				"video_id": "uuid",
-				"video_name": "...",
-				"start_time": 12.5,
-				"...": "..."
-			}
-		],
-		"created_at": "..."
-	}
-}
 ```
+data: {"type": "status", "message": "Searching for \"lighthouse keeper\"…"}
+
+data: {"type": "done", "conversation_id": "uuid", "message": {
+	"id": "uuid",
+	"role": "assistant",
+	"content": "The keeper lit the lamp at dusk [1].",
+	"citations": [
+		{
+			"marker": 1,
+			"chunk_id": "uuid",
+			"video_id": "uuid",
+			"video_name": "...",
+			"start_time": 12.5,
+			"...": "..."
+		}
+	],
+	"created_at": "..."
+}}
+```
+
+- `status` — the agent started a search; may repeat (rarely more than once —
+  see `docs/1000_semantic_search.md`'s note on `MAX_SEARCH_TOOL_CALLS`).
+- `done` — the terminal success event; the turn is fully persisted by the
+  time this arrives.
+- `error` — the terminal failure event (`{"type": "error", "message": str}`);
+  nothing was persisted for this turn.
+
+Exactly one of `done`/`error` ends the stream. A `conversation_id` that
+doesn't exist (or belongs to another project) is still a normal `404`,
+raised before the stream starts.
 
 Omit `conversation_id` to start a new conversation. A new conversation's
 `title` is derived from this first question (truncated for list display) and

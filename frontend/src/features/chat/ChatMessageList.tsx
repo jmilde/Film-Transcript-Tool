@@ -12,16 +12,23 @@ interface ChatMessageListProps {
    * placeholder assistant bubble so the chat visibly shows "it's answering"
    * rather than only disabling the send button. */
   isAnswering?: boolean
+  /** Live progress from the backend's status events, e.g. `Searching for
+   * "minerals"…` — shown in place of the generic dots-only bubble while set. */
+  statusMessage?: string | null
 }
 
-/** Three bouncing dots inside an assistant-style bubble, shown while waiting on a reply. */
-function TypingBubble() {
+/** An assistant-style bubble shown while waiting on a reply: live status text if
+ * available (what the agent is doing right now), otherwise just bouncing dots. */
+function TypingBubble({ statusMessage }: { statusMessage?: string | null }) {
   return (
     <div className="max-w-lg text-sm text-slate-800" aria-label="Assistant is answering">
-      <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-2">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2">
+        {statusMessage && <span className="text-slate-500 italic">{statusMessage}</span>}
+        <span className="inline-flex items-center gap-1">
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+        </span>
       </span>
     </div>
   )
@@ -79,6 +86,7 @@ export function ChatMessageList({
   onSelectCitation,
   pendingQuestion,
   isAnswering,
+  statusMessage,
 }: ChatMessageListProps) {
   return (
     <div className="space-y-4">
@@ -102,7 +110,7 @@ export function ChatMessageList({
           </span>
         </div>
       )}
-      {isAnswering && <TypingBubble />}
+      {isAnswering && <TypingBubble statusMessage={statusMessage} />}
     </div>
   )
 }
