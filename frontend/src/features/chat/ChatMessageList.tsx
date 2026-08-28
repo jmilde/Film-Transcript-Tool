@@ -6,6 +6,33 @@ interface ChatMessageListProps {
   messages: ChatMessage[]
   onSelectCitation: (citation: ChatCitation) => void
   canEdit: boolean
+  /** The question just submitted, shown immediately rather than waiting for
+   * the round trip to finish and the conversation to refetch. */
+  pendingQuestion?: string | null
+  /** Whether the agent is still working on `pendingQuestion` — renders a
+   * placeholder assistant bubble so the chat visibly shows "it's answering"
+   * rather than only disabling the send button. */
+  isAnswering?: boolean
+  /** Live progress from the backend's status events, e.g. `Searching for
+   * "minerals"…` — shown in place of the generic dots-only bubble while set. */
+  statusMessage?: string | null
+}
+
+/** An assistant-style bubble shown while waiting on a reply: live status text if
+ * available (what the agent is doing right now), otherwise just bouncing dots. */
+function TypingBubble({ statusMessage }: { statusMessage?: string | null }) {
+  return (
+    <div className="max-w-lg text-sm text-slate-800" aria-label="Assistant is answering">
+      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2">
+        {statusMessage && <span className="text-slate-500 italic">{statusMessage}</span>}
+        <span className="inline-flex items-center gap-1">
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+        </span>
+      </span>
+    </div>
+  )
 }
 
 const MARKER_RE = /\[(\d+)\]/g
@@ -57,7 +84,14 @@ function renderAnswer(
 }
 
 /** Renders a conversation's messages, interleaving citation cards into assistant answers. */
-export function ChatMessageList({ messages, onSelectCitation, canEdit }: ChatMessageListProps) {
+export function ChatMessageList({
+  messages,
+  onSelectCitation,
+  canEdit,
+  pendingQuestion,
+  isAnswering,
+  statusMessage,
+}: ChatMessageListProps) {
   return (
     <div className="space-y-4">
       {messages.map((message) =>
@@ -73,6 +107,14 @@ export function ChatMessageList({ messages, onSelectCitation, canEdit }: ChatMes
           </div>
         ),
       )}
+      {pendingQuestion && (
+        <div className="text-right">
+          <span className="inline-block max-w-lg rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
+            {pendingQuestion}
+          </span>
+        </div>
+      )}
+      {isAnswering && <TypingBubble statusMessage={statusMessage} />}
     </div>
   )
 }

@@ -23,15 +23,17 @@ from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 # oversized passage. There is no cross-segment windowing or overlap.
 MAX_CHUNK_CHARS = 800
 
-# Language -> Postgres text-search config for `search_vector`. Original
-# transcripts may not be English, unlike TranscriptToken's hardcoded config.
-_TSVECTOR_CONFIG_BY_LANGUAGE = {"en": "english", "es": "spanish"}
-
-
-def _search_config(language: str | None) -> str:
-    if language is None:
-        return "simple"
-    return _TSVECTOR_CONFIG_BY_LANGUAGE.get(language, "simple")
+# `search_vector` always uses Postgres's "simple" config (no stemming), even
+# though a chunk's own language is known. A project's chunks span multiple
+# languages (an original plus its translations), and chat_retrieval.py's FTS
+# leg has to query all of them with one `tsquery` — it can't know in advance
+# which language a match will come from. `to_tsvector` and `to_tsquery` must
+# agree on config or `@@` silently never matches: e.g. `to_tsvector('english',
+# 'minerals')` stems to the lexeme `miner`, but `plainto_tsquery('simple',
+# 'minerals')` stays `minerals` — those never match. Using "simple" (literal,
+# case-folded tokens) on both sides keeps FTS language-agnostic; stemming/
+# fuzzy matching across languages is the vector (ANN) leg's job, not FTS's.
+_SEARCH_VECTOR_CONFIG = "simple"
 
 
 def _display_text(token: TranscriptToken) -> str:
@@ -144,7 +146,6 @@ def handle_generate_embeddings(session: Session, job: ProcessingJob) -> dict[str
     provider = embeddings_factory.get_embeddings_provider()
     vectors = provider.embed([text for *_, text in pending])
 
-    config = _search_config(transcript.language)
     settings = get_settings()
     for (segment, chunk_index, group, text), vector in zip(pending, vectors, strict=True):
         session.add(
@@ -161,7 +162,7 @@ def handle_generate_embeddings(session: Session, job: ProcessingJob) -> dict[str
                 speaker_name=speaker_names.get(segment.speaker_id) if segment.speaker_id else None,
                 chunk_index=chunk_index,
                 text=text,
-                search_vector=func.to_tsvector(config, text),
+                search_vector=func.to_tsvector(_SEARCH_VECTOR_CONFIG, text),
                 embedding=vector,
                 embedding_model=settings.embeddings_model,
             )

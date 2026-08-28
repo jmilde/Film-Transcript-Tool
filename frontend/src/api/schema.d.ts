@@ -331,10 +331,12 @@ export interface paths {
         put?: never;
         /**
          * Reindex Transcript
-         * @description Force a full re-embed of this transcript, e.g. after heavy edits.
+         * @description Force an immediate full re-embed of this transcript.
          *
-         *     Auto-embedding happens once after transcription/translation completes;
-         *     this is the manual escape hatch since edits don't trigger a live re-embed.
+         *     Token edits already schedule a debounced re-embed automatically (see
+         *     ``app/services/reembed.py``); this route is only needed to jump the
+         *     queue — e.g. right before asking a question you need answered now, or
+         *     after changing the embedding model/config for existing content.
          */
         post: operations["reindex_transcript_transcripts__transcript_id__reindex_post"];
         delete?: never;
@@ -601,7 +603,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Conversations
+         * @description A project's chat history, most recently active conversation first.
+         */
+        get: operations["list_conversations_projects__project_id__chat_get"];
         put?: never;
         /**
          * Ask
@@ -779,6 +785,29 @@ export interface components {
             thumbnail_token: string | null;
             /** Folder Path */
             folder_path: string[];
+        };
+        /**
+         * ChatConversationSummary
+         * @description One row in a project's conversation history list — no messages.
+         */
+        ChatConversationSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** ChatMessageRead */
         ChatMessageRead: {
@@ -2919,6 +2948,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemberRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_conversations_projects__project_id__chat_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatConversationSummary"][];
                 };
             };
             /** @description Validation Error */

@@ -138,10 +138,12 @@ def reindex_transcript(
     ),
     db: Session = Depends(get_db),
 ) -> ReindexResponse:
-    """Force a full re-embed of this transcript, e.g. after heavy edits.
+    """Force an immediate full re-embed of this transcript.
 
-    Auto-embedding happens once after transcription/translation completes;
-    this is the manual escape hatch since edits don't trigger a live re-embed.
+    Token edits already schedule a debounced re-embed automatically (see
+    ``app/services/reembed.py``); this route is only needed to jump the
+    queue — e.g. right before asking a question you need answered now, or
+    after changing the embedding model/config for existing content.
     """
     job = ProcessingJob(
         video_id=transcript.video_id,

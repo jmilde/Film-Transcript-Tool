@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import AsyncIterator
 from decimal import Decimal
 
 import pytest
@@ -14,6 +15,8 @@ from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
 from app.models.video import Video
 from app.services.chat import answer_question
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
+from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
 from pydantic_ai.models.test import TestModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -92,7 +95,7 @@ def _install_fake_retrieval(monkeypatch: pytest.MonkeyPatch, chunk: TranscriptCh
     )
 
 
-def _answer_with(model: TestModel, *args: object, **kwargs: object) -> ChatMessage:
+def _answer_with(model: TestModel | FunctionModel, *args: object, **kwargs: object) -> ChatMessage:
     with transcript_agent.override(model=model):
         return answer_question(*args, **kwargs)  # type: ignore[arg-type]
 
@@ -160,6 +163,48 @@ def test_answer_question_creates_conversation_when_none_given(
     assert conversation.agent_message_history is not None
 
 
+def test_answer_question_titles_conversation_from_first_question(
+    db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, chunk = _seed_chunk(db_session, user)
+    _install_fake_retrieval(monkeypatch, chunk)
+    model = TestModel(custom_output_args={"answer": "Hi.", "citations": []})
+
+    assistant_message = _answer_with(
+        model, db_session, project.id, None, "  What's   this about?  ", user_id=user.id
+    )
+
+    conversation = db_session.get(ChatConversation, assistant_message.conversation_id)
+    assert conversation is not None
+    # Collapsed whitespace, not truncated (well under the length limit).
+    assert conversation.title == "What's this about?"
+
+
+def test_answer_question_does_not_retitle_an_existing_conversation(
+    db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, chunk = _seed_chunk(db_session, user)
+    _install_fake_retrieval(monkeypatch, chunk)
+    first_model = TestModel(custom_output_args={"answer": "first", "citations": []})
+    first = _answer_with(
+        first_model, db_session, project.id, None, "First question", user_id=user.id
+    )
+
+    second_model = TestModel(custom_output_args={"answer": "second", "citations": []})
+    _answer_with(
+        second_model,
+        db_session,
+        project.id,
+        first.conversation_id,
+        "Second question",
+        user_id=user.id,
+    )
+
+    conversation = db_session.get(ChatConversation, first.conversation_id)
+    assert conversation is not None
+    assert conversation.title == "First question"
+
+
 def test_answer_question_unknown_conversation_raises_not_found(
     db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -202,3 +247,40 @@ def test_answer_question_reuses_conversation_across_turns(
     assert history_after_second is not None
     # The second turn's history carries strictly more messages than the first.
     assert len(history_after_second["messages"]) > len(history_after_first["messages"])
+
+
+def test_answer_question_degrades_gracefully_past_the_search_call_limit(
+    db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model that never stops searching hits MAX_SEARCH_TOOL_CALLS.
+
+    Rather than a 500 from the unhandled UsageLimitExceeded, the turn is still
+    persisted with a plain-language apology and no citations.
+    """
+    project, chunk = _seed_chunk(db_session, user)
+    _install_fake_retrieval(monkeypatch, chunk)
+
+    def never_stop_searching(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        return ModelResponse(parts=[ToolCallPart("search_transcripts", {"query": "again"})])
+
+    # answer_question always sets an event_stream_handler (to relay live
+    # search-status events), which forces pydantic-ai into streaming request
+    # mode — FunctionModel needs a matching stream_function for that, not
+    # just `function`.
+    async def never_stop_searching_stream(
+        messages: list[ModelMessage], info: AgentInfo
+    ) -> AsyncIterator[DeltaToolCalls]:
+        yield {0: DeltaToolCall(name="search_transcripts", json_args='{"query": "again"}')}
+
+    assistant_message = _answer_with(
+        FunctionModel(never_stop_searching, stream_function=never_stop_searching_stream),
+        db_session,
+        project.id,
+        None,
+        "What happens?",
+        user_id=user.id,
+    )
+
+    assert assistant_message.role == "assistant"
+    assert assistant_message.citations == []
+    assert "couldn't" in assistant_message.content.lower()

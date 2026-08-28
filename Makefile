@@ -52,7 +52,7 @@ check-all: lint format-check typecheck test-all ## Full quality gate INCLUDING l
 run-backend: ## Run the FastAPI dev server with autoreload (http://localhost:8000)
 	$(UV) run uvicorn app.main:app --reload
 
-run-worker: ## Run the job-queue worker (polls Postgres, runs FFmpeg/Deepgram/DeepL jobs)
+run-worker: ## Run the job-queue worker (polls Postgres, runs FFmpeg/Deepgram/translation jobs)
 	$(UV) run python -m app.worker.runner
 
 # --- Frontend (needs Node 20+; version pinned in frontend/.nvmrc) ---

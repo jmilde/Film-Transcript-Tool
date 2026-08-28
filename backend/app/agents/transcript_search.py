@@ -5,6 +5,7 @@ with structured citations. The agent decides when and how to re-query — there
 is no separate deterministic query-reformulation step.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 
@@ -19,20 +20,34 @@ from app.config import Settings, get_settings
 from app.models.video import Video
 from app.services.chat_retrieval import search_chunks
 
+logger = logging.getLogger(__name__)
+
 SYSTEM_PROMPT = (
     "You are an assistant answering questions about a video project's transcripts. "
-    "Use the search_transcripts tool to find relevant passages before answering — "
-    "call it again with different phrasing if the first search doesn't turn up "
-    "enough to answer confidently. Only cite chunk_ids that a tool call actually "
-    "returned; never invent one. Write a concise, well-supported prose answer, and "
-    "mark every claim you support with an inline bracketed number right where it "
-    "appears in the text, e.g. 'The keeper lit the lamp at dusk [1].' Number "
-    "markers starting at 1 in the order they first appear. Every inline marker "
-    "must have a matching entry in `citations` with that same `marker` number, "
-    "and every `citations` entry must be used inline at least once — don't cite "
-    "something you never marked in the prose, and don't leave a marker without a "
-    "matching citation."
+    "Use the search_transcripts tool to find relevant passages before answering. "
+    "Results come back already ranked best-first, and can be in any language the "
+    "project's videos use, translated or not — a good match may not share any "
+    "words with your query. In most cases ONE search is enough: if the top result "
+    "(or top few) clearly speaks to the question, answer from it immediately — do "
+    "not search again just to double-check a result you already have, and do not "
+    "re-run near-duplicate phrasings of the same query. Only search again (at most "
+    "once more) if the first search came back empty or is clearly about something "
+    "else entirely. If, after that, you still have nothing relevant, say so plainly "
+    "rather than continuing to search. Only cite chunk_ids that a tool call "
+    "actually returned; never invent one. Write a concise, well-supported prose "
+    "answer, and mark every claim you support with an inline bracketed number "
+    "right where it appears in the text, e.g. 'The keeper lit the lamp at dusk "
+    "[1].' Number markers starting at 1 in the order they first appear. Every "
+    "inline marker must have a matching entry in `citations` with that same "
+    "`marker` number, and every `citations` entry must be used inline at least "
+    "once — don't cite something you never marked in the prose, and don't leave a "
+    "marker without a matching citation."
 )
+
+# Backstop against a runaway agent loop (e.g. ignoring the "search once" prompt
+# guidance) — bounds worst-case chat latency/cost independent of prompt
+# compliance. Answer_question() degrades gracefully if this is ever hit.
+MAX_SEARCH_TOOL_CALLS = 4
 
 
 @dataclass
@@ -85,9 +100,19 @@ transcript_agent = Agent(
 @transcript_agent.tool
 def search_transcripts(ctx: RunContext[ChatDeps], query: str) -> list[ChunkResult]:
     """Search the project's video transcripts for passages relevant to `query`."""
+    logger.info(
+        "transcript_search.search_transcripts project_id=%s tool_query=%r",
+        ctx.deps.project_id,
+        query,
+    )
     chunks = search_chunks(ctx.deps.session, ctx.deps.project_id, query)
     ctx.deps.seen_chunk_ids.update(chunk.id for chunk in chunks)
     if not chunks:
+        logger.info(
+            "transcript_search.search_transcripts project_id=%s tool_query=%r found nothing",
+            ctx.deps.project_id,
+            query,
+        )
         return []
 
     video_ids = {chunk.video_id for chunk in chunks}

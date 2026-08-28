@@ -143,46 +143,39 @@ def test_handle_generate_embeddings_creates_one_chunk_per_segment(
     assert {chunk.text for chunk in chunks} == {"Hello there.", "How are you?"}
 
 
-def test_handle_generate_embeddings_search_vector_matches_language_config(
+def test_handle_generate_embeddings_search_vector_ignores_transcript_language(
     media: MediaFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """search_vector always uses the "simple" config, regardless of language.
+
+    chat_retrieval.py's FTS leg queries every chunk in a project — spanning
+    however many languages it has content in — with one ``plainto_tsquery``,
+    so storage must use the same config the query side does (see the comment
+    on ``_SEARCH_VECTOR_CONFIG`` in ``embed.py`` for why a stemmed,
+    language-specific config would silently break that).
+    """
     _install_provider(monkeypatch)
     transcript = _make_transcript(media, language="es")
     _add_segment_with_words(media, transcript, ["corriendo"], position=1)
 
     handle_generate_embeddings(media.db, _embed_job(media, transcript))
 
-    # 'corriendo' (running) stems to 'correr' only under the Spanish config.
-    matched = media.db.execute(
-        select(func.count())
-        .select_from(TranscriptChunk)
-        .where(
-            TranscriptChunk.transcript_id == transcript.id,
-            TranscriptChunk.search_vector.op("@@")(func.to_tsquery("spanish", "correr")),
+    def matches(config: str, term: str) -> bool:
+        return bool(
+            media.db.execute(
+                select(func.count())
+                .select_from(TranscriptChunk)
+                .where(
+                    TranscriptChunk.transcript_id == transcript.id,
+                    TranscriptChunk.search_vector.op("@@")(func.to_tsquery(config, term)),
+                )
+            ).scalar_one()
         )
-    ).scalar_one()
-    assert matched == 1
 
-
-def test_handle_generate_embeddings_falls_back_to_simple_config_for_unmapped_language(
-    media: MediaFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _install_provider(monkeypatch)
-    transcript = _make_transcript(media, language="fr")
-    _add_segment_with_words(media, transcript, ["bonjour"], position=1)
-
-    handle_generate_embeddings(media.db, _embed_job(media, transcript))
-
-    # 'simple' config does no stemming: the literal token itself must match.
-    matched = media.db.execute(
-        select(func.count())
-        .select_from(TranscriptChunk)
-        .where(
-            TranscriptChunk.transcript_id == transcript.id,
-            TranscriptChunk.search_vector.op("@@")(func.to_tsquery("simple", "bonjour")),
-        )
-    ).scalar_one()
-    assert matched == 1
+    # The literal, unstemmed token matches under "simple"...
+    assert matches("simple", "corriendo")
+    # ...but not its Spanish stem, because "simple" never stems.
+    assert not matches("spanish", "correr")
 
 
 def test_handle_generate_embeddings_splits_long_segment(

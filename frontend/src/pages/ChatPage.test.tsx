@@ -7,6 +7,22 @@ import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
 import { ChatPage } from './ChatPage'
 
+/** A `text/event-stream` response body from a list of already-serializable
+ * event payloads. `hang: true` never closes the stream (simulating a still-
+ * in-flight ask, for asserting on transient UI like the typing indicator). */
+function sseResponse(events: Record<string, unknown>[], { hang = false } = {}) {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+      }
+      if (!hang) controller.close()
+    },
+  })
+  return new HttpResponse(stream, { headers: { 'Content-Type': 'text/event-stream' } })
+}
+
 const PROJECT_ID = '00000000-0000-0000-0000-0000000000aa'
 const CONVERSATION_ID = '00000000-0000-0000-0000-0000000000c1'
 const VIDEO_ID = '00000000-0000-0000-0000-0000000000v1'
@@ -39,7 +55,17 @@ function VideoRouteStub() {
   )
 }
 
-function renderChatPage(initialPath = `/projects/${PROJECT_ID}/chat`) {
+interface ConversationSummary {
+  id: string
+  title: string | null
+  created_at: string
+  updated_at: string
+}
+
+function renderChatPage(
+  initialPath = `/projects/${PROJECT_ID}/chat`,
+  { conversations = [] as ConversationSummary[] } = {},
+) {
   server.use(
     http.get(`http://localhost:8000/projects/${PROJECT_ID}`, () =>
       HttpResponse.json({
@@ -52,11 +78,16 @@ function renderChatPage(initialPath = `/projects/${PROJECT_ID}/chat`) {
         my_role: 'editor',
       }),
     ),
+    // The history sidebar always fetches the conversation list.
+    http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat`, () =>
+      HttpResponse.json(conversations),
+    ),
   )
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
       { path: '/projects/:projectId/chat', element: <ChatPage /> },
+      { path: '/projects/:projectId/chat/new', element: <ChatPage /> },
       { path: '/projects/:projectId/chat/:conversationId', element: <ChatPage /> },
       { path: '/videos/:videoId', element: <VideoRouteStub /> },
     ],
@@ -98,16 +129,20 @@ describe('ChatPage', () => {
         const body = (await request.json()) as { question: string; conversation_id: unknown }
         expect(body.question).toBe('What did the keeper do?')
         expect(body.conversation_id).toBeNull()
-        return HttpResponse.json({
-          conversation_id: CONVERSATION_ID,
-          message: {
-            id: 'msg-2',
-            role: 'assistant',
-            content: 'The keeper lit the lamp at dusk [1].',
-            citations: [citation()],
-            created_at: '2026-01-01T00:00:00Z',
+        return sseResponse([
+          { type: 'status', message: 'Searching for "keeper"…' },
+          {
+            type: 'done',
+            conversation_id: CONVERSATION_ID,
+            message: {
+              id: 'msg-2',
+              role: 'assistant',
+              content: 'The keeper lit the lamp at dusk [1].',
+              citations: [citation()],
+              created_at: '2026-01-01T00:00:00Z',
+            },
           },
-        })
+        ])
       }),
       http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, () =>
         HttpResponse.json([
@@ -191,5 +226,125 @@ describe('ChatPage', () => {
 
     expect(await screen.findByText('at dusk.', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('[1]', { exact: false })).toBeInTheDocument()
+  })
+
+  it('shows the question and live search status before the answer arrives', async () => {
+    server.use(
+      http.post(`http://localhost:8000/projects/${PROJECT_ID}/chat`, () =>
+        sseResponse([{ type: 'status', message: 'Searching for "keeper"…' }], { hang: true }),
+      ),
+    )
+    renderChatPage()
+
+    await userEvent.type(
+      screen.getByPlaceholderText("Ask about this project's videos…"),
+      'What did the keeper do?',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(await screen.findByText('What did the keeper do?')).toBeInTheDocument()
+    expect(screen.getByLabelText('Assistant is answering')).toBeInTheDocument()
+    expect(await screen.findByText('Searching for "keeper"…')).toBeInTheDocument()
+  })
+
+  it('lists past conversations in the sidebar and navigates to the one clicked', async () => {
+    const OTHER_CONVERSATION_ID = '00000000-0000-0000-0000-0000000000c2'
+    server.use(
+      http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${OTHER_CONVERSATION_ID}`, () =>
+        HttpResponse.json([]),
+      ),
+    )
+    renderChatPage(`/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'What did the keeper do?',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+        },
+        {
+          id: OTHER_CONVERSATION_ID,
+          title: 'Who else appears in the footage?',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+    })
+
+    expect(await screen.findByText('Who else appears in the footage?')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Who else appears in the footage?'))
+
+    // Navigated to the other conversation's route (its GET has no handler
+    // registered, so an empty message list renders) — the placeholder text
+    // confirms we're not stuck showing the original conversation's messages.
+    expect(
+      await screen.findByText("Ask a question about this project's videos."),
+    ).toBeInTheDocument()
+  })
+
+  it('starts a new chat from the sidebar', async () => {
+    renderChatPage(`/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'What did the keeper do?',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+    })
+
+    await userEvent.click(await screen.findByText('+ New chat'))
+
+    expect(
+      await screen.findByText("Ask a question about this project's videos."),
+    ).toBeInTheDocument()
+  })
+
+  it('defaults a bare /chat visit to the most recently active conversation', async () => {
+    server.use(
+      http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, () =>
+        HttpResponse.json([
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            content: 'Older answer.',
+            citations: [],
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ]),
+      ),
+    )
+    const { router } = renderChatPage(`/projects/${PROJECT_ID}/chat`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'Most recent',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+        },
+      ],
+    })
+
+    expect(await screen.findByText('Older answer.')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`)
+  })
+
+  it('does not auto-redirect an explicit "new chat" even when history exists', async () => {
+    renderChatPage(`/projects/${PROJECT_ID}/chat/new`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'Most recent',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+        },
+      ],
+    })
+
+    expect(
+      await screen.findByText("Ask a question about this project's videos."),
+    ).toBeInTheDocument()
   })
 })
