@@ -324,11 +324,13 @@ Chat should provide:
   the input
 - a synthesized prose answer with inline citation cards (not plain links),
   interleaved at the point in the answer text they support
-- a conversation-history list in the chat header (title + recency, most
-  recently active first) so a past conversation can be found and reloaded
-  without needing its URL — see **List Conversations** in
-  `docs/700_backend_api.md`
-- reload of a past conversation without re-asking
+- a persistent left-hand history sidebar listing the project's conversations
+  (title + recency, most recently active first) with a "New chat" action, so
+  a past conversation can be found and reloaded without needing its URL —
+  see **List Conversations** in `docs/700_backend_api.md`
+- reload of a past conversation without re-asking; landing on Chat with no
+  conversation selected opens the most recently active one by default
+  (explicitly starting a new chat is a distinct action, not the default)
 
 Selecting a citation card:
 

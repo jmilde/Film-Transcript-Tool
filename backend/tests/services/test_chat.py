@@ -14,6 +14,8 @@ from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
 from app.models.video import Video
 from app.services.chat import answer_question
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -92,7 +94,7 @@ def _install_fake_retrieval(monkeypatch: pytest.MonkeyPatch, chunk: TranscriptCh
     )
 
 
-def _answer_with(model: TestModel, *args: object, **kwargs: object) -> ChatMessage:
+def _answer_with(model: TestModel | FunctionModel, *args: object, **kwargs: object) -> ChatMessage:
     with transcript_agent.override(model=model):
         return answer_question(*args, **kwargs)  # type: ignore[arg-type]
 
@@ -244,3 +246,31 @@ def test_answer_question_reuses_conversation_across_turns(
     assert history_after_second is not None
     # The second turn's history carries strictly more messages than the first.
     assert len(history_after_second["messages"]) > len(history_after_first["messages"])
+
+
+def test_answer_question_degrades_gracefully_past_the_search_call_limit(
+    db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model that never stops searching hits MAX_SEARCH_TOOL_CALLS.
+
+    Rather than a 500 from the unhandled UsageLimitExceeded, the turn is still
+    persisted with a plain-language apology and no citations.
+    """
+    project, chunk = _seed_chunk(db_session, user)
+    _install_fake_retrieval(monkeypatch, chunk)
+
+    def never_stop_searching(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        return ModelResponse(parts=[ToolCallPart("search_transcripts", {"query": "again"})])
+
+    assistant_message = _answer_with(
+        FunctionModel(never_stop_searching),
+        db_session,
+        project.id,
+        None,
+        "What happens?",
+        user_id=user.id,
+    )
+
+    assert assistant_message.role == "assistant"
+    assert assistant_message.citations == []
+    assert "couldn't" in assistant_message.content.lower()

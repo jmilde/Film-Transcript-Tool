@@ -20,6 +20,7 @@ export const router = createBrowserRouter([
           { path: 'projects/:projectId', element: <ProjectView /> },
           { path: 'projects/:projectId/search', element: <SearchPage /> },
           { path: 'projects/:projectId/chat', element: <ChatPage /> },
+          { path: 'projects/:projectId/chat/new', element: <ChatPage /> },
           { path: 'projects/:projectId/chat/:conversationId', element: <ChatPage /> },
           { path: 'videos/:videoId', element: <VideoWorkspace /> },
         ],

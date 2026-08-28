@@ -5,9 +5,16 @@ import uuid
 from typing import Any
 
 from pydantic_ai import ModelMessagesTypeAdapter
+from pydantic_ai.exceptions import UsageLimitExceeded
+from pydantic_ai.usage import UsageLimits
 from sqlalchemy.orm import Session
 
-from app.agents.transcript_search import ChatDeps, Citation, transcript_agent
+from app.agents.transcript_search import (
+    MAX_SEARCH_TOOL_CALLS,
+    ChatDeps,
+    Citation,
+    transcript_agent,
+)
 from app.core.errors import NotFoundError
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.embedding import TranscriptChunk
@@ -96,26 +103,57 @@ def answer_question(
     )
 
     deps = ChatDeps(session=session, project_id=project_id)
-    result = transcript_agent.run_sync(question, deps=deps, message_history=message_history)
-
-    # Hallucination guard: only citations naming a chunk_id a tool call
-    # actually returned this run survive.
-    guarded_citations = [
-        citation for citation in result.output.citations if citation.chunk_id in deps.seen_chunk_ids
-    ]
-    dropped = len(result.output.citations) - len(guarded_citations)
-    if dropped:
-        logger.warning(
-            "chat.ask conversation_id=%s dropped %d hallucinated citation(s) "
-            "not backed by any tool call",
-            conversation.id,
-            dropped,
+    try:
+        result = transcript_agent.run_sync(
+            question,
+            deps=deps,
+            message_history=message_history,
+            # Backstop against a runaway search loop (see MAX_SEARCH_TOOL_CALLS'
+            # docstring) — independent of whether the system prompt is followed.
+            usage_limits=UsageLimits(tool_calls_limit=MAX_SEARCH_TOOL_CALLS),
         )
-    resolved_citations = [
-        resolved
-        for citation in guarded_citations
-        if (resolved := _resolve_citation(session, citation)) is not None
-    ]
+    except UsageLimitExceeded:
+        # No `result` exists to pull an answer/history from — degrade to a
+        # plain apology rather than a 500. The failed attempt's tool calls
+        # aren't persisted to agent_message_history, so the next turn simply
+        # resumes from before this one, as if it hadn't happened.
+        logger.warning(
+            "chat.ask conversation_id=%s hit the %d-search-tool-call limit "
+            "without producing an answer",
+            conversation.id,
+            MAX_SEARCH_TOOL_CALLS,
+        )
+        answer_text = (
+            "I searched several times but couldn't settle on a confident answer. "
+            "Try asking a more specific question."
+        )
+        resolved_citations: list[dict[str, Any]] = []
+    else:
+        # Hallucination guard: only citations naming a chunk_id a tool call
+        # actually returned this run survive.
+        guarded_citations = [
+            citation
+            for citation in result.output.citations
+            if citation.chunk_id in deps.seen_chunk_ids
+        ]
+        dropped = len(result.output.citations) - len(guarded_citations)
+        if dropped:
+            logger.warning(
+                "chat.ask conversation_id=%s dropped %d hallucinated citation(s) "
+                "not backed by any tool call",
+                conversation.id,
+                dropped,
+            )
+        resolved_citations = [
+            resolved
+            for citation in guarded_citations
+            if (resolved := _resolve_citation(session, citation)) is not None
+        ]
+        answer_text = result.output.answer
+        conversation.agent_message_history = {
+            "messages": ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
+        }
+
     logger.info(
         "chat.ask conversation_id=%s answered with %d citation(s), %d chunk(s) seen across "
         "all tool calls this turn",
@@ -138,15 +176,11 @@ def answer_question(
         conversation_id=conversation.id,
         project_id=project_id,
         role="assistant",
-        content=result.output.answer,
+        content=answer_text,
         citations=resolved_citations,
         created_by=user_id,
     )
     session.add(assistant_message)
-
-    conversation.agent_message_history = {
-        "messages": ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
-    }
     conversation.updated_by = user_id
 
     session.flush()

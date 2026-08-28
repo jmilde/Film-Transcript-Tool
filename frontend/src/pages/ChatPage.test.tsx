@@ -50,7 +50,7 @@ function renderChatPage(
   initialPath = `/projects/${PROJECT_ID}/chat`,
   { conversations = [] as ConversationSummary[] } = {},
 ) {
-  // The history menu always fetches the conversation list.
+  // The history sidebar always fetches the conversation list.
   server.use(
     http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat`, () =>
       HttpResponse.json(conversations),
@@ -60,6 +60,7 @@ function renderChatPage(
   const router = createMemoryRouter(
     [
       { path: '/projects/:projectId/chat', element: <ChatPage /> },
+      { path: '/projects/:projectId/chat/new', element: <ChatPage /> },
       { path: '/projects/:projectId/chat/:conversationId', element: <ChatPage /> },
       { path: '/videos/:videoId', element: <VideoRouteStub /> },
     ],
@@ -215,7 +216,7 @@ describe('ChatPage', () => {
     expect(screen.getByLabelText('Assistant is answering')).toBeInTheDocument()
   })
 
-  it('lists past conversations in the history menu and navigates to the one clicked', async () => {
+  it('lists past conversations in the sidebar and navigates to the one clicked', async () => {
     const OTHER_CONVERSATION_ID = '00000000-0000-0000-0000-0000000000c2'
     server.use(
       http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${OTHER_CONVERSATION_ID}`, () =>
@@ -239,7 +240,6 @@ describe('ChatPage', () => {
       ],
     })
 
-    await userEvent.click(screen.getByRole('button', { name: 'History' }))
     expect(await screen.findByText('Who else appears in the footage?')).toBeInTheDocument()
 
     await userEvent.click(screen.getByText('Who else appears in the footage?'))
@@ -252,7 +252,7 @@ describe('ChatPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('starts a new chat from the history menu', async () => {
+  it('starts a new chat from the sidebar', async () => {
     renderChatPage(`/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, {
       conversations: [
         {
@@ -264,8 +264,53 @@ describe('ChatPage', () => {
       ],
     })
 
-    await userEvent.click(screen.getByRole('button', { name: 'History' }))
-    await userEvent.click(screen.getByText('+ New chat'))
+    await userEvent.click(await screen.findByText('+ New chat'))
+
+    expect(
+      await screen.findByText("Ask a question about this project's videos."),
+    ).toBeInTheDocument()
+  })
+
+  it('defaults a bare /chat visit to the most recently active conversation', async () => {
+    server.use(
+      http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, () =>
+        HttpResponse.json([
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            content: 'Older answer.',
+            citations: [],
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ]),
+      ),
+    )
+    const { router } = renderChatPage(`/projects/${PROJECT_ID}/chat`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'Most recent',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+        },
+      ],
+    })
+
+    expect(await screen.findByText('Older answer.')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`)
+  })
+
+  it('does not auto-redirect an explicit "new chat" even when history exists', async () => {
+    renderChatPage(`/projects/${PROJECT_ID}/chat/new`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'Most recent',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+        },
+      ],
+    })
 
     expect(
       await screen.findByText("Ask a question about this project's videos."),
