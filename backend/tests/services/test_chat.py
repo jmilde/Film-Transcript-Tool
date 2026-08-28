@@ -160,6 +160,48 @@ def test_answer_question_creates_conversation_when_none_given(
     assert conversation.agent_message_history is not None
 
 
+def test_answer_question_titles_conversation_from_first_question(
+    db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, chunk = _seed_chunk(db_session, user)
+    _install_fake_retrieval(monkeypatch, chunk)
+    model = TestModel(custom_output_args={"answer": "Hi.", "citations": []})
+
+    assistant_message = _answer_with(
+        model, db_session, project.id, None, "  What's   this about?  ", user_id=user.id
+    )
+
+    conversation = db_session.get(ChatConversation, assistant_message.conversation_id)
+    assert conversation is not None
+    # Collapsed whitespace, not truncated (well under the length limit).
+    assert conversation.title == "What's this about?"
+
+
+def test_answer_question_does_not_retitle_an_existing_conversation(
+    db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, chunk = _seed_chunk(db_session, user)
+    _install_fake_retrieval(monkeypatch, chunk)
+    first_model = TestModel(custom_output_args={"answer": "first", "citations": []})
+    first = _answer_with(
+        first_model, db_session, project.id, None, "First question", user_id=user.id
+    )
+
+    second_model = TestModel(custom_output_args={"answer": "second", "citations": []})
+    _answer_with(
+        second_model,
+        db_session,
+        project.id,
+        first.conversation_id,
+        "Second question",
+        user_id=user.id,
+    )
+
+    conversation = db_session.get(ChatConversation, first.conversation_id)
+    assert conversation is not None
+    assert conversation.title == "First question"
+
+
 def test_answer_question_unknown_conversation_raises_not_found(
     db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -15,7 +15,7 @@ from app.models.user import User
 from app.models.video import Video
 from fastapi.testclient import TestClient
 from pydantic_ai.models.test import TestModel
-from sqlalchemy import func
+from sqlalchemy import func, text, update
 from sqlalchemy.orm import Session
 
 
@@ -228,3 +228,80 @@ def test_get_conversation_unknown_id_not_found(
     resp = auth_client.get(f"/projects/{project.id}/chat/{uuid.uuid4()}")
 
     assert resp.status_code == 404
+
+
+def test_list_conversations_orders_most_recently_active_first(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    # The test transaction never truly commits (see conftest's db_session), so
+    # Postgres's now()/onupdate=func.now() would tie across ordinary writes in
+    # one test — set updated_at explicitly to simulate real time passing.
+    project = _project(db_session, user)
+    older = ChatConversation(
+        project_id=project.id, title="Older", created_by=user.id, updated_by=user.id
+    )
+    newer = ChatConversation(
+        project_id=project.id, title="Newer", created_by=user.id, updated_by=user.id
+    )
+    db_session.add_all([older, newer])
+    db_session.flush()
+    db_session.execute(
+        update(ChatConversation)
+        .where(ChatConversation.id == older.id)
+        .values(updated_at=text("now() - interval '1 hour'"))
+    )
+    db_session.flush()
+
+    resp = auth_client.get(f"/projects/{project.id}/chat")
+
+    assert resp.status_code == 200
+    assert [c["id"] for c in resp.json()] == [str(newer.id), str(older.id)]
+
+
+def test_list_conversations_truncates_long_first_question_into_title(
+    auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(db_session, user)
+    _install_no_op_retrieval(monkeypatch)
+    model = TestModel(custom_output_args={"answer": "Hi.", "citations": []})
+    long_question = "Why " + "really " * 20 + "though?"
+
+    with transcript_agent.override(model=model):
+        auth_client.post(f"/projects/{project.id}/chat", json={"question": long_question})
+
+    body = auth_client.get(f"/projects/{project.id}/chat").json()
+
+    assert len(body[0]["title"]) <= 61  # TITLE_MAX_CHARS + the truncation ellipsis
+    assert body[0]["title"].endswith("…")
+    assert long_question.startswith(body[0]["title"][:-1])
+
+
+def test_list_conversations_scopes_to_project(
+    auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_a = _project(db_session, user)
+    project_b = _project(db_session, user)
+    _install_no_op_retrieval(monkeypatch)
+    model = TestModel(custom_output_args={"answer": "Hi.", "citations": []})
+
+    with transcript_agent.override(model=model):
+        auth_client.post(f"/projects/{project_a.id}/chat", json={"question": "In A"})
+        auth_client.post(f"/projects/{project_b.id}/chat", json={"question": "In B"})
+
+    body = auth_client.get(f"/projects/{project_a.id}/chat").json()
+
+    assert [c["title"] for c in body] == ["In A"]
+
+
+def test_list_conversations_non_member_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    project = _project(db_session, user)
+
+    other = app_client(other_user)
+    resp = other.get(f"/projects/{project.id}/chat")
+
+    assert resp.status_code == 403

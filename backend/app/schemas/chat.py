@@ -48,3 +48,14 @@ class ChatAskRequest(BaseModel):
 class ChatAskResponse(BaseModel):
     conversation_id: uuid.UUID
     message: ChatMessageRead
+
+
+class ChatConversationSummary(BaseModel):
+    """One row in a project's conversation history list — no messages."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str | None
+    created_at: datetime
+    updated_at: datetime

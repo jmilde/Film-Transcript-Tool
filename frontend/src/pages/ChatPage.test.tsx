@@ -39,7 +39,23 @@ function VideoRouteStub() {
   )
 }
 
-function renderChatPage(initialPath = `/projects/${PROJECT_ID}/chat`) {
+interface ConversationSummary {
+  id: string
+  title: string | null
+  created_at: string
+  updated_at: string
+}
+
+function renderChatPage(
+  initialPath = `/projects/${PROJECT_ID}/chat`,
+  { conversations = [] as ConversationSummary[] } = {},
+) {
+  // The history menu always fetches the conversation list.
+  server.use(
+    http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat`, () =>
+      HttpResponse.json(conversations),
+    ),
+  )
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
@@ -197,5 +213,62 @@ describe('ChatPage', () => {
 
     expect(await screen.findByText('What did the keeper do?')).toBeInTheDocument()
     expect(screen.getByLabelText('Assistant is answering')).toBeInTheDocument()
+  })
+
+  it('lists past conversations in the history menu and navigates to the one clicked', async () => {
+    const OTHER_CONVERSATION_ID = '00000000-0000-0000-0000-0000000000c2'
+    server.use(
+      http.get(`http://localhost:8000/projects/${PROJECT_ID}/chat/${OTHER_CONVERSATION_ID}`, () =>
+        HttpResponse.json([]),
+      ),
+    )
+    renderChatPage(`/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'What did the keeper do?',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+        },
+        {
+          id: OTHER_CONVERSATION_ID,
+          title: 'Who else appears in the footage?',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'History' }))
+    expect(await screen.findByText('Who else appears in the footage?')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Who else appears in the footage?'))
+
+    // Navigated to the other conversation's route (its GET has no handler
+    // registered, so an empty message list renders) — the placeholder text
+    // confirms we're not stuck showing the original conversation's messages.
+    expect(
+      await screen.findByText("Ask a question about this project's videos."),
+    ).toBeInTheDocument()
+  })
+
+  it('starts a new chat from the history menu', async () => {
+    renderChatPage(`/projects/${PROJECT_ID}/chat/${CONVERSATION_ID}`, {
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'What did the keeper do?',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'History' }))
+    await userEvent.click(screen.getByText('+ New chat'))
+
+    expect(
+      await screen.findByText("Ask a question about this project's videos."),
+    ).toBeInTheDocument()
   })
 })

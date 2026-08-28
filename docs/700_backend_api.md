@@ -674,7 +674,35 @@ Synchronous — no job, no polling. Response:
 }
 ```
 
-Omit `conversation_id` to start a new conversation.
+Omit `conversation_id` to start a new conversation. A new conversation's
+`title` is derived from this first question (truncated for list display) and
+never changes on later turns.
+
+---
+
+## List Conversations
+
+```
+GET /projects/{project_id}/chat
+```
+
+Response:
+
+```json
+[
+	{
+		"id": "uuid",
+		"title": "What did the lighthouse keeper do?",
+		"created_at": "...",
+		"updated_at": "..."
+	}
+]
+```
+
+The project's chat history, most recently active conversation first (sorted
+by `updated_at`, which bumps on every turn — including continuing an older
+conversation). No message bodies — used to populate a conversation-history
+list the user picks from before reloading via **Get Conversation** below.
 
 ---
 

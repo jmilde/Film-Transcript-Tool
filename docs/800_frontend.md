@@ -318,9 +318,16 @@ via an "Ask" button alongside Search.
 Chat should provide:
 
 - a question input, disabled with a "Thinking…" state while a request is in
-  flight (synchronous — no streaming)
+  flight (synchronous — no streaming); the question appears immediately in
+  its own bubble and a placeholder "answering" bubble stands in for the
+  assistant's turn until the response arrives, rather than only disabling
+  the input
 - a synthesized prose answer with inline citation cards (not plain links),
   interleaved at the point in the answer text they support
+- a conversation-history list in the chat header (title + recency, most
+  recently active first) so a past conversation can be found and reloaded
+  without needing its URL — see **List Conversations** in
+  `docs/700_backend_api.md`
 - reload of a past conversation without re-asking
 
 Selecting a citation card:

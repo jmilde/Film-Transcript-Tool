@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAskChat, useChatConversation } from '../api/hooks/useChat'
 import type { ChatCitation } from '../api/hooks/useChat'
+import { ChatHistoryMenu } from '../features/chat/ChatHistoryMenu'
 import { ChatInput } from '../features/chat/ChatInput'
 import { ChatMessageList } from '../features/chat/ChatMessageList'
 import type { PendingSearchNav } from '../features/search/types'
@@ -67,6 +68,12 @@ function ChatPageInner({
           ← Project
         </Link>
         <h2 className="text-lg font-semibold text-slate-800">Ask</h2>
+        <ChatHistoryMenu
+          projectId={projectId}
+          activeConversationId={conversationId}
+          onNewChat={() => void navigate(`/projects/${projectId}/chat`)}
+          onSelect={(id) => void navigate(`/projects/${projectId}/chat/${id}`)}
+        />
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto">

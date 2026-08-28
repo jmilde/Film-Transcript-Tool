@@ -15,7 +15,13 @@ from app.models.chat import ChatConversation, ChatMessage
 from app.models.project import Project
 from app.models.user import User
 from app.models.video import Video
-from app.schemas.chat import ChatAskRequest, ChatAskResponse, ChatCitation, ChatMessageRead
+from app.schemas.chat import (
+    ChatAskRequest,
+    ChatAskResponse,
+    ChatCitation,
+    ChatConversationSummary,
+    ChatMessageRead,
+)
 from app.services.chat import answer_question
 from app.services.folders import build_folder_breadcrumbs
 
@@ -87,6 +93,20 @@ def ask(
     return ChatAskResponse(
         conversation_id=message.conversation_id, message=_to_message_read(db, message)
     )
+
+
+@router.get("/projects/{project_id}/chat", response_model=list[ChatConversationSummary])
+def list_conversations(
+    project: Project = Depends(require_project_member),
+    db: Session = Depends(get_db),
+) -> list[ChatConversationSummary]:
+    """A project's chat history, most recently active conversation first."""
+    conversations = db.execute(
+        select(ChatConversation)
+        .where(ChatConversation.project_id == project.id)
+        .order_by(ChatConversation.updated_at.desc())
+    ).scalars()
+    return [ChatConversationSummary.model_validate(c) for c in conversations]
 
 
 @router.get("/projects/{project_id}/chat/{conversation_id}", response_model=list[ChatMessageRead])

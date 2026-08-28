@@ -4,9 +4,27 @@ import type { components } from '../schema'
 
 export type ChatMessage = components['schemas']['ChatMessageRead']
 export type ChatCitation = components['schemas']['ChatCitation']
+export type ChatConversationSummary = components['schemas']['ChatConversationSummary']
 
 function chatQueryKey(projectId: string, conversationId: string) {
   return ['chat', projectId, conversationId] as const
+}
+
+function chatHistoryQueryKey(projectId: string) {
+  return ['chat-history', projectId] as const
+}
+
+/** A project's chat history for the header's conversation list, most recent first. */
+export function useChatConversations(projectId: string) {
+  return useQuery({
+    queryKey: chatHistoryQueryKey(projectId),
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/projects/{project_id}/chat', {
+          params: { path: { project_id: projectId } },
+        }),
+      ),
+  })
 }
 
 /** A conversation's full message history, in order (for reload — no re-ask). */
@@ -42,6 +60,9 @@ export function useAskChat(projectId: string) {
       ),
     onSuccess: (data) => {
       void client.invalidateQueries({ queryKey: chatQueryKey(projectId, data.conversation_id) })
+      // A new/continued conversation changes the header's history list (new
+      // entry, or an existing one moving to the top of "most recent").
+      void client.invalidateQueries({ queryKey: chatHistoryQueryKey(projectId) })
     },
   })
 }

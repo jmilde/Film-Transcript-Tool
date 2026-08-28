@@ -15,6 +15,17 @@ from app.models.video import Video
 
 logger = logging.getLogger(__name__)
 
+# How much of the first question to keep as a conversation's list-view title.
+TITLE_MAX_CHARS = 60
+
+
+def _derive_title(question: str) -> str:
+    """A conversation's title is its first question, truncated for list display."""
+    collapsed = " ".join(question.split())
+    if len(collapsed) <= TITLE_MAX_CHARS:
+        return collapsed
+    return collapsed[:TITLE_MAX_CHARS].rstrip() + "…"
+
 
 def _resolve_citation(session: Session, citation: Citation) -> dict[str, Any] | None:
     """Expand a bare (marker, chunk_id) citation into its display payload.
@@ -63,7 +74,10 @@ def answer_question(
             raise NotFoundError("Conversation not found")
     else:
         conversation = ChatConversation(
-            project_id=project_id, created_by=user_id, updated_by=user_id
+            project_id=project_id,
+            title=_derive_title(question),
+            created_by=user_id,
+            updated_by=user_id,
         )
         session.add(conversation)
         session.flush()
