@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -10,6 +11,7 @@ from app.models.job import JobStatus, JobType, ProcessingJob
 from app.services.pipeline import next_stage
 from app.worker.claim import claim_next_job
 from app.worker.handlers.audio_extract import handle_extract_audio
+from app.worker.handlers.embed import handle_generate_embeddings
 from app.worker.handlers.export import handle_export
 from app.worker.handlers.metadata import handle_extract_metadata
 from app.worker.handlers.noop import handle_noop
@@ -30,6 +32,7 @@ HANDLERS: dict[JobType, JobHandler] = {
     JobType.EXTRACT_AUDIO: handle_extract_audio,
     JobType.TRANSCRIBE: handle_transcribe,
     JobType.TRANSLATE: handle_translate,
+    JobType.GENERATE_EMBEDDINGS: handle_generate_embeddings,
     JobType.EXPORT: handle_export,
 }
 
@@ -106,4 +109,7 @@ def run_forever(poll_interval: float = 2.0) -> None:
 
 
 if __name__ == "__main__":
+    # Separate process from the API, so it needs its own handler — see
+    # app/main.py's basicConfig call for why this is necessary at all.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     run_forever()

@@ -1,7 +1,10 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    chat,
     comments,
     exports,
     folders,
@@ -16,6 +19,12 @@ from app.api.routes import (
 )
 from app.config import get_settings
 from app.core.errors import register_error_handlers
+
+# INFO-level `app.*` logging (chat/search retrieval diagnostics in particular —
+# see app/services/chat.py, app/services/chat_retrieval.py,
+# app/agents/transcript_search.py) is otherwise invisible: with no handler
+# configured, Python's logging falls back to WARNING-only on stderr.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 
 def create_app() -> FastAPI:
@@ -48,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(search.router)
     app.include_router(exports.router)
     app.include_router(members.router)
+    app.include_router(chat.router)
 
     return app
 

@@ -289,10 +289,12 @@ Editable objects MUST record:
 
 # 16. Out of Scope
 
+Plan change: this document originally excluded AI-assisted/semantic search
+from Version 1; it now ships as project-scoped semantic chat search over
+transcripts. See `docs/1000_semantic_search.md` for the full design.
+
 The following features are intentionally excluded from Version 1:
 
-- AI-assisted search
-- Semantic search
 - Automatic summarization
 - Topic extraction
 - DaVinci Resolve integration

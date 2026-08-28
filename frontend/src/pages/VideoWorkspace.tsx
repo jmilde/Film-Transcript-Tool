@@ -118,7 +118,11 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     ) {
       appliedSearchRef.current = true
       seek(pendingSearch.startTime)
-      setSelectionRange(pendingSearch.transcriptId, pendingSearch.id, pendingSearch.id)
+      setSelectionRange(
+        pendingSearch.transcriptId,
+        pendingSearch.id,
+        pendingSearch.endTokenId ?? pendingSearch.id,
+      )
     } else if (pendingSearch.kind === 'comment' && comments) {
       const comment = comments.find((c) => c.id === pendingSearch.id)
       if (comment) {
@@ -155,7 +159,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
         </Link>
         {pendingSearch?.returnTo && (
           <Link to={pendingSearch.returnTo} className="text-sm text-slate-500 hover:underline">
-            ← Back to search
+            ← Back
           </Link>
         )}
         <h2 className="truncate text-lg font-semibold text-slate-800">{video?.name ?? 'Video'}</h2>

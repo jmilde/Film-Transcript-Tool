@@ -12,4 +12,7 @@ export interface PendingSearchNav {
   transcriptId: string | null
   startTime: number | null
   returnTo: string
+  /** End of a multi-token range (e.g. a chat citation's chunk span); falls
+   * back to `id` when absent, so a single-token hit highlights just itself. */
+  endTokenId?: string | null
 }

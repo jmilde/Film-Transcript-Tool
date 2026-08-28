@@ -4,7 +4,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.job import ProcessingJob
+from app.models.job import JobStatus, JobType, ProcessingJob
 from app.models.transcript import Transcript, TranscriptType
 from app.services.translation import collect_source_segments, create_translation_transcript
 from app.translation import factory as translation_factory
@@ -63,6 +63,19 @@ def handle_translate(session: Session, job: ProcessingJob) -> dict[str, Any] | N
         translated_texts,
         target_language=target_language,
         created_by=source.created_by,
+    )
+
+    # Not part of the auto-chained upload pipeline (see services/pipeline.py) —
+    # triggered explicitly here so a fresh translation is searchable without a
+    # manual reindex.
+    session.add(
+        ProcessingJob(
+            video_id=source.video_id,
+            project_id=source.project_id,
+            type=JobType.GENERATE_EMBEDDINGS,
+            status=JobStatus.PENDING,
+            result={"transcript_id": str(translation.id)},
+        )
     )
 
     return {

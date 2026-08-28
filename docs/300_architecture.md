@@ -292,7 +292,44 @@ A transcript translation is stored separately from the original transcript.
 
 ---
 
-# 12. Authentication
+# 12. Semantic Search & Chat
+
+Project-scoped chat search over video transcripts, combining vector
+similarity, full-text search, and reranking, orchestrated by an LLM agent
+that produces a synthesized answer with structured citations. Full design in
+`docs/1000_semantic_search.md`.
+
+## Retrieval Pipeline
+
+1. **Chunking** — one chunk per transcript segment (sub-split for length),
+   embedded and full-text indexed as its own row (`transcript_chunks`).
+2. **Hybrid search** — a query is embedded for an ANN vector search and also
+   run as a full-text search; both candidate sets are scoped to the project
+   and unioned by chunk id.
+3. **Rerank** — the union is reranked by a dedicated reranking model for a
+   single relevance ordering.
+4. **Citation resolution** — every transcript (original and translations) is
+   embedded for multilingual recall, but a winning chunk always resolves back
+   to the original-language transcript's chunk for the same moment, so
+   citations are consistent regardless of which language matched.
+
+## Agent
+
+One agent, one tool (`search_transcripts`, backed by the retrieval pipeline
+above), producing a prose answer with inline citation markers. The agent
+decides when and how many times to search; citations are checked against
+what the tool actually returned before being shown to the user.
+
+## Provider Abstraction
+
+Embedding, reranking, and agent/chat model calls are made through a single
+external AI provider, behind the same provider-agnostic abstraction pattern
+used for transcription/translation — provider-specific request/response
+shapes never leak past that boundary.
+
+---
+
+# 13. Authentication
 
 Authentication is provided by Supabase.
 
@@ -306,7 +343,7 @@ Authentication information is used by the backend for:
 
 ---
 
-# 13. Docker Deployment
+# 14. Docker Deployment
 
 The development environment SHOULD run through Docker Compose.
 
@@ -334,7 +371,7 @@ may be configured separately.
 
 ---
 
-# 14. Future Deployment
+# 15. Future Deployment
 
 The architecture SHOULD allow:
 
@@ -366,12 +403,10 @@ without changing application behaviour.
 
 ---
 
-# 15. Out of Scope
+# 16. Out of Scope
 
 The architecture does not currently include:
 
-- AI processing services
-- vector databases
 - real-time collaboration servers
 - video editing integrations
 - distributed processing

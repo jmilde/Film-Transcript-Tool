@@ -18,6 +18,7 @@ class JobType(enum.StrEnum):
     EXTRACT_AUDIO = "extract_audio"
     TRANSCRIBE = "transcribe"
     TRANSLATE = "translate"
+    GENERATE_EMBEDDINGS = "generate_embeddings"
     EXPORT = "export"
     NOOP = "noop"
 
@@ -60,5 +61,9 @@ class ProcessingJob(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     error_message: Mapped[str | None]
     # Generic pointer to what a completed job produced, e.g. {"export_id": ...}.
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Null means claimable as soon as pending; a future timestamp defers
+    # claiming until then. Used to debounce re-embedding jobs (see
+    # app/services/reembed.py) so a burst of edits collapses into one run.
+    run_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -12,6 +12,7 @@ from app.models.transcript import TranscriptToken
 from app.models.user import User
 from app.schemas.token import TokenEdit, TokenSplitRequest
 from app.schemas.transcript import TokenRead
+from app.services.reembed import schedule_reembed
 from app.services.tokens import delete_token, edit_token, merge_tokens, split_token
 
 router = APIRouter(tags=["tokens"])
@@ -40,6 +41,7 @@ def update_token(
     edit_token(
         db, token, payload.edited_text, user_id=user.id, expected_version=payload.expected_version
     )
+    schedule_reembed(db, token.transcript_id)
     db.commit()
     db.refresh(token)
     return _token_read(token)
@@ -53,6 +55,7 @@ def remove_token(
     user: User = Depends(get_current_user),
 ) -> TokenRead:
     delete_token(db, token, user_id=user.id, expected_version=expected_version)
+    schedule_reembed(db, token.transcript_id)
     db.commit()
     db.refresh(token)
     return _token_read(token)
@@ -71,6 +74,7 @@ def merge(
         user_id=user.id,
         expected_versions=context.expected_versions,
     )
+    schedule_reembed(db, replacement.transcript_id)
     db.commit()
     db.refresh(replacement)
     return _token_read(replacement)
@@ -90,6 +94,7 @@ def split(
         user_id=user.id,
         expected_version=payload.expected_version,
     )
+    schedule_reembed(db, token.transcript_id)
     db.commit()
     for part in parts:
         db.refresh(part)

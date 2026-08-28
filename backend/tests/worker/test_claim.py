@@ -1,11 +1,12 @@
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.config import get_settings
 from app.models.job import JobStatus, JobType, ProcessingJob
 from app.worker.claim import claim_next_job
-from sqlalchemy import Engine, create_engine, delete
+from sqlalchemy import Engine, create_engine, delete, update
 from sqlalchemy.orm import Session
 
 
@@ -54,3 +55,42 @@ def test_skip_locked_prevents_double_claim(engine: Engine, committed_job: uuid.U
         session_b.rollback()
         session_a.close()
         session_b.close()
+
+
+@pytest.fixture
+def isolated_queue(db_session: Session) -> Session:
+    """Park any pre-existing pending jobs so claiming is deterministic."""
+    db_session.execute(
+        update(ProcessingJob)
+        .where(ProcessingJob.status == JobStatus.PENDING)
+        .values(status=JobStatus.RUNNING)
+    )
+    db_session.flush()
+    return db_session
+
+
+def test_future_run_after_is_not_claimable(isolated_queue: Session) -> None:
+    future = ProcessingJob(
+        type=JobType.NOOP,
+        status=JobStatus.PENDING,
+        run_after=datetime.now(UTC) + timedelta(minutes=5),
+    )
+    isolated_queue.add(future)
+    isolated_queue.flush()
+
+    assert claim_next_job(isolated_queue) is None
+
+
+def test_elapsed_run_after_is_claimable(isolated_queue: Session) -> None:
+    ready = ProcessingJob(
+        type=JobType.NOOP,
+        status=JobStatus.PENDING,
+        run_after=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    isolated_queue.add(ready)
+    isolated_queue.flush()
+
+    claimed = claim_next_job(isolated_queue)
+
+    assert claimed is not None
+    assert claimed.id == ready.id

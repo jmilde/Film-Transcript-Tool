@@ -11,6 +11,7 @@ from app.models.membership import MembershipRole
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.video import Video
 from app.schemas.transcript import (
+    ReindexResponse,
     SegmentRead,
     TokenRead,
     TranscriptRead,
@@ -128,3 +129,30 @@ def create_translation(
     db.flush()
     db.commit()
     return TranslationResponse(job_id=job.id)
+
+
+@router.post("/transcripts/{transcript_id}/reindex", response_model=ReindexResponse)
+def reindex_transcript(
+    transcript: Transcript = Depends(
+        require_min_role(require_transcript_access, MembershipRole.EDITOR)
+    ),
+    db: Session = Depends(get_db),
+) -> ReindexResponse:
+    """Force an immediate full re-embed of this transcript.
+
+    Token edits already schedule a debounced re-embed automatically (see
+    ``app/services/reembed.py``); this route is only needed to jump the
+    queue — e.g. right before asking a question you need answered now, or
+    after changing the embedding model/config for existing content.
+    """
+    job = ProcessingJob(
+        video_id=transcript.video_id,
+        project_id=transcript.project_id,
+        type=JobType.GENERATE_EMBEDDINGS,
+        status=JobStatus.PENDING,
+        result={"transcript_id": str(transcript.id), "force": True},
+    )
+    db.add(job)
+    db.flush()
+    db.commit()
+    return ReindexResponse(job_id=job.id)

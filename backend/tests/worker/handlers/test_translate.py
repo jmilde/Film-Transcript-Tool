@@ -84,6 +84,16 @@ def test_handle_translate_creates_translation(
     )
     assert "HELLO" in tokens and "THERE." in tokens
 
+    # The new translation enqueues its own embedding job for the translation
+    # transcript, not the source.
+    embed_job = media.db.execute(
+        select(ProcessingJob).where(
+            ProcessingJob.type == JobType.GENERATE_EMBEDDINGS,
+            ProcessingJob.video_id == media.video.id,
+        )
+    ).scalar_one()
+    assert embed_job.result == {"transcript_id": str(translation.id)}
+
 
 def test_handle_translate_leaves_original_untouched(
     media: MediaFixture, monkeypatch: pytest.MonkeyPatch
@@ -129,6 +139,16 @@ def test_handle_translate_is_idempotent(
         )
     ).scalar_one()
     assert translations == 1
+    # Skip path: only the first (real) translation enqueued an embedding job.
+    embed_job_count = media.db.execute(
+        select(func.count())
+        .select_from(ProcessingJob)
+        .where(
+            ProcessingJob.type == JobType.GENERATE_EMBEDDINGS,
+            ProcessingJob.video_id == media.video.id,
+        )
+    ).scalar_one()
+    assert embed_job_count == 1
 
 
 def test_run_once_drives_translate_to_completion(
