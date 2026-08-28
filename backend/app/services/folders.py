@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.folder import Folder
+from app.models.video import Video
 
 
 def build_folder_breadcrumbs(
@@ -44,3 +45,26 @@ def build_folder_breadcrumbs(
         return names
 
     return {folder_id: path_for(folder_id) for folder_id in unique_ids}
+
+
+def resolve_descendant_video_ids(session: Session, folder_id: uuid.UUID) -> set[uuid.UUID]:
+    """Every video id anywhere in ``folder_id``'s subtree, including its own.
+
+    Walks ``parent_folder_id`` breadth-first *down* from ``folder_id`` (the
+    mirror image of ``build_folder_breadcrumbs``' upward walk), one query per
+    tree depth rather than one per folder. Returns an empty set — not an
+    error — if the folder has no videos anywhere in its subtree, including
+    when ``folder_id`` itself doesn't exist.
+    """
+    folder_ids = {folder_id}
+    frontier = {folder_id}
+    while frontier:
+        children = set(
+            session.execute(
+                select(Folder.id).where(Folder.parent_folder_id.in_(frontier))
+            ).scalars()
+        )
+        frontier = children - folder_ids
+        folder_ids |= frontier
+
+    return set(session.execute(select(Video.id).where(Video.folder_id.in_(folder_ids))).scalars())

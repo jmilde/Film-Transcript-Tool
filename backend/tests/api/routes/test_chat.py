@@ -15,6 +15,8 @@ from app.models.project import Project
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken, TranscriptType
 from app.models.user import User
 from app.models.video import Video
+from app.services.chat_retrieval import ChunkMatch
+from app.services.entity_lookup import EntityLookupResult, SpeakerMatch
 from fastapi.testclient import TestClient
 from pydantic_ai.models.test import TestModel
 from sqlalchemy import func, select, text, update
@@ -29,8 +31,14 @@ def _project(db: Session, user: User) -> Project:
     return project
 
 
+_EMPTY_LOOKUP = EntityLookupResult(speakers=[], videos=[], folders=[])
+
+
 def _install_no_op_retrieval(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(agent_module, "search_chunks", lambda session, project_id, query: [])
+    monkeypatch.setattr(agent_module, "search_chunks", lambda session, project_id, **kwargs: [])
+    monkeypatch.setattr(
+        agent_module, "lookup_entities_service", lambda session, project_id, term: _EMPTY_LOOKUP
+    )
 
 
 def _seed_chunk(db: Session, user: User) -> tuple[Project, TranscriptChunk]:
@@ -136,12 +144,16 @@ def test_ask_enriches_citations_with_folder_path_and_thumbnail_token(
     auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     project, chunk = _seed_chunk(db_session, user)
-    monkeypatch.setattr(agent_module, "search_chunks", lambda session, project_id, query: [chunk])
+    match = ChunkMatch(chunk=chunk, score=0.9, matched_via=frozenset({"semantic"}))
+    monkeypatch.setattr(
+        agent_module, "search_chunks", lambda session, project_id, **kwargs: [match]
+    )
     model = TestModel(
+        call_tools=["search_transcripts"],
         custom_output_args={
             "answer": "It says hello [1].",
             "citations": [{"marker": 1, "chunk_id": str(chunk.id)}],
-        }
+        },
     )
 
     with transcript_agent.override(model=model):
@@ -154,19 +166,88 @@ def test_ask_enriches_citations_with_folder_path_and_thumbnail_token(
     assert citation["thumbnail_token"] is None
 
 
-def test_ask_streams_a_status_event_for_the_search_before_the_answer(
+def test_ask_streams_search_transcripts_call_then_result_summary(
     auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     project, chunk = _seed_chunk(db_session, user)
-    monkeypatch.setattr(agent_module, "search_chunks", lambda session, project_id, query: [chunk])
-    model = TestModel(custom_output_args={"answer": "It says hello.", "citations": []})
+    match = ChunkMatch(chunk=chunk, score=0.9, matched_via=frozenset({"semantic"}))
+    monkeypatch.setattr(
+        agent_module, "search_chunks", lambda session, project_id, **kwargs: [match]
+    )
+    model = TestModel(
+        call_tools=["search_transcripts"],
+        custom_output_args={"answer": "It says hello.", "citations": []},
+    )
 
     with transcript_agent.override(model=model):
         resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "What?"})
 
     events = _sse_events(resp)
-    assert [event["type"] for event in events] == ["status", "done"]
+    assert [event["type"] for event in events] == ["status", "status", "done"]
     assert "Searching" in events[0]["message"]
+    assert events[1]["message"] == "Found 1 relevant passage(s) — 1 via semantic search"
+
+
+def test_ask_streams_search_transcripts_zero_result_summary(
+    auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(db_session, user)
+    monkeypatch.setattr(agent_module, "search_chunks", lambda session, project_id, **kwargs: [])
+    model = TestModel(
+        call_tools=["search_transcripts"],
+        custom_output_args={"answer": "Nothing found.", "citations": []},
+    )
+
+    with transcript_agent.override(model=model):
+        resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "What?"})
+
+    events = _sse_events(resp)
+    assert [event["type"] for event in events] == ["status", "status", "done"]
+    assert events[1]["message"] == "No relevant passages found"
+
+
+def test_ask_streams_lookup_entities_call_then_result_summary(
+    auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(db_session, user)
+    lookup_result = EntityLookupResult(
+        speakers=[SpeakerMatch(name="Mariza", video_ids=[uuid.uuid4()])], videos=[], folders=[]
+    )
+    monkeypatch.setattr(
+        agent_module, "lookup_entities_service", lambda session, project_id, term: lookup_result
+    )
+    model = TestModel(
+        call_tools=["lookup_entities"],
+        custom_output_args={"answer": "Found her.", "citations": []},
+    )
+
+    with transcript_agent.override(model=model):
+        resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "Who?"})
+
+    events = _sse_events(resp)
+    assert [event["type"] for event in events] == ["status", "status", "done"]
+    assert "Looking up" in events[0]["message"]
+    assert "1 speaker(s)" in events[1]["message"]
+
+
+def test_ask_streams_lookup_entities_zero_result_summary(
+    auth_client: TestClient, db_session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(db_session, user)
+    monkeypatch.setattr(
+        agent_module, "lookup_entities_service", lambda session, project_id, term: _EMPTY_LOOKUP
+    )
+    model = TestModel(
+        call_tools=["lookup_entities"],
+        custom_output_args={"answer": "No one by that name.", "citations": []},
+    )
+
+    with transcript_agent.override(model=model):
+        resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "Who?"})
+
+    events = _sse_events(resp)
+    assert [event["type"] for event in events] == ["status", "status", "done"]
+    assert events[1]["message"].startswith("No matches found for")
 
 
 def test_ask_streams_an_error_event_on_unexpected_failure_and_does_not_persist(
@@ -174,11 +255,13 @@ def test_ask_streams_an_error_event_on_unexpected_failure_and_does_not_persist(
 ) -> None:
     project = _project(db_session, user)
 
-    def boom(session: Session, project_id: uuid.UUID, query: str) -> list[TranscriptChunk]:
+    def boom(session: Session, project_id: uuid.UUID, **kwargs: object) -> list[TranscriptChunk]:
         raise RuntimeError("openrouter is down")
 
     monkeypatch.setattr(agent_module, "search_chunks", boom)
-    model = TestModel(custom_output_args={"answer": "Hi.", "citations": []})
+    model = TestModel(
+        call_tools=["search_transcripts"], custom_output_args={"answer": "Hi.", "citations": []}
+    )
 
     with transcript_agent.override(model=model):
         resp = auth_client.post(f"/projects/{project.id}/chat", json={"question": "What?"})

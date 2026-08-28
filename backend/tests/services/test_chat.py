@@ -15,6 +15,8 @@ from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
 from app.models.video import Video
 from app.services.chat import answer_question
+from app.services.chat_retrieval import ChunkMatch
+from app.services.entity_lookup import EntityLookupResult
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
 from pydantic_ai.models.test import TestModel
@@ -88,10 +90,16 @@ def _seed_chunk(db: Session, user: User) -> tuple[Project, TranscriptChunk]:
 
 
 def _install_fake_retrieval(monkeypatch: pytest.MonkeyPatch, chunk: TranscriptChunk) -> None:
+    match = ChunkMatch(chunk=chunk, score=0.9, matched_via=frozenset({"semantic"}))
     monkeypatch.setattr(
         agent_module,
         "search_chunks",
-        lambda session, project_id, query: [chunk],
+        lambda session, project_id, **kwargs: [match],
+    )
+    monkeypatch.setattr(
+        agent_module,
+        "lookup_entities_service",
+        lambda session, project_id, term: EntityLookupResult(speakers=[], videos=[], folders=[]),
     )
 
 
@@ -261,7 +269,7 @@ def test_answer_question_degrades_gracefully_past_the_search_call_limit(
     _install_fake_retrieval(monkeypatch, chunk)
 
     def never_stop_searching(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        return ModelResponse(parts=[ToolCallPart("search_transcripts", {"query": "again"})])
+        return ModelResponse(parts=[ToolCallPart("search_transcripts", {"fts_query": "again"})])
 
     # answer_question always sets an event_stream_handler (to relay live
     # search-status events), which forces pydantic-ai into streaming request
@@ -270,7 +278,7 @@ def test_answer_question_degrades_gracefully_past_the_search_call_limit(
     async def never_stop_searching_stream(
         messages: list[ModelMessage], info: AgentInfo
     ) -> AsyncIterator[DeltaToolCalls]:
-        yield {0: DeltaToolCall(name="search_transcripts", json_args='{"query": "again"}')}
+        yield {0: DeltaToolCall(name="search_transcripts", json_args='{"fts_query": "again"}')}
 
     assistant_message = _answer_with(
         FunctionModel(never_stop_searching, stream_function=never_stop_searching_stream),

@@ -11,17 +11,23 @@ import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 from pydantic_ai import ModelMessagesTypeAdapter, RunContext
 from pydantic_ai.exceptions import UsageLimitExceeded
-from pydantic_ai.messages import AgentStreamEvent, FunctionToolCallEvent
+from pydantic_ai.messages import (
+    AgentStreamEvent,
+    FunctionToolCallEvent,
+    FunctionToolResultEvent,
+    ToolReturnPart,
+)
 from pydantic_ai.usage import UsageLimits
 from sqlalchemy.orm import Session
 
 from app.agents.transcript_search import (
     MAX_SEARCH_TOOL_CALLS,
     ChatDeps,
+    ChunkResult,
     Citation,
     transcript_agent,
 )
@@ -29,6 +35,7 @@ from app.core.errors import NotFoundError
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.embedding import TranscriptChunk
 from app.models.video import Video
+from app.services.entity_lookup import EntityLookupResult
 
 logger = logging.getLogger(__name__)
 
@@ -126,13 +133,68 @@ async def stream_answer_question(
     # needs to know a search *started*, to relay to the UI as it happens.
     status_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
+    # Call-started args, keyed by tool_call_id, so the later result-summary
+    # event (which only carries the return value, not the original args) can
+    # still report what a lookup_entities call searched for.
+    pending_call_terms: dict[str, str] = {}
+
     async def on_events(ctx: RunContext[ChatDeps], events: AsyncIterable[AgentStreamEvent]) -> None:
         async for event in events:
-            if isinstance(event, FunctionToolCallEvent) and event.part.tool_name == (
-                "search_transcripts"
-            ):
-                query = event.part.args_as_dict().get("query", "")
-                await status_queue.put(f'Searching for "{query}"…')
+            if isinstance(event, FunctionToolCallEvent):
+                if event.part.tool_name == "search_transcripts":
+                    args = event.part.args_as_dict()
+                    query = args.get("semantic_query") or args.get("fts_query") or ""
+                    active_filters = [
+                        f"speaker {args['speaker_name']!r}" if args.get("speaker_name") else None,
+                        "this video" if args.get("video_id") else None,
+                        "this folder" if args.get("folder_id") else None,
+                    ]
+                    filter_suffix = ""
+                    filter_bits = [bit for bit in active_filters if bit is not None]
+                    if filter_bits:
+                        filter_suffix = f" (scoped to {', '.join(filter_bits)})"
+                    await status_queue.put(f'Searching for "{query}"{filter_suffix}…')
+                elif event.part.tool_name == "lookup_entities":
+                    term = event.part.args_as_dict().get("term", "")
+                    pending_call_terms[event.part.tool_call_id] = term
+                    await status_queue.put(f'Looking up "{term}"…')
+            elif isinstance(event, FunctionToolResultEvent):
+                if not isinstance(event.part, ToolReturnPart):
+                    continue  # RetryPromptPart: a model-retry, not a real result.
+                if event.part.tool_name == "search_transcripts":
+                    results = cast(list[ChunkResult], event.part.content)
+                    semantic_count = sum(1 for r in results if "semantic" in r.matched_via)
+                    fts_count = sum(1 for r in results if "fts" in r.matched_via)
+                    if not results:
+                        await status_queue.put("No relevant passages found")
+                        continue
+                    clauses = [
+                        clause
+                        for clause in (
+                            f"{semantic_count} via semantic search" if semantic_count else None,
+                            f"{fts_count} via text search" if fts_count else None,
+                        )
+                        if clause is not None
+                    ]
+                    await status_queue.put(
+                        f"Found {len(results)} relevant passage(s) — {', '.join(clauses)}"
+                    )
+                elif event.part.tool_name == "lookup_entities":
+                    result = cast(EntityLookupResult, event.part.content)
+                    term = pending_call_terms.get(event.part.tool_call_id, "")
+                    if not result.speakers and not result.videos and not result.folders:
+                        await status_queue.put(f'No matches found for "{term}"')
+                        continue
+                    clauses = [
+                        clause
+                        for clause in (
+                            f"{len(result.speakers)} speaker(s)" if result.speakers else None,
+                            f"{len(result.videos)} video(s)" if result.videos else None,
+                            f"{len(result.folders)} folder(s)" if result.folders else None,
+                        )
+                        if clause is not None
+                    ]
+                    await status_queue.put(f'Found {", ".join(clauses)} matching "{term}"')
 
     async def run_agent() -> Any:
         try:

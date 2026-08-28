@@ -100,7 +100,10 @@ def test_build_document_drops_fully_deleted_segment(db_session: Session, user: U
 def test_build_document_resolves_speaker_name(db_session: Session, user: User) -> None:
     transcript = _transcript(db_session, user)
     speaker = db_session.execute(
-        select(Speaker).where(Speaker.provider_identifier == "speaker_0")
+        select(Speaker).where(
+            Speaker.video_id == transcript.video_id,
+            Speaker.provider_identifier == "speaker_0",
+        )
     ).scalar_one()
     speaker.name = "John"
     db_session.flush()
