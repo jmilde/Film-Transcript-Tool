@@ -26,7 +26,7 @@ const DOCUMENT: Document = {
 
 function renderEditor() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
+  return render(
     <QueryClientProvider client={client}>
       <AuthProvider>
         <DocumentEditor projectId={PROJECT_ID} documentId={DOCUMENT_ID} />
@@ -89,5 +89,36 @@ describe('DocumentEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText(/edited by someone else/)).not.toBeInTheDocument()
     })
+  })
+
+  it('renders a typed "# " markdown shortcut as a visually distinct heading', async () => {
+    const emptyDoc: Document = {
+      ...DOCUMENT,
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [] }] },
+    }
+    server.use(http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(emptyDoc)))
+    server.use(
+      http.patch('http://localhost:8000/documents/d-1', () =>
+        HttpResponse.json({ ...emptyDoc, version: 2 }),
+      ),
+    )
+    const { container } = renderEditor()
+
+    const editable = await waitFor(() => {
+      const el = container.querySelector('[contenteditable="true"]')
+      expect(el).toBeInTheDocument()
+      return el as HTMLElement
+    })
+    expect(editable.closest('.prose')).toBeInTheDocument()
+
+    await userEvent.click(editable)
+    await userEvent.type(editable, '# Heading')
+
+    const heading = await waitFor(() => {
+      const h1 = container.querySelector('h1')
+      expect(h1).toBeInTheDocument()
+      return h1 as HTMLElement
+    })
+    expect(heading).toHaveTextContent('Heading')
   })
 })

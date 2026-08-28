@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@plugin '@tailwindcss/typography';
 
 /* Tailwind's preflight doesn't set a pointer cursor on buttons (browsers
    don't either, unlike links), so every clickable control needs it explicitly. */
