@@ -5,6 +5,26 @@ import type { ChatCitation, ChatMessage } from '../../api/hooks/useChat'
 interface ChatMessageListProps {
   messages: ChatMessage[]
   onSelectCitation: (citation: ChatCitation) => void
+  /** The question just submitted, shown immediately rather than waiting for
+   * the round trip to finish and the conversation to refetch. */
+  pendingQuestion?: string | null
+  /** Whether the agent is still working on `pendingQuestion` — renders a
+   * placeholder assistant bubble so the chat visibly shows "it's answering"
+   * rather than only disabling the send button. */
+  isAnswering?: boolean
+}
+
+/** Three bouncing dots inside an assistant-style bubble, shown while waiting on a reply. */
+function TypingBubble() {
+  return (
+    <div className="max-w-lg text-sm text-slate-800" aria-label="Assistant is answering">
+      <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-2">
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+      </span>
+    </div>
+  )
 }
 
 const MARKER_RE = /\[(\d+)\]/g
@@ -54,7 +74,12 @@ function renderAnswer(
 }
 
 /** Renders a conversation's messages, interleaving citation cards into assistant answers. */
-export function ChatMessageList({ messages, onSelectCitation }: ChatMessageListProps) {
+export function ChatMessageList({
+  messages,
+  onSelectCitation,
+  pendingQuestion,
+  isAnswering,
+}: ChatMessageListProps) {
   return (
     <div className="space-y-4">
       {messages.map((message) =>
@@ -70,6 +95,14 @@ export function ChatMessageList({ messages, onSelectCitation }: ChatMessageListP
           </div>
         ),
       )}
+      {pendingQuestion && (
+        <div className="text-right">
+          <span className="inline-block max-w-lg rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
+            {pendingQuestion}
+          </span>
+        </div>
+      )}
+      {isAnswering && <TypingBubble />}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAskChat, useChatConversation } from '../api/hooks/useChat'
 import type { ChatCitation } from '../api/hooks/useChat'
@@ -24,18 +25,22 @@ function ChatPageInner({
   const navigate = useNavigate()
   const { data: messages } = useChatConversation(projectId, conversationId)
   const ask = useAskChat(projectId)
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
 
   function handleSubmit(question: string) {
+    setPendingQuestion(question)
     ask.mutate(
       { question, conversationId },
       {
         onSuccess: (data) => {
+          setPendingQuestion(null)
           if (data.conversation_id !== conversationId) {
             void navigate(`/projects/${projectId}/chat/${data.conversation_id}`, {
               replace: true,
             })
           }
         },
+        onError: () => setPendingQuestion(null),
       },
     )
   }
@@ -65,8 +70,13 @@ function ChatPageInner({
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto">
-        {messages && messages.length > 0 ? (
-          <ChatMessageList messages={messages} onSelectCitation={handleSelectCitation} />
+        {(messages && messages.length > 0) || pendingQuestion ? (
+          <ChatMessageList
+            messages={messages ?? []}
+            onSelectCitation={handleSelectCitation}
+            pendingQuestion={pendingQuestion}
+            isAnswering={ask.isPending}
+          />
         ) : (
           <p className="text-sm text-slate-400">Ask a question about this project's videos.</p>
         )}

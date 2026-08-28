@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -108,4 +109,7 @@ def run_forever(poll_interval: float = 2.0) -> None:
 
 
 if __name__ == "__main__":
+    # Separate process from the API, so it needs its own handler — see
+    # app/main.py's basicConfig call for why this is necessary at all.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     run_forever()

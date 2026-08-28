@@ -5,8 +5,27 @@ single relevance ordering, then every winning chunk is resolved back to the
 original-language transcript's chunk for the same moment — citations always
 point at the original, even when a translation chunk scored best (matches
 ``VideoWorkspace.tsx``'s "left pane always shows the original" convention).
+
+How this covers multiple languages, e.g. a Spanish original plus its English
+translation:
+
+- Every ``Transcript`` (original *and* each translation) is chunked and
+  embedded independently (``app/worker/handlers/embed.py``) — a project's
+  ``transcript_chunks`` table holds rows in every language it has content for.
+- ``query`` is embedded once and compared by cosine distance against *all* of
+  a project's chunk embeddings regardless of language (the ANN leg below).
+  This is what makes an English question findable against Spanish-only
+  content and vice versa: the embedding model maps semantically similar text
+  close together across languages, not just within one.
+- The FTS leg is a cheap literal-keyword net alongside ANN, not a language-
+  aware one — see the comment above ``tsquery`` below for why it uses
+  Postgres's "simple" config rather than a stemmed one.
+- Whichever chunk wins (original or translation), ``_resolve_to_original``
+  maps it back to the original-language transcript's overlapping chunk before
+  it's cited, so the user always jumps to the source-language passage.
 """
 
+import logging
 import uuid
 
 from sqlalchemy import func, select
@@ -16,6 +35,8 @@ from app.embeddings import factory as embeddings_factory
 from app.models.embedding import TranscriptChunk
 from app.models.transcript import Transcript, TranscriptType
 from app.reranking import factory as reranking_factory
+
+logger = logging.getLogger(__name__)
 
 # Recall width for each leg before reranking narrows to the final answer set.
 ANN_CANDIDATES = 20
@@ -98,39 +119,70 @@ def search_chunks(session: Session, project_id: uuid.UUID, query: str) -> list[T
     embeddings_provider = embeddings_factory.get_embeddings_provider()
     (query_vector,) = embeddings_provider.embed([query])
 
-    ann_candidates = session.execute(
-        select(TranscriptChunk)
-        .where(TranscriptChunk.project_id == project_id)
-        .order_by(TranscriptChunk.embedding.cosine_distance(query_vector))
-        .limit(ANN_CANDIDATES)
-    ).scalars()
+    ann_candidates = list(
+        session.execute(
+            select(TranscriptChunk)
+            .where(TranscriptChunk.project_id == project_id)
+            .order_by(TranscriptChunk.embedding.cosine_distance(query_vector))
+            .limit(ANN_CANDIDATES)
+        ).scalars()
+    )
 
-    # 'simple' does no stemming, so this leg matches literal tokens
-    # regardless of which language config a chunk's search_vector used.
+    # "simple" does no stemming — it case-folds and tokenizes but never maps a
+    # word to its stem. That has to match how embed.py built search_vector:
+    # to_tsvector and to_tsquery only find each other under the SAME config,
+    # and a stemmed config (e.g. "english") produces different lexemes than
+    # "simple" for the same word (to_tsvector('english', 'minerals') -> the
+    # stem 'miner', but plainto_tsquery('simple', 'minerals') stays
+    # 'minerals' — those never satisfy `@@`). Since one query here must be
+    # able to match chunks in any of a project's languages, both sides use
+    # "simple" so this leg is a plain literal/substring-of-tokens match
+    # instead of a silently-broken per-language one.
     tsquery = func.plainto_tsquery("simple", query)
-    fts_candidates = session.execute(
-        select(TranscriptChunk)
-        .where(
-            TranscriptChunk.project_id == project_id,
-            TranscriptChunk.search_vector.op("@@")(tsquery),
-        )
-        .limit(FTS_CANDIDATES)
-    ).scalars()
+    fts_candidates = list(
+        session.execute(
+            select(TranscriptChunk)
+            .where(
+                TranscriptChunk.project_id == project_id,
+                TranscriptChunk.search_vector.op("@@")(tsquery),
+            )
+            .limit(FTS_CANDIDATES)
+        ).scalars()
+    )
 
     candidates: dict[uuid.UUID, TranscriptChunk] = {}
     for chunk in (*ann_candidates, *fts_candidates):
         candidates.setdefault(chunk.id, chunk)
+    logger.info(
+        "chat_retrieval.search_chunks project_id=%s query=%r ann=%d fts=%d union=%d",
+        project_id,
+        query,
+        len(ann_candidates),
+        len(fts_candidates),
+        len(candidates),
+    )
     if not candidates:
         return []
 
     candidate_list = list(candidates.values())
     rerank_provider = reranking_factory.get_rerank_provider()
     scores = rerank_provider.rerank(query, [chunk.text for chunk in candidate_list])
-    ranked = [
-        chunk
-        for chunk, _score in sorted(
-            zip(candidate_list, scores, strict=True), key=lambda pair: pair[1], reverse=True
-        )
-    ][:RERANK_TOP_K]
+    ranked_with_scores = sorted(
+        zip(candidate_list, scores, strict=True), key=lambda pair: pair[1], reverse=True
+    )[:RERANK_TOP_K]
+    ranked = [chunk for chunk, _score in ranked_with_scores]
+    logger.info(
+        "chat_retrieval.search_chunks project_id=%s reranked top %d of %d: %s",
+        project_id,
+        len(ranked),
+        len(candidate_list),
+        [(chunk.id, chunk.language, round(score, 3)) for chunk, score in ranked_with_scores],
+    )
 
-    return _resolve_to_original(session, ranked)
+    resolved = _resolve_to_original(session, ranked)
+    logger.info(
+        "chat_retrieval.search_chunks project_id=%s resolved %d chunk(s) to original transcripts",
+        project_id,
+        len(resolved),
+    )
+    return resolved

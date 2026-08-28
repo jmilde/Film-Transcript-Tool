@@ -5,6 +5,7 @@ with structured citations. The agent decides when and how to re-query — there
 is no separate deterministic query-reformulation step.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 
@@ -18,6 +19,8 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.models.video import Video
 from app.services.chat_retrieval import search_chunks
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You are an assistant answering questions about a video project's transcripts. "
@@ -85,9 +88,19 @@ transcript_agent = Agent(
 @transcript_agent.tool
 def search_transcripts(ctx: RunContext[ChatDeps], query: str) -> list[ChunkResult]:
     """Search the project's video transcripts for passages relevant to `query`."""
+    logger.info(
+        "transcript_search.search_transcripts project_id=%s tool_query=%r",
+        ctx.deps.project_id,
+        query,
+    )
     chunks = search_chunks(ctx.deps.session, ctx.deps.project_id, query)
     ctx.deps.seen_chunk_ids.update(chunk.id for chunk in chunks)
     if not chunks:
+        logger.info(
+            "transcript_search.search_transcripts project_id=%s tool_query=%r found nothing",
+            ctx.deps.project_id,
+            query,
+        )
         return []
 
     video_ids = {chunk.video_id for chunk in chunks}

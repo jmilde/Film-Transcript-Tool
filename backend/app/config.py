@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     supabase_publishable_key: str
     supabase_jwks_url: str
     deepgram_api_key: str
-    deepl_api_key: str
     storage_root: str
     # Semantic chat search: all AI calls (agent, embeddings, rerank) go through
     # OpenRouter with this one key.

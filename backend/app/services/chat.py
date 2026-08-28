@@ -1,5 +1,6 @@
 """Orchestrates one chat turn: run the agent, guard citations, persist messages."""
 
+import logging
 import uuid
 from typing import Any
 
@@ -11,6 +12,8 @@ from app.core.errors import NotFoundError
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.embedding import TranscriptChunk
 from app.models.video import Video
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_citation(session: Session, citation: Citation) -> dict[str, Any] | None:
@@ -71,6 +74,13 @@ def answer_question(
             conversation.agent_message_history["messages"]
         )
 
+    logger.info(
+        "chat.ask project_id=%s conversation_id=%s question=%r",
+        project_id,
+        conversation.id,
+        question,
+    )
+
     deps = ChatDeps(session=session, project_id=project_id)
     result = transcript_agent.run_sync(question, deps=deps, message_history=message_history)
 
@@ -79,11 +89,26 @@ def answer_question(
     guarded_citations = [
         citation for citation in result.output.citations if citation.chunk_id in deps.seen_chunk_ids
     ]
+    dropped = len(result.output.citations) - len(guarded_citations)
+    if dropped:
+        logger.warning(
+            "chat.ask conversation_id=%s dropped %d hallucinated citation(s) "
+            "not backed by any tool call",
+            conversation.id,
+            dropped,
+        )
     resolved_citations = [
         resolved
         for citation in guarded_citations
         if (resolved := _resolve_citation(session, citation)) is not None
     ]
+    logger.info(
+        "chat.ask conversation_id=%s answered with %d citation(s), %d chunk(s) seen across "
+        "all tool calls this turn",
+        conversation.id,
+        len(resolved_citations),
+        len(deps.seen_chunk_ids),
+    )
 
     session.add(
         ChatMessage(
