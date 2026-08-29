@@ -252,6 +252,77 @@ def _iter_clip_nodes(node: dict[str, Any]) -> list[dict[str, Any]]:
     return found
 
 
+def _find_clip_node(content: dict[str, Any], node_id: str) -> dict[str, Any] | None:
+    for node in _iter_clip_nodes(content):
+        if (node.get("attrs") or {}).get("nodeId") == node_id:
+            return node
+    return None
+
+
+def _iter_comment_marked_text(node: dict[str, Any], comment_id: str) -> list[str]:
+    """Text runs carrying a `comment` mark with the given `commentId`.
+
+    A comment's prose-text anchor is the TipTap `comment` mark, not a
+    relational column — see `DocumentCommentAnchor`. A single comment can span
+    several adjacent text nodes (e.g. selection crossing a bold/plain
+    boundary), so this collects and joins every run rather than assuming one.
+    """
+    found = []
+    if node.get("type") == "text":
+        marks = node.get("marks") or []
+        if any(
+            mark.get("type") == "comment"
+            and (mark.get("attrs") or {}).get("commentId") == comment_id
+            for mark in marks
+        ):
+            found.append(node.get("text") or "")
+    for child in node.get("content") or []:
+        found.extend(_iter_comment_marked_text(child, comment_id))
+    return found
+
+
+def resolve_document_comment_excerpt(
+    session: Session,
+    document: Document,
+    *,
+    comment_id: uuid.UUID,
+    clip_node_id: str | None,
+) -> str | None:
+    """Resolve a document-anchored comment's excerpt fresh from current content.
+
+    Mirrors `resolve_document_content`'s on-read resolution for clip blocks:
+    nothing is persisted, so this always reflects the document's current
+    state, returning `None` if the anchor (clip node or comment mark) can no
+    longer be found — e.g. the clip was later removed from the document.
+    """
+    if clip_node_id is not None:
+        node = _find_clip_node(document.content, clip_node_id)
+        if node is None:
+            return None
+        attrs = node.get("attrs") or {}
+        transcript_id = uuid.UUID(attrs["transcriptId"])
+        start_token_id = uuid.UUID(attrs["startTokenId"])
+        end_token_id = uuid.UUID(attrs["endTokenId"])
+        tokens = {
+            token.id: token
+            for token in session.execute(
+                select(TranscriptToken).where(
+                    TranscriptToken.id.in_({start_token_id, end_token_id})
+                )
+            )
+            .scalars()
+            .all()
+        }
+        start_token = tokens.get(start_token_id)
+        end_token = tokens.get(end_token_id)
+        if start_token is None or end_token is None:
+            return None
+        return _excerpt(_range_tokens(session, transcript_id, start_token, end_token))
+
+    text_runs = _iter_comment_marked_text(document.content, str(comment_id))
+    return "".join(text_runs) if text_runs else None
+
+
 def _map_clip_nodes(
     node: dict[str, Any], resolve: Callable[[dict[str, Any]], dict[str, Any]]
 ) -> None:
