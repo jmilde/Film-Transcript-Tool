@@ -488,7 +488,14 @@ Panel contents:
 
 - a document switcher: list, create, rename, delete, select the active
   document
-- a rich-text editor (TipTap) over the active document's content
+- a fixed formatting toolbar (Bold/Italic/Heading 1/Heading 2/Bullet
+  list), pinned above the document rather than floating — it applies from
+  wherever the cursor is, so it doesn't need a selection to appear, unlike
+  the contextual bubble menu below
+- a rich-text editor (TipTap) over the active document's content,
+  rendered as a bounded white "page" (bordered, padded, subtle shadow)
+  against a gray backdrop, rather than filling the panel edge-to-edge —
+  what actually reads as "a document" instead of plain panel content
 - each clip block renders inline, within the surrounding prose, as
   excerpt text with a persistent left border + background tint (marking
   "this text is from source material") — not a boxed card. An underline
@@ -500,7 +507,9 @@ Panel contents:
 - selecting a clip block (click, or arrow-key onto it) shows a shared
   bubble menu with Play / Comment / Remove actions (§12-equivalent
   `SelectionToolbar`/`BubbleMenu` pattern), rather than the card itself
-  carrying inline controls
+  carrying inline controls; selecting a plain text range shows the same
+  bubble menu with just Copy / Comment (formatting lives in the fixed
+  toolbar above, not here)
 
 A clip's annotation is a regular Comment (§13) anchored via
 `DocumentCommentAnchor.clip_node_id`, created through the bubble menu's

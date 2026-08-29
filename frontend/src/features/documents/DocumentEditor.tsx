@@ -46,25 +46,29 @@ import type { Document } from '../../api/hooks/useDocuments'
 const SAVE_DEBOUNCE_MS = 1000
 
 /** What the shared `BubbleMenu` popup shows: either a plain-text selection
- * (formatting + comment) or a `NodeSelection` over a `clipBlock` (play/
- * comment/remove). `null` means no popup-worthy selection. Text-mode carries
- * the live selected text/range so the popup's summary line stays in sync as
- * the user drags to extend the selection — `useEditorState`'s equality check
- * only re-renders when this value actually changes. */
+ * (copy + comment) or a `NodeSelection` over a `clipBlock` (play/comment/
+ * remove) — formatting toggles live in the fixed toolbar above the document
+ * instead (`FormattingState` below), not in this popup, since they apply
+ * from a collapsed cursor too and shouldn't need a selection to reach.
+ * `null` means no popup-worthy selection. Text-mode carries the live
+ * selected text/range so the popup's summary line stays in sync as the user
+ * drags to extend the selection — `useEditorState`'s equality check only
+ * re-renders when this value actually changes. */
 type BubbleSelection =
-  | {
-      kind: 'text'
-      from: number
-      to: number
-      text: string
-      bold: boolean
-      italic: boolean
-      h1: boolean
-      h2: boolean
-      bulletList: boolean
-    }
+  | { kind: 'text'; from: number; to: number; text: string }
   | { kind: 'clip'; attrs: ClipBlockNodeAttrs }
   | null
+
+/** Live formatting state for the fixed toolbar's active-button highlighting
+ * — tracked independently of `BubbleSelection` since the toolbar works from
+ * a collapsed cursor (no selection at all), unlike the floating popup. */
+interface FormattingState {
+  bold: boolean
+  italic: boolean
+  h1: boolean
+  h2: boolean
+  bulletList: boolean
+}
 
 /** A single-field comment draft can be opened from a text selection or a
  * selected clip node — the shared popup swaps to `SelectionToolbar`'s draft
@@ -224,13 +228,22 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         from: selection.from,
         to: selection.to,
         text: editor.state.doc.textBetween(selection.from, selection.to, ' '),
-        bold: editor.isActive('bold'),
-        italic: editor.isActive('italic'),
-        h1: editor.isActive('heading', { level: 1 }),
-        h2: editor.isActive('heading', { level: 2 }),
-        bulletList: editor.isActive('bulletList'),
       }
     },
+  })
+
+  // Drives the fixed toolbar's active-button highlighting from a collapsed
+  // cursor too, not just a selection — a rich-text toolbar should show
+  // "Bold" as active just from clicking into bold text, same as any editor.
+  const formattingState = useEditorState<FormattingState>({
+    editor,
+    selector: ({ editor }) => ({
+      bold: editor?.isActive('bold') ?? false,
+      italic: editor?.isActive('italic') ?? false,
+      h1: editor?.isActive('heading', { level: 1 }) ?? false,
+      h2: editor?.isActive('heading', { level: 2 }) ?? false,
+      bulletList: editor?.isActive('bulletList') ?? false,
+    }),
   })
 
   // Closing the popup's draft (e.g. Escape, or clicking elsewhere collapses
@@ -388,41 +401,6 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         ]
       : [
           {
-            id: 'bold',
-            icon: BoldIcon,
-            label: 'Bold',
-            active: bubbleSelection.bold,
-            onClick: () => editor?.chain().focus().toggleBold().run(),
-          },
-          {
-            id: 'italic',
-            icon: ItalicIcon,
-            label: 'Italic',
-            active: bubbleSelection.italic,
-            onClick: () => editor?.chain().focus().toggleItalic().run(),
-          },
-          {
-            id: 'h1',
-            icon: Heading1Icon,
-            label: 'Heading 1',
-            active: bubbleSelection.h1,
-            onClick: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(),
-          },
-          {
-            id: 'h2',
-            icon: Heading2Icon,
-            label: 'Heading 2',
-            active: bubbleSelection.h2,
-            onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
-          },
-          {
-            id: 'bulletList',
-            icon: BulletListIcon,
-            label: 'Bullet list',
-            active: bubbleSelection.bulletList,
-            onClick: () => editor?.chain().focus().toggleBulletList().run(),
-          },
-          {
             id: 'copy',
             icon: CopyIcon,
             label: 'Copy',
@@ -439,6 +417,48 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
             },
           },
         ]
+
+  // The fixed toolbar pinned above the document — unlike `bubbleActions`,
+  // always rendered (not gated on a selection existing) and toggles from
+  // wherever the cursor currently is, matching how a rich-text editor's
+  // formatting toolbar normally works.
+  const formattingActions: ToolbarAction[] = [
+    {
+      id: 'bold',
+      icon: BoldIcon,
+      label: 'Bold',
+      active: formattingState.bold,
+      onClick: () => editor?.chain().focus().toggleBold().run(),
+    },
+    {
+      id: 'italic',
+      icon: ItalicIcon,
+      label: 'Italic',
+      active: formattingState.italic,
+      onClick: () => editor?.chain().focus().toggleItalic().run(),
+    },
+    {
+      id: 'h1',
+      icon: Heading1Icon,
+      label: 'Heading 1',
+      active: formattingState.h1,
+      onClick: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(),
+    },
+    {
+      id: 'h2',
+      icon: Heading2Icon,
+      label: 'Heading 2',
+      active: formattingState.h2,
+      onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+    },
+    {
+      id: 'bulletList',
+      icon: BulletListIcon,
+      label: 'Bullet list',
+      active: formattingState.bulletList,
+      onClick: () => editor?.chain().focus().toggleBulletList().run(),
+    },
+  ]
 
   // Opens the comment thread for a clicked comment span — a stand-in for
   // E6's shared popup, reusing the same `useCommentsStore` selection state
@@ -527,6 +547,29 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         aria-label="Document title"
         className="border-b border-slate-200 px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none"
       />
+      {/* Fixed above the document (not floating) — formatting applies from
+          wherever the cursor is, so it doesn't need a selection to show,
+          unlike the contextual BubbleMenu below. */}
+      <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-3 py-1.5">
+        {formattingActions.map((action) => {
+          const Icon = action.icon
+          return (
+            <button
+              key={action.id}
+              type="button"
+              aria-label={action.label}
+              title={action.label}
+              aria-pressed={action.active}
+              onClick={action.onClick}
+              className={`rounded p-1.5 hover:bg-slate-100 ${
+                action.active ? 'bg-slate-200 text-slate-800' : 'text-slate-500'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          )
+        })}
+      </div>
       {isDocumentConflict(updateDocument.error) && (
         <div className="flex items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
           <span>This document was edited by someone else. Your change was not saved.</span>
@@ -546,7 +589,13 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         </div>
       )}
       <DocumentCommentsContext.Provider value={{ clipCommentStatus }}>
-        <div className="relative flex-1 overflow-y-auto" onClick={handleContentClick}>
+        {/* A gray backdrop behind a bounded white "page" (rather than the
+            editor just filling the panel edge-to-edge) is what actually
+            reads as "a document" instead of plain panel content. */}
+        <div
+          className="relative flex-1 overflow-y-auto bg-slate-100"
+          onClick={handleContentClick}
+        >
           <BubbleMenu
             editor={editor}
             shouldShow={shouldShowBubble}
@@ -587,7 +636,11 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
               )
             )}
           </BubbleMenu>
-          <EditorContent editor={editor} className="prose prose-sm max-w-none px-4 py-3" />
+          <div className="mx-auto max-w-2xl px-4 py-6">
+            <div className="rounded-md border border-slate-200 bg-white px-8 py-8 shadow-sm">
+              <EditorContent editor={editor} className="prose prose-sm max-w-none" />
+            </div>
+          </div>
         </div>
       </DocumentCommentsContext.Provider>
     </div>

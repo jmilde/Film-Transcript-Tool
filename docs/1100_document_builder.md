@@ -152,13 +152,20 @@ for the clip reference's node view.
   attrs)` command for programmatic insertion that lands the node inline
   within the surrounding text rather than always opening a new
   paragraph.
+- Formatting toolbar: a fixed bar pinned above the document (not floating,
+  and not gated on a selection) with Bold/Italic/Heading 1/Heading 2/
+  Bullet list — it toggles from wherever the cursor currently is, the same
+  as any rich-text editor's toolbar, and its buttons show active state
+  from a collapsed cursor too. This is a separate control from the
+  floating `BubbleMenu` below.
 - Rendering: excerpt text with a persistent left border + background
   tint (marks "this text is from source material"), plus an underline
   reserved exclusively for "has a comment" — the two decoration channels
   stack without colliding. Selecting the node shows a shared `BubbleMenu`
   with Play/Comment/Remove actions (§6/§7); the node view itself renders
   only the excerpt and its decoration classes, no inline controls of its
-  own.
+  own. Selecting a plain text range shows the same `BubbleMenu` with just
+  Copy/Comment — formatting lives in the fixed toolbar above, not here.
 - Save: content changes are debounced (~1s) into a `PATCH` carrying the
   last-known `version`; a `409` shows the same conflict/reload banner
   pattern already used for token-edit conflicts.

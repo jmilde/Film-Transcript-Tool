@@ -314,7 +314,7 @@ describe('DocumentEditor', () => {
       },
     }
 
-    it('shows Bold/Italic/Heading/List/Comment for a text selection and toggles bold', async () => {
+    it('shows Bold/Italic/Heading/List in the fixed toolbar (no selection needed) and toggles bold', async () => {
       server.use(
         http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
@@ -327,25 +327,44 @@ describe('DocumentEditor', () => {
         http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
       )
       const { container } = renderEditor()
-      const paragraph = await screen.findByText('Hello there')
-      await userEvent.click(paragraph)
-      selectWithinText(container, 'Hello there', 0, 5) // "Hello"
+      await screen.findByText('Hello there')
 
-      const boldButton = await screen.findByRole('button', { name: 'Bold' })
+      // The formatting toolbar is fixed above the document — present before
+      // any selection is made, unlike the contextual bubble menu.
+      const boldButton = screen.getByRole('button', { name: 'Bold' })
       expect(screen.getByRole('button', { name: 'Italic' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Heading 1' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Heading 2' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Bullet list' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Comment' })).toBeInTheDocument()
-      // A clip-only action must never leak into the text-selection bubble.
-      expect(screen.queryByRole('button', { name: 'Play clip' })).not.toBeInTheDocument()
-
       expect(boldButton).toHaveAttribute('aria-pressed', 'false')
+
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 0, 5) // "Hello"
+
       await userEvent.click(boldButton)
       await waitFor(() => {
         expect(container.querySelector('strong')).toHaveTextContent('Hello')
       })
       expect(screen.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('shows only Copy/Comment (not formatting) in the floating bubble for a text selection', async () => {
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
+      )
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 0, 5) // "Hello"
+
+      await screen.findByRole('button', { name: 'Copy' })
+      expect(screen.getByRole('button', { name: 'Comment' })).toBeInTheDocument()
+      // A clip-only action must never leak into the text-selection bubble.
+      expect(screen.queryByRole('button', { name: 'Play clip' })).not.toBeInTheDocument()
     })
 
     it('writes both clipboard MIME entries via Copy for a text selection', async () => {
