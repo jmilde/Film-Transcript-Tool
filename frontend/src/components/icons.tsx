@@ -207,3 +207,43 @@ export function DocumentIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function BoldIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M6 3.5h5a3.25 3.25 0 0 1 2.1 5.73A3.5 3.5 0 0 1 11.5 16H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Zm2 5.25h2.75a1.5 1.5 0 0 0 0-3H8v3Zm0 5.25h3.25a1.75 1.75 0 0 0 0-3.5H8v3.5Z" />
+    </svg>
+  )
+}
+
+export function ItalicIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M8.5 3.5h6v1.75h-2.06l-2.38 9.5H12v1.75H6v-1.75h2.06l2.38-9.5H8.5V3.5Z" />
+    </svg>
+  )
+}
+
+export function Heading1Icon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M2.5 4h1.8v5.1h4.4V4h1.8v12h-1.8v-5.2H4.3V16H2.5V4Zm12.4 1.9-2.1.9V5.1l2.6-1.3h1.2v12h-1.7V5.9Z" />
+    </svg>
+  )
+}
+
+export function Heading2Icon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M2.5 4h1.8v5.1h4.4V4h1.8v12h-1.8v-5.2H4.3V16H2.5V4Zm9.9 10.5c0-1.4.85-2.2 2.35-3.15 1.25-.8 1.75-1.2 1.75-1.95 0-.65-.5-1.05-1.25-1.05-.75 0-1.35.4-1.85 1.05l-1.15-.95c.65-1 1.7-1.7 3.1-1.7 1.75 0 2.95 1 2.95 2.55 0 1.35-.9 2.1-2.25 2.95-.9.55-1.5.95-1.75 1.3h4.1V16h-6V14.5Z" />
+    </svg>
+  )
+}
+
+export function BulletListIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M3.5 5.25a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Zm0 3.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Zm0 3.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM7 5h10v1.5H7V5Zm0 3.75h10v1.5H7v-1.5ZM7 12.5h10V14H7v-1.5Z" />
+    </svg>
+  )
+}

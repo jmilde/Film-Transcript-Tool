@@ -22,6 +22,7 @@ export interface ToolbarDraft {
   accentClass?: string
   /** Border accent for the input field; defaults to sky. */
   inputAccentClass?: string
+  placeholder?: string
 }
 
 type SelectionToolbarProps =
@@ -62,6 +63,7 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
         <input
           autoFocus
           value={draft.value}
+          placeholder={draft.placeholder}
           onChange={(e) => draft.onChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') draft.onConfirm()

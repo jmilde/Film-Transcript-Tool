@@ -31,6 +31,21 @@ const RESOLVED_ONLY_KEYS = [
   'folder_path',
 ]
 
+/** Read-only display fields the backend injects into `attrs` on every read
+ * (see `resolve_document_content`); absent until the node has been resolved
+ * at least once (e.g. immediately after insert, before the first refetch). */
+export interface ResolvedClipFields {
+  video_name?: string
+  start_time?: number
+  end_time?: number
+  speaker_name?: string | null
+  excerpt?: string
+  thumbnail_token?: string | null
+  folder_path?: string[]
+}
+
+export type ClipBlockNodeAttrs = ClipBlockAttrs & ResolvedClipFields
+
 /** Strip the backend's read-only resolved fields from a document tree before
  * saving, so a stale excerpt/thumbnail never round-trips back into storage —
  * the excerpt must only ever come from a fresh resolve on read. */

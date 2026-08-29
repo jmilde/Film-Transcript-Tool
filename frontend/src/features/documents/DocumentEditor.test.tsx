@@ -299,6 +299,63 @@ describe('DocumentEditor', () => {
     })
   })
 
+  describe('formatting/comment bubble menu', () => {
+    const PROSE_DOC: Document = {
+      ...DOCUMENT,
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello there' }] }],
+      },
+    }
+
+    it('shows Bold/Italic/Heading/List/Comment for a text selection and toggles bold', async () => {
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
+      )
+      server.use(
+        http.patch('http://localhost:8000/documents/d-1', () =>
+          HttpResponse.json({ ...PROSE_DOC, version: 2 }),
+        ),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
+      )
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 0, 5) // "Hello"
+
+      const boldButton = await screen.findByRole('button', { name: 'Bold' })
+      expect(screen.getByRole('button', { name: 'Italic' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Heading 1' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Heading 2' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Bullet list' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Comment' })).toBeInTheDocument()
+      // A clip-only action must never leak into the text-selection bubble.
+      expect(screen.queryByRole('button', { name: 'Play clip' })).not.toBeInTheDocument()
+
+      expect(boldButton).toHaveAttribute('aria-pressed', 'false')
+      await userEvent.click(boldButton)
+      await waitFor(() => {
+        expect(container.querySelector('strong')).toHaveTextContent('Hello')
+      })
+      expect(screen.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    // The clip-selection branch (Play/Comment/Remove for a NodeSelection over
+    // a clipBlock) isn't covered by an automated test here: ProseMirror's
+    // real click handling resolves the clicked node via on-screen coordinates
+    // (`view.posAtCoords`), and its DOM-selection-read fallback is disabled
+    // for React node views (`ReactNodeView.ignoreMutation` unconditionally
+    // returns `true`, by design, so React's own DOM updates inside a node
+    // view never get misread as document mutations). Neither path is
+    // reachable in jsdom's zeroed-out layout without adding an editor-access
+    // seam to production code purely for tests. `shouldShowBubble`'s
+    // clip-vs-text discrimination is covered directly below instead; the
+    // full clip popup (Play/Comment/Remove, and Remove actually deleting the
+    // node) is on the Phase E6 manual verification checklist.
+  })
+
   it('a clip gains an underline once a comment is added to it, surviving a reload', async () => {
     const clipDoc: Document = {
       ...DOCUMENT,

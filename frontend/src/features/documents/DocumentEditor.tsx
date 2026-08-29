@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
 import { isNodeSelection } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import { shouldShowBubble } from './shouldShowBubble'
 import {
   isDocumentConflict,
   useDocument,
@@ -16,14 +18,55 @@ import {
 } from '../../api/hooks/useComments'
 import { useCommentsStore } from '../../store/comments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
+import { usePlaybackStore } from '../../store/playback'
 import { ClipBlock, stripResolvedClipFields } from './clipBlockNode'
+import type { ClipBlockNodeAttrs } from './clipBlockNode'
 import { CommentMark } from './commentMark'
 import { CommentResolvedDecoration, commentResolvedPluginKey } from './commentResolvedDecoration'
 import { DocumentCommentsContext } from './documentCommentsContext'
 import type { ClipCommentStatus } from './documentCommentsContext'
+import { SelectionToolbar } from '../toolbar/SelectionToolbar'
+import type { ToolbarAction } from '../toolbar/SelectionToolbar'
+import {
+  BoldIcon,
+  BulletListIcon,
+  CommentIcon,
+  Heading1Icon,
+  Heading2Icon,
+  ItalicIcon,
+  PlayIcon,
+  TrashIcon,
+} from '../../components/icons'
+import { formatTime } from '../player/format'
 import type { Document } from '../../api/hooks/useDocuments'
 
 const SAVE_DEBOUNCE_MS = 1000
+
+/** What the shared `BubbleMenu` popup shows: either a plain-text selection
+ * (formatting + comment) or a `NodeSelection` over a `clipBlock` (play/
+ * comment/remove). `null` means no popup-worthy selection. Text-mode carries
+ * the live selected text/range so the popup's summary line stays in sync as
+ * the user drags to extend the selection — `useEditorState`'s equality check
+ * only re-renders when this value actually changes. */
+type BubbleSelection =
+  | {
+      kind: 'text'
+      from: number
+      to: number
+      text: string
+      bold: boolean
+      italic: boolean
+      h1: boolean
+      h2: boolean
+      bulletList: boolean
+    }
+  | { kind: 'clip'; attrs: ClipBlockNodeAttrs }
+  | null
+
+/** A single-field comment draft can be opened from a text selection or a
+ * selected clip node — the shared popup swaps to `SelectionToolbar`'s draft
+ * mode either way; only where the resulting `Comment` gets anchored differs. */
+type CommentDraftTarget = { kind: 'text' } | { kind: 'clip'; nodeId: string }
 
 interface DocumentEditorProps {
   projectId: string
@@ -53,6 +96,9 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const createDocumentComment = useCreateDocumentComment(documentId)
   const pendingInsert = useDocumentPanelStore((s) => s.pendingInsert)
   const consumePendingInsert = useDocumentPanelStore((s) => s.consumePendingInsert)
+  const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
+  const activeVideoId = usePlaybackStore((s) => s.activeVideoId)
+  const playSelection = usePlaybackStore((s) => s.playSelection)
   const selectComment = useCommentsStore((s) => s.select)
   const client = useQueryClient()
 
@@ -62,8 +108,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const [initialized, setInitialized] = useState(false)
   const [title, setTitle] = useState('')
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [hasTextSelection, setHasTextSelection] = useState(false)
-  const [commentDraftOpen, setCommentDraftOpen] = useState(false)
+  const [commentDraft, setCommentDraft] = useState<CommentDraftTarget | null>(null)
   const [commentDraftText, setCommentDraftText] = useState('')
 
   // Set right after applying a comment mark; cleared once that specific save
@@ -156,24 +201,44 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
       .run()
   }, [editor, initialized])
 
-  // Track whether the current selection is a non-empty text range (as
-  // opposed to an empty caret or a NodeSelection over a clip), which is what
-  // a document-wide selection toolbar would key off; this interim "Comment"
-  // button is what E6's shared BubbleMenu/SelectionToolbar replaces.
-  useEffect(() => {
-    if (!editor) return
-    function update() {
+  // Derives what the shared BubbleMenu popup should show from the editor's
+  // live selection. `useEditorState` only re-renders this component when the
+  // selector's (deep-equal) output actually changes, so dragging to extend a
+  // text selection re-renders on every character (the `text` field changes)
+  // while toggling a mark elsewhere in an unrelated selection does not.
+  const bubbleSelection = useEditorState<BubbleSelection>({
+    editor,
+    selector: ({ editor }) => {
+      if (!editor) return null
       const { selection } = editor.state
-      setHasTextSelection(!selection.empty && !isNodeSelection(selection))
+      if (selection.empty) return null
+      if (isNodeSelection(selection)) {
+        if (selection.node.type.name !== 'clipBlock') return null
+        return { kind: 'clip', attrs: selection.node.attrs as ClipBlockNodeAttrs }
+      }
+      return {
+        kind: 'text',
+        from: selection.from,
+        to: selection.to,
+        text: editor.state.doc.textBetween(selection.from, selection.to, ' '),
+        bold: editor.isActive('bold'),
+        italic: editor.isActive('italic'),
+        h1: editor.isActive('heading', { level: 1 }),
+        h2: editor.isActive('heading', { level: 2 }),
+        bulletList: editor.isActive('bulletList'),
+      }
+    },
+  })
+
+  // Closing the popup's draft (e.g. Escape, or clicking elsewhere collapses
+  // the selection) shouldn't leave a stale draft armed for whatever gets
+  // selected next.
+  useEffect(() => {
+    if (!bubbleSelection) {
+      setCommentDraft(null)
+      setCommentDraftText('')
     }
-    update()
-    editor.on('selectionUpdate', update)
-    editor.on('transaction', update)
-    return () => {
-      editor.off('selectionUpdate', update)
-      editor.off('transaction', update)
-    }
-  }, [editor])
+  }, [bubbleSelection])
 
   // Push each comment's live resolved state into the decoration plugin's own
   // state via a transaction, rather than storing it redundantly on the mark
@@ -202,25 +267,119 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     return map
   }, [comments])
 
-  function createClipComment(nodeId: string, text: string) {
-    createDocumentComment.mutate({ clipNodeId: nodeId, text })
+  async function submitCommentDraft() {
+    if (!editor || !commentDraft) return
+    const text = commentDraftText.trim()
+    if (!text) return
+    if (commentDraft.kind === 'clip') {
+      createDocumentComment.mutate({ clipNodeId: commentDraft.nodeId, text })
+    } else {
+      const { from, to } = editor.state.selection
+      if (from === to) return
+      const comment = await createDocumentComment.mutateAsync({ clipNodeId: null, text })
+      pendingMarkSaveRef.current = { commentId: comment.id, from, to }
+      editor
+        .chain()
+        .setTextSelection({ from, to })
+        .setMark('comment', { commentId: comment.id })
+        .run()
+    }
+    setCommentDraftText('')
+    setCommentDraft(null)
   }
 
-  async function submitTextComment() {
-    if (!editor) return
-    const text = commentDraftText.trim()
-    const { from, to } = editor.state.selection
-    if (!text || from === to) return
-    const comment = await createDocumentComment.mutateAsync({ clipNodeId: null, text })
-    pendingMarkSaveRef.current = { commentId: comment.id, from, to }
-    editor
-      .chain()
-      .setTextSelection({ from, to })
-      .setMark('comment', { commentId: comment.id })
-      .run()
-    setCommentDraftText('')
-    setCommentDraftOpen(false)
+  // Reuses VideoWorkspace's own player when it's already open on this clip's
+  // video (so there's never two players for the same video); otherwise asks
+  // the panel to preview the clip in its own player (see ClipPreviewPlayer).
+  function playClip(attrs: ClipBlockNodeAttrs) {
+    if (attrs.start_time === undefined || attrs.end_time === undefined) return
+    if (attrs.videoId === activeVideoId && playSelection) {
+      playSelection(attrs.start_time, attrs.end_time)
+    } else {
+      setPreviewClip({
+        videoId: attrs.videoId,
+        startTime: attrs.start_time,
+        endTime: attrs.end_time,
+      })
+    }
   }
+
+  const bubbleActions: ToolbarAction[] = !bubbleSelection
+    ? []
+    : bubbleSelection.kind === 'clip'
+      ? [
+          {
+            id: 'play',
+            icon: PlayIcon,
+            label: 'Play clip',
+            variant: 'primary',
+            onClick: () => playClip(bubbleSelection.attrs),
+          },
+          {
+            id: 'comment',
+            icon: CommentIcon,
+            label: 'Comment',
+            variant: 'highlight',
+            onClick: () => {
+              setCommentDraftText('')
+              setCommentDraft({ kind: 'clip', nodeId: bubbleSelection.attrs.nodeId })
+            },
+          },
+          {
+            id: 'remove',
+            icon: TrashIcon,
+            label: 'Remove clip',
+            variant: 'danger',
+            onClick: () => editor?.chain().deleteSelection().run(),
+          },
+        ]
+      : [
+          {
+            id: 'bold',
+            icon: BoldIcon,
+            label: 'Bold',
+            active: bubbleSelection.bold,
+            onClick: () => editor?.chain().focus().toggleBold().run(),
+          },
+          {
+            id: 'italic',
+            icon: ItalicIcon,
+            label: 'Italic',
+            active: bubbleSelection.italic,
+            onClick: () => editor?.chain().focus().toggleItalic().run(),
+          },
+          {
+            id: 'h1',
+            icon: Heading1Icon,
+            label: 'Heading 1',
+            active: bubbleSelection.h1,
+            onClick: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(),
+          },
+          {
+            id: 'h2',
+            icon: Heading2Icon,
+            label: 'Heading 2',
+            active: bubbleSelection.h2,
+            onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+          },
+          {
+            id: 'bulletList',
+            icon: BulletListIcon,
+            label: 'Bullet list',
+            active: bubbleSelection.bulletList,
+            onClick: () => editor?.chain().focus().toggleBulletList().run(),
+          },
+          {
+            id: 'comment',
+            icon: CommentIcon,
+            label: 'Comment',
+            variant: 'highlight',
+            onClick: () => {
+              setCommentDraftText('')
+              setCommentDraft({ kind: 'text' })
+            },
+          },
+        ]
 
   // Opens the comment thread for a clicked comment span — a stand-in for
   // E6's shared popup, reusing the same `useCommentsStore` selection state
@@ -314,49 +473,48 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
           again.
         </div>
       )}
-      {/* Interim selection trigger — Phase E6 replaces this with a BubbleMenu
-          rendering the shared SelectionToolbar (Phase E5). */}
-      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-1.5">
-        <button
-          type="button"
-          disabled={!hasTextSelection}
-          onClick={() => setCommentDraftOpen((open) => !open)}
-          className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-        >
-          Comment
-        </button>
-        {commentDraftOpen && (
-          <>
-            <input
-              autoFocus
-              value={commentDraftText}
-              onChange={(e) => setCommentDraftText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void submitTextComment()
-                if (e.key === 'Escape') setCommentDraftOpen(false)
-              }}
-              placeholder="Add a comment…"
-              className="flex-1 rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-700 focus:border-sky-400 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => void submitTextComment()}
-              className="rounded bg-slate-800 px-2 py-0.5 text-xs text-white hover:bg-slate-700"
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              onClick={() => setCommentDraftOpen(false)}
-              className="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-          </>
-        )}
-      </div>
-      <DocumentCommentsContext.Provider value={{ clipCommentStatus, createClipComment }}>
-        <div className="flex-1 overflow-y-auto" onClick={handleContentClick}>
+      <DocumentCommentsContext.Provider value={{ clipCommentStatus }}>
+        <div className="relative flex-1 overflow-y-auto" onClick={handleContentClick}>
+          <BubbleMenu
+            editor={editor}
+            shouldShow={shouldShowBubble}
+            className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+          >
+            {commentDraft ? (
+              <SelectionToolbar
+                mode="draft"
+                draft={{
+                  label: 'Comment:',
+                  value: commentDraftText,
+                  placeholder: 'Add a comment…',
+                  onChange: setCommentDraftText,
+                  onConfirm: () => void submitCommentDraft(),
+                  onCancel: () => setCommentDraft(null),
+                  accentClass: 'border-violet-100 bg-violet-50',
+                  inputAccentClass: 'border-violet-400',
+                }}
+              />
+            ) : (
+              bubbleSelection && (
+                <SelectionToolbar
+                  mode="actions"
+                  summary={
+                    bubbleSelection.kind === 'clip'
+                      ? {
+                          text: bubbleSelection.attrs.excerpt ?? 'Clip',
+                          timecode:
+                            bubbleSelection.attrs.start_time !== undefined &&
+                            bubbleSelection.attrs.end_time !== undefined
+                              ? `${formatTime(bubbleSelection.attrs.start_time)} – ${formatTime(bubbleSelection.attrs.end_time)}`
+                              : undefined,
+                        }
+                      : { text: bubbleSelection.text }
+                  }
+                  actions={bubbleActions}
+                />
+              )
+            )}
+          </BubbleMenu>
           <EditorContent editor={editor} className="prose prose-sm max-w-none px-4 py-3" />
         </div>
       </DocumentCommentsContext.Provider>
