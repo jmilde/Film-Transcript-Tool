@@ -14,13 +14,22 @@ declare module '@tiptap/core' {
 }
 
 /**
- * Where "Add to Document" should insert the next clip, held purely as
- * ProseMirror plugin state — never a raw integer in a Zustand store, which
- * would go stale the instant an edit shifted positions around it. Plugin
- * state is mapped through `tr.mapping` on every transaction automatically,
- * so it stays attached to the right spot even after unrelated edits
- * elsewhere in the document. Rendered as a thin `Decoration.widget` bar so
- * the user can see where it is.
+ * Where "Add to Document" should insert the next clip. Tracked
+ * automatically from wherever the cursor last was in this document (see
+ * `DocumentEditor`'s `selectionUpdate` listener) rather than a manual
+ * "mark insert point" action, and held purely as ProseMirror plugin state
+ * — never a raw integer in a Zustand store, which would go stale the
+ * instant an edit shifted positions around it. Plugin state is mapped
+ * through `tr.mapping` on every transaction automatically, so it stays
+ * attached to the right spot even after unrelated edits elsewhere in the
+ * document.
+ *
+ * Rendered as a `Decoration.widget` bar with a soft halo and a gentle
+ * pulse so it reads as "live" — and, since it's a document decoration
+ * rather than the native browser selection, it keeps rendering even after
+ * the editor loses focus (e.g. the user clicks into the search or chat
+ * panel while writing), which is the whole point: the marker should look
+ * like it "stays" where the cursor was.
  */
 export const InsertMarker = Extension.create({
   name: 'insertMarker',
@@ -45,7 +54,8 @@ export const InsertMarker = Extension.create({
               Decoration.widget(pos, () => {
                 const bar = document.createElement('span')
                 bar.setAttribute('data-insert-marker', '')
-                bar.className = 'mx-px inline-block h-4 w-0.5 align-middle bg-sky-500'
+                bar.className =
+                  'mx-px inline-block h-4 w-0.5 animate-pulse rounded-sm align-middle bg-sky-500 shadow-[0_0_0_3px_rgba(56,189,248,0.35)]'
                 return bar
               }),
             ])

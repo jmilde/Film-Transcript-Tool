@@ -37,7 +37,6 @@ import {
   Heading1Icon,
   Heading2Icon,
   ItalicIcon,
-  PinIcon,
   PlayIcon,
   TrashIcon,
 } from '../../components/icons'
@@ -244,11 +243,10 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     }
   }, [bubbleSelection])
 
-  // Read reactively (rather than only at click-time) so the "mark/clear
-  // insert point" affordance and the panel-store flag stay in sync with the
-  // plugin's own state, including when it's cleared by a document switch
-  // (the editor is torn down and rebuilt fresh for a new `documentId`, so a
-  // new plugin instance starts at `null`).
+  // Read reactively (rather than only at click-time) so the panel-store flag
+  // stays in sync with the plugin's own state, including when it's cleared
+  // by a document switch (the editor is torn down and rebuilt fresh for a
+  // new `documentId`, so a new plugin instance starts at `null`).
   const insertMarkerPos = useEditorState<number | null>({
     editor,
     selector: ({ editor }) =>
@@ -259,14 +257,23 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     setInsertMarkerDocumentId(insertMarkerPos !== null ? documentId : null)
   }, [insertMarkerPos, documentId, setInsertMarkerDocumentId])
 
-  function markInsertPointHere() {
+  // The insert point is tracked automatically from wherever the cursor last
+  // was — no manual "mark insert point" action. `setInsertMarker` only sets
+  // plugin-state meta (no doc change), so this never trips the autosave
+  // debounce above. The marker's own decoration (insertMarker.ts) renders
+  // regardless of focus, which is what keeps it visible after the user
+  // clicks outside the editor (e.g. into the search or chat panel) instead
+  // of disappearing along with the native selection.
+  useEffect(() => {
     if (!editor) return
-    editor.commands.setInsertMarker(editor.state.selection.to)
-  }
-
-  function clearInsertPoint() {
-    editor?.commands.clearInsertMarker()
-  }
+    function handleSelectionUpdate() {
+      editor.commands.setInsertMarker(editor.state.selection.to)
+    }
+    editor.on('selectionUpdate', handleSelectionUpdate)
+    return () => {
+      editor.off('selectionUpdate', handleSelectionUpdate)
+    }
+  }, [editor])
 
   // Push each comment's live resolved state into the decoration plugin's own
   // state via a transaction, rather than storing it redundantly on the mark
@@ -520,31 +527,6 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         aria-label="Document title"
         className="border-b border-slate-200 px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none"
       />
-      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-1.5 text-xs text-slate-500">
-        <PinIcon
-          className={`h-3.5 w-3.5 ${insertMarkerPos !== null ? 'text-sky-500' : 'text-slate-300'}`}
-        />
-        {insertMarkerPos !== null ? (
-          <>
-            <span>Insert point set</span>
-            <button
-              type="button"
-              onClick={clearInsertPoint}
-              className="ml-auto rounded px-1.5 py-0.5 font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-            >
-              Clear insert point
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={markInsertPointHere}
-            className="ml-auto rounded px-1.5 py-0.5 font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-          >
-            Mark insert point here
-          </button>
-        )}
-      </div>
       {isDocumentConflict(updateDocument.error) && (
         <div className="flex items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
           <span>This document was edited by someone else. Your change was not saved.</span>

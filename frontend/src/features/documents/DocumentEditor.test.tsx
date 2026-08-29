@@ -438,15 +438,17 @@ describe('DocumentEditor', () => {
       )
     }
 
-    it('lands a queued insert at the marked position, then advances the marker past it', async () => {
+    it('lands a queued insert at the cursor position, then advances the marker past it', async () => {
       mockClipRoutes()
       const { container } = renderEditor()
       const paragraph = await screen.findByText('Hello there')
       await userEvent.click(paragraph)
+      // Placing the cursor is enough — the marker is tracked automatically,
+      // no separate "mark insert point" action.
       selectWithinText(container, 'Hello there', 6, 6) // collapsed cursor before "there"
-
-      await userEvent.click(await screen.findByRole('button', { name: 'Mark insert point here' }))
-      expect(await screen.findByText('Insert point set')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(container.querySelector('[data-insert-marker]')).toBeInTheDocument()
+      })
 
       useDocumentPanelStore.getState().queueInsert({
         transcriptId: 't-1',
@@ -460,7 +462,7 @@ describe('DocumentEditor', () => {
       })
       // The marker isn't consumed by the insert — it stays set, having
       // advanced to just after the node that was just inserted.
-      expect(screen.getByText('Insert point set')).toBeInTheDocument()
+      expect(container.querySelector('[data-insert-marker]')).toBeInTheDocument()
 
       useDocumentPanelStore.getState().queueInsert({
         transcriptId: 't-1',
@@ -488,19 +490,11 @@ describe('DocumentEditor', () => {
     // this describe block's other tests prove `DocumentEditor` reads that
     // mapped position correctly at insert time.
 
-    it('clears the marker on demand, falling back to end-of-document inserts', async () => {
+    it('falls back to end-of-document inserts before the cursor has ever been placed', async () => {
       mockClipRoutes()
       const { container } = renderEditor()
-      const paragraph = await screen.findByText('Hello there')
-      await userEvent.click(paragraph)
-      selectWithinText(container, 'Hello there', 6, 6)
-      await userEvent.click(await screen.findByRole('button', { name: 'Mark insert point here' }))
-      expect(await screen.findByText('Insert point set')).toBeInTheDocument()
-
-      await userEvent.click(screen.getByRole('button', { name: 'Clear insert point' }))
-      expect(
-        await screen.findByRole('button', { name: 'Mark insert point here' }),
-      ).toBeInTheDocument()
+      await screen.findByText('Hello there')
+      expect(container.querySelector('[data-insert-marker]')).not.toBeInTheDocument()
 
       useDocumentPanelStore.getState().queueInsert({
         transcriptId: 't-1',

@@ -465,11 +465,15 @@ the same way regardless of anchor kind.
 - pending clip insert (queued until the editor is ready to receive it)
 - preview clip (set when a clip's video isn't already open in the video
   workspace, so the panel renders its own preview player)
-- insert-marker flag: whether the active document currently has an
-  insert point marked (not the position itself, which lives in the
-  editor's own ProseMirror plugin state so it stays correctly mapped
-  through edits) — lets other components render "a marker is set"
-  without reaching into the editor instance
+- insert-marker flag: whether the active document currently has an insert
+  point marked (not the position itself, which lives in the editor's own
+  ProseMirror plugin state so it stays correctly mapped through edits) —
+  lets other components render "a marker is set" without reaching into the
+  editor instance. The marker itself is set automatically from wherever the
+  cursor last was in the document (no manual "mark insert point" action),
+  and its decoration keeps rendering after the editor loses focus, so it
+  stays visible while browsing/searching/asking elsewhere before the next
+  clip is queued.
 
 ---
 
