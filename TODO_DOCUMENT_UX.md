@@ -86,9 +86,9 @@ not re-litigate these while implementing):
 - [x] Verify: `make check` green (two unrelated pre-existing/flaky failures confirmed independent of this change: `test_build_document_resolves_speaker_name` fails identically on the pre-E2 base commit; `test_export_lifecycle`'s Postgres connection drop passes on rerun)
 
 ## Phase E3 — Frontend: unified comments data layer
-- [ ] Regenerate API client types (`npm run gen:api` or equivalent) against the new discriminated `CommentRead`
-- [ ] `frontend/src/api/hooks/useComments.ts`: add `useDocumentComments(documentId)`, `useCreateDocumentComment(documentId)`
-- [ ] Verify: `typecheck`/`lint` green; hook tests (MSW-backed, mirroring existing `useComments` test conventions)
+- [x] Regenerate API client types (`npm run gen:api` or equivalent) against the new discriminated `CommentRead`
+- [x] `frontend/src/api/hooks/useComments.ts`: add `useDocumentComments(documentId)`, `useCreateDocumentComment(documentId)`
+- [x] Verify: `typecheck`/`lint` green; hook tests (MSW-backed, mirroring existing `useComments` test conventions)
 
 ## Phase E4 — Clip references as inline text + TipTap comment mark
 - [ ] `frontend/src/features/documents/clipBlockNode.ts`: change `group: 'block'` → `group: 'inline', inline: true` (keep `atom: true`, `selectable: true`, `draggable: false`, same name/attrs/`insertClipBlockAt` command — no backend change needed, `resolve_document_content`'s tree-walk doesn't care about block-vs-inline); move `parseHTML`/`renderHTML` from `div[data-clip-block]` to `span[data-clip-block]`

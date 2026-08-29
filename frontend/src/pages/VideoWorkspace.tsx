@@ -6,7 +6,7 @@ import { useProject } from '../api/hooks/useProjects'
 import { proxyUrl, useMediaToken, useWaveform } from '../api/hooks/useMedia'
 import { useSpeakers } from '../api/hooks/useSpeakers'
 import { useTranscript, useTranscripts } from '../api/hooks/useTranscripts'
-import { useComments } from '../api/hooks/useComments'
+import { transcriptAnchor, useComments } from '../api/hooks/useComments'
 import { usePlaybackStore } from '../store/playback'
 import { useSelectionStore } from '../store/selection'
 import { useDocumentPanelStore } from '../store/documentPanel'
@@ -142,10 +142,11 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
       )
     } else if (pendingSearch.kind === 'comment' && comments) {
       const comment = comments.find((c) => c.id === pendingSearch.id)
-      if (comment) {
+      const anchor = comment && transcriptAnchor(comment)
+      if (anchor) {
         appliedSearchRef.current = true
-        seek(comment.in_time)
-        setSelectionRange(comment.transcript_id, comment.start_token_id, comment.end_token_id)
+        seek(anchor.in_time)
+        setSelectionRange(anchor.transcript_id, anchor.start_token_id, anchor.end_token_id)
       }
     } else if (pendingSearch.kind === 'speaker') {
       appliedSearchRef.current = true

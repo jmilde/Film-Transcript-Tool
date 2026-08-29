@@ -449,6 +449,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{document_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List For Document */
+        get: operations["list_for_document_documents__document_id__comments_get"];
+        put?: never;
+        /** Create For Document */
+        post: operations["create_for_document_documents__document_id__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/comments/{comment_id}/replies": {
         parameters: {
             query?: never;
@@ -611,7 +629,18 @@ export interface paths {
         put?: never;
         /**
          * Ask
-         * @description Ask a question over the project's transcripts; enqueues no job — synchronous.
+         * @description Ask a question over the project's transcripts; enqueues no job.
+         *
+         *     Streams server-sent events on the same request/response rather than a
+         *     single JSON body: a ``status`` event each time the agent starts a search
+         *     (so the UI can show "Searching for ..." live), then one terminal event —
+         *     ``done`` with the persisted message, or ``error``.
+         *
+         *     A bad ``conversation_id`` is checked here, before the stream starts, so
+         *     it can still be a normal 404 — once ``StreamingResponse`` sends headers
+         *     (200), the status code can no longer change, so ``stream_answer_question``
+         *     turns that same case into an ``error`` event instead as a defensive
+         *     fallback (e.g. a delete racing this request).
          */
         post: operations["ask_projects__project_id__chat_post"];
         delete?: never;
@@ -717,15 +746,6 @@ export interface components {
             question: string;
             /** Conversation Id */
             conversation_id?: string | null;
-        };
-        /** ChatAskResponse */
-        ChatAskResponse: {
-            /**
-             * Conversation Id
-             * Format: uuid
-             */
-            conversation_id: string;
-            message: components["schemas"]["ChatMessageRead"];
         };
         /**
          * ChatCitation
@@ -920,11 +940,6 @@ export interface components {
              */
             id: string;
             /**
-             * Transcript Id
-             * Format: uuid
-             */
-            transcript_id: string;
-            /**
              * Created By
              * Format: uuid
              */
@@ -933,20 +948,8 @@ export interface components {
             text: string;
             /** Resolved */
             resolved: boolean;
-            /**
-             * Start Token Id
-             * Format: uuid
-             */
-            start_token_id: string;
-            /**
-             * End Token Id
-             * Format: uuid
-             */
-            end_token_id: string;
-            /** In Time */
-            in_time: number;
-            /** Out Time */
-            out_time: number;
+            /** Anchor */
+            anchor: components["schemas"]["TranscriptCommentAnchor"] | components["schemas"]["DocumentCommentAnchorRead"];
             /**
              * Created At
              * Format: date-time
@@ -984,6 +987,30 @@ export interface components {
         CommentUpdate: {
             /** Resolved */
             resolved?: boolean | null;
+        };
+        /** DocumentCommentAnchorRead */
+        DocumentCommentAnchorRead: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "document";
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Clip Node Id */
+            clip_node_id: string | null;
+            /** Excerpt */
+            excerpt: string | null;
+        };
+        /** DocumentCommentCreate */
+        DocumentCommentCreate: {
+            /** Clip Node Id */
+            clip_node_id?: string | null;
+            /** Text */
+            text: string;
         };
         /** DocumentCreate */
         DocumentCreate: {
@@ -1433,6 +1460,33 @@ export interface components {
             tokens: components["schemas"]["TokenSplitPiece"][];
             /** Expected Version */
             expected_version: number;
+        };
+        /** TranscriptCommentAnchor */
+        TranscriptCommentAnchor: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "transcript";
+            /**
+             * Transcript Id
+             * Format: uuid
+             */
+            transcript_id: string;
+            /**
+             * Start Token Id
+             * Format: uuid
+             */
+            start_token_id: string;
+            /**
+             * End Token Id
+             * Format: uuid
+             */
+            end_token_id: string;
+            /** In Time */
+            in_time: number;
+            /** Out Time */
+            out_time: number;
         };
         /** TranscriptRead */
         TranscriptRead: {
@@ -2627,6 +2681,72 @@ export interface operations {
             };
         };
     };
+    list_for_document_documents__document_id__comments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_for_document_documents__document_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentCommentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reply_comments__comment_id__replies_post: {
         parameters: {
             query?: never;
@@ -3013,7 +3133,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatAskResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

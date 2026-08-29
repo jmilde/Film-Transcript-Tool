@@ -9,7 +9,7 @@ import {
   useMergeTokens,
   useSplitToken,
 } from '../../api/hooks/useTokens'
-import { useCreateComment } from '../../api/hooks/useComments'
+import { transcriptAnchor, useCreateComment } from '../../api/hooks/useComments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
@@ -187,8 +187,10 @@ export function TranscriptViewer({
   const commentedTokenInfo = useMemo(() => {
     const map = new Map<string, { resolved: boolean }>()
     for (const comment of comments ?? []) {
-      const a = tokenIndex.get(comment.start_token_id)
-      const b = tokenIndex.get(comment.end_token_id)
+      const anchor = transcriptAnchor(comment)
+      if (!anchor) continue
+      const a = tokenIndex.get(anchor.start_token_id)
+      const b = tokenIndex.get(anchor.end_token_id)
       if (a === undefined || b === undefined) continue
       const [lo, hi] = a <= b ? [a, b] : [b, a]
       for (let i = lo; i <= hi; i++) {
