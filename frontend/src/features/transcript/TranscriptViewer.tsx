@@ -11,6 +11,7 @@ import {
 } from '../../api/hooks/useTokens'
 import { transcriptAnchor, useCreateComment } from '../../api/hooks/useComments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
+import { clipBlockMarkerHtml, writeClipToClipboard } from '../documents/clipClipboard'
 import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
 import { SelectionToolbar } from '../toolbar/SelectionToolbar'
@@ -352,6 +353,28 @@ export function TranscriptViewer({
     clearSelection()
   }
 
+  // Writes both a plain-text and a marker-HTML clipboard entry so pasting
+  // into a document reconstructs an inline clip reference (not just the
+  // excerpt string) while pasting elsewhere still yields plain text — see
+  // `clipClipboard.ts`. Anchored to whichever transcript (original or
+  // translation) is currently on screen, same as `addSelectionToDocument`.
+  function copySelection() {
+    if (!transcript || selectedTokens.length === 0 || !selectionInfo) return
+    void writeClipToClipboard(
+      selectionInfo.text,
+      clipBlockMarkerHtml(
+        {
+          nodeId: crypto.randomUUID(),
+          transcriptId: transcript.id,
+          videoId,
+          startTokenId: selectedTokens[0].id,
+          endTokenId: selectedTokens[selectedTokens.length - 1].id,
+        },
+        selectionInfo.text,
+      ),
+    )
+  }
+
   // Anchors the clip to whichever transcript (original or translation) is
   // currently on screen — not forced to the original, unlike chat citations
   // (see docs/1100_document_builder.md's anchor-resolution rationale).
@@ -387,7 +410,7 @@ export function TranscriptViewer({
         id: 'copy',
         icon: CopyIcon,
         label: 'Copy',
-        onClick: () => void navigator.clipboard.writeText(selectionInfo.text),
+        onClick: copySelection,
       },
     )
     if (canMerge) {

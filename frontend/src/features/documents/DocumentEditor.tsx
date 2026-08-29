@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { isNodeSelection } from '@tiptap/core'
+import { DOMSerializer } from '@tiptap/pm/model'
 import StarterKit from '@tiptap/starter-kit'
 import { shouldShowBubble } from './shouldShowBubble'
 import {
@@ -21,6 +22,7 @@ import { useDocumentPanelStore } from '../../store/documentPanel'
 import { usePlaybackStore } from '../../store/playback'
 import { ClipBlock, stripResolvedClipFields } from './clipBlockNode'
 import type { ClipBlockNodeAttrs } from './clipBlockNode'
+import { writeClipToClipboard } from './clipClipboard'
 import { CommentMark } from './commentMark'
 import { CommentResolvedDecoration, commentResolvedPluginKey } from './commentResolvedDecoration'
 import { InsertMarker, insertMarkerPluginKey } from './insertMarker'
@@ -32,6 +34,7 @@ import {
   BoldIcon,
   BulletListIcon,
   CommentIcon,
+  CopyIcon,
   Heading1Icon,
   Heading2Icon,
   ItalicIcon,
@@ -332,6 +335,26 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     }
   }
 
+  // Writes both a plain-text and an HTML clipboard entry for a text
+  // selection that may contain inline clip nodes — built from the schema's
+  // own DOM serializer, so any embedded `clipBlock` node renders through its
+  // `renderHTML` exactly as `clipBlockNode.ts`'s `parseHTML` expects back on
+  // paste (same round-trip TipTap's own copy/paste already relies on
+  // internally; see `clipClipboard.ts`). `textBetween`'s `leafText` callback
+  // fills in each clip's excerpt for the plain-text entry, since an atom node
+  // otherwise contributes nothing to the default text join.
+  function copyTextSelection(from: number, to: number) {
+    if (!editor) return
+    const text = editor.state.doc.textBetween(from, to, ' ', (node) =>
+      node.type.name === 'clipBlock' ? ((node.attrs as ClipBlockNodeAttrs).excerpt ?? '') : '',
+    )
+    const slice = editor.state.doc.slice(from, to)
+    const fragment = DOMSerializer.fromSchema(editor.schema).serializeFragment(slice.content)
+    const container = document.createElement('div')
+    container.appendChild(fragment)
+    void writeClipToClipboard(text, container.innerHTML)
+  }
+
   const bubbleActions: ToolbarAction[] = !bubbleSelection
     ? []
     : bubbleSelection.kind === 'clip'
@@ -396,6 +419,12 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
             label: 'Bullet list',
             active: bubbleSelection.bulletList,
             onClick: () => editor?.chain().focus().toggleBulletList().run(),
+          },
+          {
+            id: 'copy',
+            icon: CopyIcon,
+            label: 'Copy',
+            onClick: () => copyTextSelection(bubbleSelection.from, bubbleSelection.to),
           },
           {
             id: 'comment',

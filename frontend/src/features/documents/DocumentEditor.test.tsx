@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DocumentEditor } from './DocumentEditor'
 import { AuthProvider } from '../../auth/AuthProvider'
 import { useCommentsStore } from '../../store/comments'
@@ -58,6 +58,11 @@ function renderEditor(documentId: string = DOCUMENT_ID) {
     </QueryClientProvider>,
   )
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  delete (navigator.clipboard as { write?: unknown }).write
+})
 
 describe('DocumentEditor', () => {
   it('loads and renders the document content', async () => {
@@ -341,6 +346,36 @@ describe('DocumentEditor', () => {
         expect(container.querySelector('strong')).toHaveTextContent('Hello')
       })
       expect(screen.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('writes both clipboard MIME entries via Copy for a text selection', async () => {
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
+      )
+      class FakeClipboardItem {
+        data: Record<string, Blob>
+        constructor(data: Record<string, Blob>) {
+          this.data = data
+        }
+      }
+      const write = vi.fn(async (_items: unknown[]) => {})
+      vi.stubGlobal('ClipboardItem', FakeClipboardItem)
+      navigator.clipboard.write = write
+
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 0, 5) // "Hello"
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Copy' }))
+
+      expect(write).toHaveBeenCalledTimes(1)
+      const item = write.mock.calls[0]?.[0]?.[0] as FakeClipboardItem
+      expect(await item.data['text/plain']?.text()).toBe('Hello')
+      expect(await item.data['text/html']?.text()).toContain('Hello')
     })
 
     // The clip-selection branch (Play/Comment/Remove for a NodeSelection over

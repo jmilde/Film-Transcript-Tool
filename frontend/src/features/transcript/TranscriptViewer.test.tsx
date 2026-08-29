@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TranscriptViewer } from './TranscriptViewer'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
@@ -70,6 +70,11 @@ beforeEach(() => {
   usePlaybackStore.setState({ autoFollow: true })
   useSelectionStore.getState().clear()
   useDocumentPanelStore.setState({ isOpen: false, pendingInsert: null })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  delete (navigator.clipboard as { write?: unknown }).write
 })
 
 function renderViewer(onPlaySelection = vi.fn(), canEdit = true) {
@@ -184,6 +189,37 @@ describe('TranscriptViewer', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Copy' }))
     expect(writeText).toHaveBeenCalledWith('Hello world')
+  })
+
+  it('also writes a clip marker HTML entry when the Clipboard write API is available', async () => {
+    class FakeClipboardItem {
+      data: Record<string, Blob>
+      constructor(data: Record<string, Blob>) {
+        this.data = data
+      }
+    }
+    const write = vi.fn(async (_items: unknown[]) => {})
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem)
+    navigator.clipboard.write = write
+
+    renderViewer()
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy' }))
+
+    expect(write).toHaveBeenCalledTimes(1)
+    const item = write.mock.calls[0]?.[0]?.[0] as FakeClipboardItem
+    expect(await item.data['text/plain']?.text()).toBe('Hello world')
+    const html = await item.data['text/html']?.text()
+    expect(html).toContain('data-clip-block')
+    expect(html).toContain('transcriptId="t-1"')
+    expect(html).toContain('videoId="vid-1"')
+    expect(html).toContain('startTokenId="tok-a"')
+    expect(html).toContain('endTokenId="tok-b"')
+    expect(html).toContain('excerpt="Hello world"')
+    expect(html).toContain('>Hello world<')
   })
 
   it('clears the selection', async () => {
