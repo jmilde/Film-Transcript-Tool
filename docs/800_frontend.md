@@ -110,7 +110,11 @@ fight over space and resize/collapse using identical mechanics:
 
 The document panel's `Panel` is `collapsible`, collapsing to a thin
 toggle rail (matching `collapsedSize`) when closed rather than unmounting
-— it stays mounted across navigation. See §19 Document Builder UI.
+— it stays mounted across navigation. Its `minSize` is a fixed pixel value
+(not a percentage of the `Group`), so it can't be dragged down to an
+unusably narrow width on a smaller window — it either sits at a real
+working width or collapses to the rail, never something in between that's
+too cramped to use. See §19 Document Builder UI.
 
 ---
 
@@ -329,9 +333,10 @@ Selecting a result:
 - seeks to the location
 - highlights the transcript range
 
-A transcript-text result also offers "add to document" (§19), queuing a
-single-token clip insert — speaker/comment results have no token range to
-anchor to, so they don't.
+Search results do not offer "add to document" — that entry point exists
+only from a live transcript selection (§10), so a clip's anchor is always
+chosen deliberately from the transcript itself rather than from a search
+snippet.
 
 ---
 
@@ -364,8 +369,9 @@ Selecting a citation card:
 - highlights the full cited token range in the **original** transcript pane,
   even when the citation matched via a translation
 
-A citation card also offers "add to document" (§19), queuing the cited
-range as a clip insert.
+A citation card does not offer "add to document" — same reasoning as
+Search UI above; the only entry point for a clip insert is a transcript
+selection (§10).
 
 ---
 
@@ -498,20 +504,20 @@ Comment action — it is not a `note` attribute stored on the clip node
 itself, so clip annotations get the same reply/resolve/search treatment
 as any other comment instead of a bespoke field.
 
-Add-to-document entry points (§10 Transcript Selection, §15 Chat UI's
-citation cards, §14 Search UI's results) queue a clip insert; if the panel
-or its editor isn't mounted yet, the insert is queued and applied once it
-is, so nothing is silently dropped.
+The only add-to-document entry point is a transcript selection (§10) —
+Search results and chat citation cards don't offer it (§14, §15). Queuing
+a clip insert this way opens the panel if closed; if the panel or its
+editor isn't mounted yet, the insert is queued and applied once it is, so
+nothing is silently dropped.
 
 ## Player Coordination
 
-Clicking a clip block's play button:
-
-- reuses the video workspace's existing player if that page is already
-  open on the clip's video, seeking within it — never a second player for
-  the same video at once
-- otherwise, the panel plays the clip in its own lightweight preview
-  player (no waveform/transcript sync, unlike the full workspace player)
+Clicking a clip reference's Play action always plays it in the document
+panel's own lightweight preview player (no waveform/transcript sync, unlike
+the full workspace player) — never the video workspace's player, even when
+that page is already open on the same video. The two players are kept
+fully separate on purpose, so writing in the document panel can never
+hijack or reseek whatever the user has open in the workspace.
 
 Both players render identical play/pause/±5s-skip/2x-speed chrome from
 one shared, purely-presentational control component: the workspace

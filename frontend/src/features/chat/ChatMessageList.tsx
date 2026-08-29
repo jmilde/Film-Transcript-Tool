@@ -5,7 +5,6 @@ import type { ChatCitation, ChatMessage } from '../../api/hooks/useChat'
 interface ChatMessageListProps {
   messages: ChatMessage[]
   onSelectCitation: (citation: ChatCitation) => void
-  canEdit: boolean
   /** The question just submitted, shown immediately rather than waiting for
    * the round trip to finish and the conversation to refetch. */
   pendingQuestion?: string | null
@@ -50,7 +49,6 @@ function renderAnswer(
   content: string,
   citations: ChatCitation[] | null,
   onSelectCitation: (citation: ChatCitation) => void,
-  canEdit: boolean,
 ): ReactNode[] {
   const byMarker = new Map((citations ?? []).map((citation) => [citation.marker, citation]))
   const parts: ReactNode[] = []
@@ -65,12 +63,7 @@ function renderAnswer(
     const citation = byMarker.get(Number(match[1]))
     parts.push(
       citation ? (
-        <ChatCitationCard
-          key={key++}
-          citation={citation}
-          onClick={() => onSelectCitation(citation)}
-          canEdit={canEdit}
-        />
+        <ChatCitationCard key={key++} citation={citation} onClick={() => onSelectCitation(citation)} />
       ) : (
         <span key={key++}>{match[0]}</span>
       ),
@@ -87,7 +80,6 @@ function renderAnswer(
 export function ChatMessageList({
   messages,
   onSelectCitation,
-  canEdit,
   pendingQuestion,
   isAnswering,
   statusMessage,
@@ -103,7 +95,7 @@ export function ChatMessageList({
           </div>
         ) : (
           <div key={message.id} className="max-w-lg space-y-1 text-sm text-slate-800">
-            {renderAnswer(message.content, message.citations, onSelectCitation, canEdit)}
+            {renderAnswer(message.content, message.citations, onSelectCitation)}
           </div>
         ),
       )}

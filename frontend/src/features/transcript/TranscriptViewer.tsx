@@ -25,7 +25,6 @@ import {
   EditIcon,
   PlayIcon,
   SearchIcon,
-  TrashIcon,
 } from '../../components/icons'
 import type { ToolbarAction } from '../toolbar/SelectionToolbar'
 import type { Speaker } from '../../api/hooks/useSpeakers'
@@ -60,9 +59,12 @@ interface SpeakerGroup {
  * it into view. Consecutive segments spoken by the same speaker are grouped
  * under a single speaker header, matching how the transcript reads out loud.
  * Clicking a token seeks the video there; dragging across tokens selects a
- * range, showing its text/timecodes and play/copy/edit/comment/delete
- * actions. Double-clicking a token edits its text inline — clearing it
- * deletes the token, typing a space splits it into multiple tokens. Ranges
+ * range, showing its text/timecodes and play/copy/edit/comment actions —
+ * there is no separate delete action; clearing the Edit draft to empty text
+ * deletes the whole selection, the same "clear it to delete it" rule
+ * double-clicking a single token already uses. Double-clicking a token edits
+ * its text inline — clearing it deletes the token, typing a space splits it
+ * into multiple tokens. Ranges
  * covered by a comment are underlined (violet while unresolved, gray once
  * resolved). An inline search finds and steps through matches in this
  * transcript.
@@ -332,11 +334,24 @@ export function TranscriptViewer({
     setEditingText(token.text)
   }
 
+  // Clearing the draft to empty deletes the whole selection, regardless of
+  // segment span — mirrors the single-token double-click-to-clear pattern
+  // (commitEdit above), so there's one "clear text to delete" rule instead of
+  // a separate Delete action. Replacing with non-empty text is still a real
+  // merge, which the backend only allows within one segment; a cross-segment
+  // selection with non-empty text is left as a no-op (draft stays open) since
+  // there's no destination token to write it to.
   function confirmMerge() {
-    if (mergeDraft === null || mergeDraft.trim() === '') return
+    if (mergeDraft === null) return
+    const trimmed = mergeDraft.trim()
+    if (trimmed === '') {
+      deleteSelection()
+      return
+    }
+    if (!canMerge) return
     mergeTokens.mutate({
       tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
-      text: mergeDraft.trim(),
+      text: trimmed,
     })
     setMergeDraft(null)
     clearSelection()
@@ -393,6 +408,7 @@ export function TranscriptViewer({
     deleteTokens.mutate({
       tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
     })
+    setMergeDraft(null)
     clearSelection()
   }
 
@@ -413,15 +429,13 @@ export function TranscriptViewer({
         onClick: copySelection,
       },
     )
-    if (canMerge) {
+    if (canEdit) {
       toolbarActions.push({
         id: 'edit',
         icon: EditIcon,
         label: 'Edit',
         onClick: () => setMergeDraft(selectionInfo.text),
       })
-    }
-    if (canEdit) {
       toolbarActions.push({
         id: 'comment',
         icon: CommentIcon,
@@ -434,13 +448,6 @@ export function TranscriptViewer({
         icon: DocumentIcon,
         label: 'Add to Document',
         onClick: addSelectionToDocument,
-      })
-      toolbarActions.push({
-        id: 'delete',
-        icon: TrashIcon,
-        label: 'Delete',
-        variant: 'danger',
-        onClick: deleteSelection,
       })
     }
   }

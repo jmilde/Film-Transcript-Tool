@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAskChat, useChatConversation, useChatConversations } from '../api/hooks/useChat'
 import type { ChatCitation } from '../api/hooks/useChat'
-import { useProject } from '../api/hooks/useProjects'
 import { ChatHistorySidebar } from '../features/chat/ChatHistorySidebar'
 import { ChatInput } from '../features/chat/ChatInput'
 import { ChatMessageList } from '../features/chat/ChatMessageList'
@@ -41,8 +40,6 @@ function ChatPageInner({
   const { data: conversations } = useChatConversations(projectId)
   const { data: messages } = useChatConversation(projectId, conversationId)
   const ask = useAskChat(projectId)
-  const { data: project } = useProject(projectId)
-  const canEdit = project ? project.my_role !== 'viewer' : false
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
 
   const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
@@ -115,7 +112,6 @@ function ChatPageInner({
             <ChatMessageList
               messages={messages ?? []}
               onSelectCitation={handleSelectCitation}
-              canEdit={canEdit}
               pendingQuestion={pendingQuestion}
               isAnswering={ask.isPending}
               statusMessage={ask.statusMessage}

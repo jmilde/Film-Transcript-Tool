@@ -186,31 +186,32 @@ panel. It collapses to a thin toggle rail when closed (`collapsedSize`,
 not unmounted), and stays mounted across navigation between the project
 view, search, chat, and the video workspace.
 
-**Insert-queue flow:** an "Add to Document" entry point (transcript
-selection, chat citation, search hit) never touches the editor directly.
-It queues the minimal reference ids in a shared panel store; that store
-action opens the panel if closed. Once the target document's editor is
+**Insert-queue flow:** the only "Add to Document" entry point is a
+transcript selection (`docs/800_frontend.md` §10) — chat citations and
+search hits don't offer it, so a clip's anchor is always chosen
+deliberately from the transcript itself. It never touches the editor
+directly: it queues the minimal reference ids in a shared panel store,
+which opens the panel if closed. Once the target document's editor is
 mounted, it consumes the queued payload, resolves its display fields via
 the clip-blocks/resolve endpoint (§4), and inserts the node — so nothing
 is silently dropped if the panel or editor wasn't ready yet.
 
 **Player coordination:** clicking a clip reference's Play action (§7's
-bubble menu) reuses the video workspace's own player when that page is
-already open on the clip's video (seeking within it — never a second
-player for the same video at once); otherwise the panel renders its own
-lightweight preview player. That preview player deliberately does not
-share the video workspace's global playback state (current time,
-duration, waveform sync) — a second writer to that shared state would
-corrupt the workspace's own display for an unrelated video. It has no
-waveform or transcript sync, just play/pause/seek for the previewed
-range. Both players render identical chrome (play/pause, ±5s skip, 2x
-speed) from one shared presentational control component — the workspace
-player wires it to the global playback store, the preview player wires
-the same component to local state — so chrome parity is achieved without
-the preview player ever touching the shared store. Because the preview
-player has no accompanying waveform, its ±5s skip buttons are its only
-seek mechanism (the workspace player's primary scrub surface is the
-waveform, not this control row).
+bubble menu) always plays in the panel's own lightweight preview player —
+never the video workspace's player, even when that page is already open on
+the same video. The two are kept fully separate on purpose: writing in the
+document panel must never hijack or reseek whatever the user currently has
+on screen in the workspace. The preview player does not share the video
+workspace's global playback state (current time, duration, waveform sync)
+at all; it has no waveform or transcript sync, just play/pause/seek for the
+previewed range. Both players render identical chrome (play/pause, ±5s
+skip, 2x speed) from one shared presentational control component — the
+workspace player wires it to the global playback store, the preview player
+wires the same component to local state only — so chrome parity is
+achieved without the preview player ever touching the shared store.
+Because the preview player has no accompanying waveform, its ±5s skip
+buttons are its only seek mechanism (the workspace player's primary scrub
+surface is the waveform, not this control row).
 
 ---
 

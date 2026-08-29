@@ -41,12 +41,16 @@ export function AppShell() {
         {/* `collapsedSize` (40px) matches the rail-button width `DocumentPanel`
             renders in its collapsed state, so the panel is never a sliver
             narrower than its own toggle button. */}
+        {/* A percentage minSize can still resolve to an unusably narrow panel
+            on a smaller/split browser window (the toolbar buttons and
+            document switcher row need real horizontal room) — a fixed pixel
+            floor guarantees a working width regardless of window size. */}
         <Panel
           panelRef={documentPanelRef}
           collapsible
           collapsedSize={40}
           defaultSize="25"
-          minSize="20"
+          minSize={320}
         >
           <DocumentPanel panelRef={documentPanelRef} />
         </Panel>

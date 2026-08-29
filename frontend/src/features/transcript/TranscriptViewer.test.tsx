@@ -373,7 +373,7 @@ describe('TranscriptViewer', () => {
     )
   })
 
-  it('deletes the whole selection via the Delete button', async () => {
+  it('deletes the whole selection by clearing the Edit draft to empty', async () => {
     const deleted: string[] = []
     server.use(
       http.delete('http://localhost:8000/tokens/:tokenId', ({ params }) => {
@@ -387,8 +387,61 @@ describe('TranscriptViewer', () => {
     fireEvent.mouseEnter(screen.getByText('world'))
     fireEvent.mouseUp(document)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const mergeInput = screen.getByDisplayValue('Hello world')
+    fireEvent.change(mergeInput, { target: { value: '' } })
+    await userEvent.click(screen.getByText('Confirm'))
+
     await waitFor(() => expect(deleted.sort()).toEqual(['tok-a', 'tok-b']))
+  })
+
+  it('shows Edit for a cross-segment selection but does not merge non-empty replacement text', async () => {
+    let mergeCalled = false
+    server.use(
+      http.post('http://localhost:8000/tokens/merge', () => {
+        mergeCalled = true
+        return HttpResponse.json({})
+      }),
+    )
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const crossSegmentTranscript: Transcript = {
+      ...TRANSCRIPT,
+      segments: [
+        { id: 'seg-1', speaker_id: 'spk-1', tokens: [TRANSCRIPT.segments[0].tokens[0]] },
+        {
+          id: 'seg-2',
+          speaker_id: 'spk-1',
+          tokens: [{ ...TRANSCRIPT.segments[0].tokens[1], segment_id: 'seg-2' }],
+        },
+      ],
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={crossSegmentTranscript}
+          speakers={[SPEAKER]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+          canEdit
+          videoId="vid-1"
+        />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const mergeInput = screen.getByDisplayValue('Hello world')
+    fireEvent.change(mergeInput, { target: { value: "don't" } })
+    await userEvent.click(screen.getByText('Confirm'))
+
+    await new Promise((r) => setTimeout(r, 10))
+    expect(mergeCalled).toBe(false)
+    // The draft stays open since there's no valid destination for the merge.
+    expect(screen.getByDisplayValue("don't")).toBeInTheDocument()
   })
 
   it('merges the selection via the Edit button', async () => {
@@ -615,7 +668,7 @@ describe('TranscriptViewer', () => {
       expect(screen.queryByDisplayValue('world')).not.toBeInTheDocument()
     })
 
-    it('hides Edit, Comment, Add to Document, and Delete from the selection toolbar, keeping Play/Copy', () => {
+    it('hides Edit, Comment, and Add to Document from the selection toolbar, keeping Play/Copy', () => {
       renderViewer(vi.fn(), false)
 
       fireEvent.mouseDown(screen.getByText('Hello'))
@@ -627,7 +680,6 @@ describe('TranscriptViewer', () => {
       expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
     })
   })
 

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
-import { useProject } from '../api/hooks/useProjects'
 import { useSearchGroups } from '../api/hooks/useSearch'
 import type { SearchHit } from '../api/hooks/useSearch'
 import { SearchVideoGroupCard } from '../features/search/SearchVideoGroupCard'
@@ -20,8 +19,6 @@ function SearchPageInner({ projectId }: { projectId: string }) {
 
   const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
   useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
-  const { data: project } = useProject(projectId)
-  const canEdit = project ? project.my_role !== 'viewer' : false
 
   const q = searchParams.get('q') ?? ''
   const [input, setInput] = useState(q)
@@ -93,7 +90,6 @@ function SearchPageInner({ projectId }: { projectId: string }) {
             key={group.video_id}
             group={group}
             onSelectHit={(hit) => handleSelectHit(group.video_id, hit)}
-            canEdit={canEdit}
           />
         ))}
       </div>

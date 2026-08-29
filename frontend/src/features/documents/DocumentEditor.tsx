@@ -19,7 +19,6 @@ import {
 } from '../../api/hooks/useComments'
 import { useCommentsStore } from '../../store/comments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
-import { usePlaybackStore } from '../../store/playback'
 import { ClipBlock, stripResolvedClipFields } from './clipBlockNode'
 import type { ClipBlockNodeAttrs } from './clipBlockNode'
 import { writeClipToClipboard } from './clipClipboard'
@@ -103,8 +102,6 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const consumePendingInsert = useDocumentPanelStore((s) => s.consumePendingInsert)
   const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
   const setInsertMarkerDocumentId = useDocumentPanelStore((s) => s.setInsertMarkerDocumentId)
-  const activeVideoId = usePlaybackStore((s) => s.activeVideoId)
-  const playSelection = usePlaybackStore((s) => s.playSelection)
   const selectComment = useCommentsStore((s) => s.select)
   const client = useQueryClient()
 
@@ -319,20 +316,18 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     setCommentDraft(null)
   }
 
-  // Reuses VideoWorkspace's own player when it's already open on this clip's
-  // video (so there's never two players for the same video); otherwise asks
-  // the panel to preview the clip in its own player (see ClipPreviewPlayer).
+  // Always plays in the panel's own preview player — deliberately never the
+  // video workspace's player, even when that page is already open on the
+  // same video. Keeping the two fully separate means writing in the document
+  // panel never hijacks or reseeks whatever the user has on screen in the
+  // workspace.
   function playClip(attrs: ClipBlockNodeAttrs) {
     if (attrs.start_time === undefined || attrs.end_time === undefined) return
-    if (attrs.videoId === activeVideoId && playSelection) {
-      playSelection(attrs.start_time, attrs.end_time)
-    } else {
-      setPreviewClip({
-        videoId: attrs.videoId,
-        startTime: attrs.start_time,
-        endTime: attrs.end_time,
-      })
-    }
+    setPreviewClip({
+      videoId: attrs.videoId,
+      startTime: attrs.start_time,
+      endTime: attrs.end_time,
+    })
   }
 
   // Writes both a plain-text and an HTML clipboard entry for a text

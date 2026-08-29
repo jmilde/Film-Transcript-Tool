@@ -1,8 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SearchVideoGroupCard } from './SearchVideoGroupCard'
-import { useDocumentPanelStore } from '../../store/documentPanel'
 import type { SearchVideoGroup } from '../../api/hooks/useSearch'
 
 const GROUP: SearchVideoGroup = {
@@ -31,34 +30,18 @@ const GROUP: SearchVideoGroup = {
   ],
 }
 
-beforeEach(() => {
-  useDocumentPanelStore.setState({ isOpen: false, pendingInsert: null })
-})
-
 describe('SearchVideoGroupCard', () => {
-  it('queues a single-token clip insert for a transcript hit, without seeking', async () => {
+  it('seeks on selecting a hit', async () => {
     const onSelectHit = vi.fn()
-    render(<SearchVideoGroupCard group={GROUP} onSelectHit={onSelectHit} canEdit />)
+    render(<SearchVideoGroupCard group={GROUP} onSelectHit={onSelectHit} />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add to Document' }))
+    await userEvent.click(screen.getByText('hello there'))
 
-    expect(useDocumentPanelStore.getState().pendingInsert).toEqual({
-      transcriptId: 't-1',
-      videoId: 'v-1',
-      startTokenId: 'tok-a',
-      endTokenId: 'tok-a',
-    })
-    expect(onSelectHit).not.toHaveBeenCalled()
+    expect(onSelectHit).toHaveBeenCalledWith(GROUP.hits[0])
   })
 
-  it('does not offer Add to Document for a speaker hit (no token to anchor to)', () => {
-    render(<SearchVideoGroupCard group={GROUP} onSelectHit={vi.fn()} canEdit />)
-
-    expect(screen.getAllByRole('button', { name: 'Add to Document' })).toHaveLength(1)
-  })
-
-  it('does not offer Add to Document for a viewer', () => {
-    render(<SearchVideoGroupCard group={GROUP} onSelectHit={vi.fn()} canEdit={false} />)
+  it('does not offer Add to Document for any hit', () => {
+    render(<SearchVideoGroupCard group={GROUP} onSelectHit={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
   })

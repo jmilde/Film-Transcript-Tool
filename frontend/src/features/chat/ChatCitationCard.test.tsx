@@ -1,8 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ChatCitationCard } from './ChatCitationCard'
-import { useDocumentPanelStore } from '../../store/documentPanel'
 import type { ChatCitation } from '../../api/hooks/useChat'
 
 const CITATION: ChatCitation = {
@@ -23,37 +22,18 @@ const CITATION: ChatCitation = {
   folder_path: ['Season 1'],
 }
 
-beforeEach(() => {
-  useDocumentPanelStore.setState({ isOpen: false, pendingInsert: null })
-})
-
 describe('ChatCitationCard', () => {
-  it('queues a clip insert without triggering the seek action', async () => {
+  it('seeks on click', async () => {
     const onClick = vi.fn()
-    render(<ChatCitationCard citation={CITATION} onClick={onClick} canEdit />)
-
-    await userEvent.click(screen.getByRole('button', { name: 'Add to Document' }))
-
-    expect(useDocumentPanelStore.getState().pendingInsert).toEqual({
-      transcriptId: 't-1',
-      videoId: 'v-1',
-      startTokenId: 'tok-a',
-      endTokenId: 'tok-b',
-    })
-    expect(onClick).not.toHaveBeenCalled()
-  })
-
-  it('still seeks on the main card click', async () => {
-    const onClick = vi.fn()
-    render(<ChatCitationCard citation={CITATION} onClick={onClick} canEdit />)
+    render(<ChatCitationCard citation={CITATION} onClick={onClick} />)
 
     await userEvent.click(screen.getByText('Interview A'))
 
     expect(onClick).toHaveBeenCalled()
   })
 
-  it('does not offer Add to Document for a viewer', () => {
-    render(<ChatCitationCard citation={CITATION} onClick={vi.fn()} canEdit={false} />)
+  it('does not offer Add to Document', () => {
+    render(<ChatCitationCard citation={CITATION} onClick={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
   })

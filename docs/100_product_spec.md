@@ -273,9 +273,11 @@ surrounding prose whose excerpt is resolved fresh from the transcript on
 every read (so it can never drift from the source, even after later
 edits).
 
-Clip references MUST be insertable from a transcript selection, a search
-result, or a chat citation, via a persistent panel that stays open across
-navigation so users can browse, search, or ask questions while writing.
+Clip references MUST be insertable from a transcript selection, via a
+persistent panel that stays open across navigation so users can browse,
+search, or ask questions while writing. Search results and chat citations
+are not insertion points — a clip's anchor is always chosen deliberately
+from the transcript itself.
 
 Users MAY add their own comment/annotation per clip reference — this is a
 regular project comment anchored to the clip, not a bespoke per-clip
