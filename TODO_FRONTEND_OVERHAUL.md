@@ -83,9 +83,9 @@ behind the two flagged below:
 
 ## Phase 0 — Dependencies
 
-- [ ] `cd frontend && npm install @radix-ui/react-dialog @radix-ui/react-popover @radix-ui/react-tooltip @radix-ui/react-dropdown-menu @radix-ui/react-select lucide-react`
-- [ ] Confirm no other existing dependency already covers one of these (quick grep for `@radix-ui`/`lucide` before adding, in case a partial adoption happened outside this session)
-- [ ] Verify: `npm install` clean, `npm run typecheck` still clean (no code changes yet)
+- [x] `cd frontend && npm install @radix-ui/react-dialog @radix-ui/react-popover @radix-ui/react-tooltip @radix-ui/react-dropdown-menu @radix-ui/react-select lucide-react`
+- [x] Confirm no other existing dependency already covers one of these (quick grep for `@radix-ui`/`lucide` before adding, in case a partial adoption happened outside this session)
+- [x] Verify: `npm install` clean, `npm run typecheck` still clean (no code changes yet)
 
 ## Phase 1 — Theme variables
 
