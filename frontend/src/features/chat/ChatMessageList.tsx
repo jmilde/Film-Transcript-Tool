@@ -63,7 +63,11 @@ function renderAnswer(
     const citation = byMarker.get(Number(match[1]))
     parts.push(
       citation ? (
-        <ChatCitationCard key={key++} citation={citation} onClick={() => onSelectCitation(citation)} />
+        <ChatCitationCard
+          key={key++}
+          citation={citation}
+          onClick={() => onSelectCitation(citation)}
+        />
       ) : (
         <span key={key++}>{match[0]}</span>
       ),

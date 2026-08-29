@@ -202,7 +202,11 @@ Users can disable auto-follow.
 
 Users select transcript ranges by dragging over text.
 
-A selection displays:
+A selection shows a popup floating above the selected range (tracking it as
+the drag extends, and flipping to below the selection if there's no room
+above), rather than a bar docked to the panel header — the same "hover
+above the selection" pattern the document editor's bubble menu uses. It
+displays:
 
 - selected text
 - start timecode
@@ -211,8 +215,10 @@ A selection displays:
 Available actions:
 
 - play selection
+- edit — clearing the text to empty deletes the whole selection (any
+  token span, not just a single segment); replacing it with new text is a
+  same-segment merge. There is no separate delete action.
 - comment
-- edit
 - copy
 - add to document (queues a clip block insert into the document panel's
   active document — see §19)

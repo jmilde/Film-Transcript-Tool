@@ -38,9 +38,7 @@ export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-slate-800">
-            {citation.video_name}
-          </span>
+          <span className="truncate text-sm font-medium text-slate-800">{citation.video_name}</span>
           <span className="shrink-0 font-mono text-xs text-slate-400">
             {formatTime(citation.start_time)}
           </span>

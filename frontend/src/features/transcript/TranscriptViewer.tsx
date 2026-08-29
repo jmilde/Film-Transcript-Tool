@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
@@ -222,11 +222,51 @@ export function TranscriptViewer({
   useEffect(() => setMatchIndex(0), [searchQuery])
 
   const tokenRefs = useRef(new Map<string, HTMLSpanElement>())
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [popupPos, setPopupPos] = useState<{
+    top: number
+    left: number
+    placement: 'above' | 'below'
+  } | null>(null)
 
   useEffect(() => {
     if (!currentMatch) return
     tokenRefs.current.get(currentMatch.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [currentMatch])
+
+  // Floats the selection toolbar above the selected token range (matching
+  // the document editor's BubbleMenu) instead of pinning it to the panel
+  // header. Positions are computed in the scroll container's own content
+  // coordinate space (offsetTop/offsetLeft), not the viewport, so the popup
+  // naturally scrolls together with the tokens beneath it without needing a
+  // scroll listener — an absolutely positioned descendant of the
+  // `position: relative` scrolling element scrolls with its content.
+  useLayoutEffect(() => {
+    if (selectedTokens.length === 0) {
+      setPopupPos(null)
+      return
+    }
+    const container = scrollContainerRef.current
+    const firstEl = tokenRefs.current.get(selectedTokens[0].id)
+    const lastEl = tokenRefs.current.get(selectedTokens[selectedTokens.length - 1].id)
+    if (!container || !firstEl || !lastEl) {
+      setPopupPos(null)
+      return
+    }
+    const top = Math.min(firstEl.offsetTop, lastEl.offsetTop)
+    const bottom = Math.max(
+      firstEl.offsetTop + firstEl.offsetHeight,
+      lastEl.offsetTop + lastEl.offsetHeight,
+    )
+    const left = (firstEl.offsetLeft + lastEl.offsetLeft + lastEl.offsetWidth) / 2
+    const GAP = 8
+    // A rough height estimate is enough here — it only decides which side
+    // of the selection to render on, not the popup's actual layout.
+    const ESTIMATED_POPUP_HEIGHT = 44
+    const placement: 'above' | 'below' =
+      top - ESTIMATED_POPUP_HEIGHT - GAP < container.scrollTop ? 'below' : 'above'
+    setPopupPos({ top: placement === 'above' ? top - GAP : bottom + GAP, left, placement })
+  }, [selectedTokens, mergeDraft, commentDraft])
 
   function stepMatch(direction: 1 | -1) {
     if (searchMatches.length === 0) return
@@ -538,44 +578,57 @@ export function TranscriptViewer({
         </div>
       )}
 
-      {selectionInfo &&
-        (mergeDraft !== null ? (
-          <SelectionToolbar
-            mode="draft"
-            draft={{
-              label: 'Edit to:',
-              value: mergeDraft,
-              onChange: setMergeDraft,
-              onConfirm: confirmMerge,
-              onCancel: () => setMergeDraft(null),
+      <div
+        ref={scrollContainerRef}
+        className="relative flex-1 space-y-4 overflow-y-auto p-4 select-none"
+      >
+        {selectionInfo && popupPos && (
+          <div
+            className="absolute z-10 w-max max-w-[90%] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+            style={{
+              top: popupPos.top,
+              left: popupPos.left,
+              transform:
+                popupPos.placement === 'above' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
             }}
-          />
-        ) : commentDraft !== null ? (
-          <SelectionToolbar
-            mode="draft"
-            draft={{
-              label: 'Comment:',
-              value: commentDraft,
-              onChange: setCommentDraft,
-              onConfirm: confirmComment,
-              onCancel: () => setCommentDraft(null),
-              accentClass: 'border-violet-100 bg-violet-50',
-              inputAccentClass: 'border-violet-400',
-            }}
-          />
-        ) : (
-          <SelectionToolbar
-            mode="actions"
-            summary={{
-              text: selectionInfo.text,
-              timecode: `${formatTime(selectionInfo.startTime)} – ${formatTime(selectionInfo.endTime)}`,
-            }}
-            actions={toolbarActions}
-            onClear={() => clearSelection()}
-          />
-        ))}
-
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 select-none">
+          >
+            {mergeDraft !== null ? (
+              <SelectionToolbar
+                mode="draft"
+                draft={{
+                  label: 'Edit to:',
+                  value: mergeDraft,
+                  onChange: setMergeDraft,
+                  onConfirm: confirmMerge,
+                  onCancel: () => setMergeDraft(null),
+                }}
+              />
+            ) : commentDraft !== null ? (
+              <SelectionToolbar
+                mode="draft"
+                draft={{
+                  label: 'Comment:',
+                  value: commentDraft,
+                  onChange: setCommentDraft,
+                  onConfirm: confirmComment,
+                  onCancel: () => setCommentDraft(null),
+                  accentClass: 'border-violet-100 bg-violet-50',
+                  inputAccentClass: 'border-violet-400',
+                }}
+              />
+            ) : (
+              <SelectionToolbar
+                mode="actions"
+                summary={{
+                  text: selectionInfo.text,
+                  timecode: `${formatTime(selectionInfo.startTime)} – ${formatTime(selectionInfo.endTime)}`,
+                }}
+                actions={toolbarActions}
+                onClear={() => clearSelection()}
+              />
+            )}
+          </div>
+        )}
         {speakerGroups.map((group) => (
           <div key={group.key}>
             <div className="mb-1 text-xs font-semibold text-slate-500">

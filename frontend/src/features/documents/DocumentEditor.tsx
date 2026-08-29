@@ -592,10 +592,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         {/* A gray backdrop behind a bounded white "page" (rather than the
             editor just filling the panel edge-to-edge) is what actually
             reads as "a document" instead of plain panel content. */}
-        <div
-          className="relative flex-1 overflow-y-auto bg-slate-100"
-          onClick={handleContentClick}
-        >
+        <div className="relative flex-1 overflow-y-auto bg-slate-100" onClick={handleContentClick}>
           <BubbleMenu
             editor={editor}
             shouldShow={shouldShowBubble}
