@@ -85,23 +85,32 @@ Mobile support is not a Version 1 goal.
 # 4. Application Layout
 
 The application consists of a navigation bar, the routed main workspace,
-and a persistent document panel docked as a sibling column — mounted once
-in the top-level app shell (not per page), so it stays open across
-navigation instead of resetting when the user moves between pages.
+and a persistent document panel — mounted once in the top-level app shell
+(not per page), so it stays open across navigation instead of resetting
+when the user moves between pages.
+
+The routed workspace and the document panel are both resizable `Panel`s
+of one shared top-level `Group` (react-resizable-panels), not a flat
+peer/fallback layout — the document panel is a first-class member of the
+same resizable-panel system as the page it sits beside, so the two never
+fight over space and resize/collapse using identical mechanics:
 
 ```
 ------------------------------------------------
 | Navigation                                   |
 ------------------------------------------------
-|                                    |         |
-| Main Workspace                     | Document|
-|                                    | Panel   |
-|                                    |         |
+| Group (horizontal)                           |
+|  ------------------------------------------  |
+|  | Panel: routed page  | Panel: Document   |  |
+|  | (Outlet)             | Panel             |  |
+|  |                      |                   |  |
+|  ------------------------------------------  |
 ------------------------------------------------
 ```
 
-The document panel collapses to a thin toggle rail when closed. See §19
-Document Builder UI.
+The document panel's `Panel` is `collapsible`, collapsing to a thin
+toggle rail (matching `collapsedSize`) when closed rather than unmounting
+— it stays mounted across navigation. See §19 Document Builder UI.
 
 ---
 
@@ -287,7 +296,9 @@ can not
 
 # 13. Comments UI
 
-Comments appear attached to transcript ranges.
+Comments appear attached to a transcript range or, from the document
+panel, to a document (a run of prose text or a clip reference) — see §18
+Comment State and §19 Document Builder UI.
 
 A comment displays:
 
@@ -433,6 +444,11 @@ Important UI state includes:
 - open threads
 - selected comment
 
+This state is anchor-agnostic: a comment's `anchor` may be a transcript
+range or a document (§13 Comments UI, `docs/700_backend_api.md` §11), but
+which reply threads are expanded and which comment is selected is tracked
+the same way regardless of anchor kind.
+
 ---
 
 ## Document Panel State
@@ -443,6 +459,11 @@ Important UI state includes:
 - pending clip insert (queued until the editor is ready to receive it)
 - preview clip (set when a clip's video isn't already open in the video
   workspace, so the panel renders its own preview player)
+- insert-marker flag: whether the active document currently has an
+  insert point marked (not the position itself, which lives in the
+  editor's own ProseMirror plugin state so it stays correctly mapped
+  through edits) — lets other components render "a marker is set"
+  without reaching into the editor instance
 
 ---
 
@@ -458,8 +479,24 @@ Panel contents:
 - a document switcher: list, create, rename, delete, select the active
   document
 - a rich-text editor (TipTap) over the active document's content
-- each clip block renders as a card: thumbnail, video name, timecode,
-  non-editable excerpt, an editable note, and a play button
+- each clip block renders inline, within the surrounding prose, as
+  excerpt text with a persistent left border + background tint (marking
+  "this text is from source material") — not a boxed card. An underline
+  is added only once a comment exists on the clip, so the two decoration
+  channels (source-material tint, has-a-comment underline) stack without
+  colliding. A clip's user-facing note is not part of the node's own
+  rendering — it is a regular comment (see below) — and the excerpt
+  itself is never directly editable
+- selecting a clip block (click, or arrow-key onto it) shows a shared
+  bubble menu with Play / Comment / Remove actions (§12-equivalent
+  `SelectionToolbar`/`BubbleMenu` pattern), rather than the card itself
+  carrying inline controls
+
+A clip's annotation is a regular Comment (§13) anchored via
+`DocumentCommentAnchor.clip_node_id`, created through the bubble menu's
+Comment action — it is not a `note` attribute stored on the clip node
+itself, so clip annotations get the same reply/resolve/search treatment
+as any other comment instead of a bespoke field.
 
 Add-to-document entry points (§10 Transcript Selection, §15 Chat UI's
 citation cards, §14 Search UI's results) queue a clip insert; if the panel
@@ -475,6 +512,16 @@ Clicking a clip block's play button:
   the same video at once
 - otherwise, the panel plays the clip in its own lightweight preview
   player (no waveform/transcript sync, unlike the full workspace player)
+
+Both players render identical play/pause/±5s-skip/2x-speed chrome from
+one shared, purely-presentational control component: the workspace
+player wires it to the global playback store, while the panel's preview
+player wires the same component to local state instead (it deliberately
+never touches the global store — a second writer there would corrupt the
+workspace's own display for an unrelated video). The preview player has
+no waveform, so — unlike the full workspace player, where the waveform is
+the primary scrub/seek surface — its only seek mechanism is the ±5s skip
+buttons.
 
 ## Concurrency
 

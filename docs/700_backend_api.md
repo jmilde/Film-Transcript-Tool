@@ -565,6 +565,13 @@ trying again.
 
 # 11. Comments
 
+A comment anchors to either a transcript range or a document — the two
+create/list route pairs below both return the same `CommentRead` shape,
+whose `anchor` field is a discriminated union (`kind: "transcript" |
+"document"`) so a single comments UI can render both without a type
+switch at the call site. Reply and resolve are anchor-agnostic — one pair
+of routes handles both.
+
 ## Create Comment
 
 ```
@@ -581,12 +588,76 @@ Request:
 }
 ```
 
+Response `anchor`:
+
+```json
+{
+	"kind": "transcript",
+	"transcript_id": "uuid",
+	"start_token_id": "uuid",
+	"end_token_id": "uuid",
+	"in_time": 12.5,
+	"out_time": 14.0
+}
+```
+
+`in_time`/`out_time` are derived from the range's tokens on every read,
+not stored, so the comment's displayed timecode follows edits to those
+tokens.
+
 ---
 
 ## List Comments
 
 ```
 GET /transcripts/{transcript_id}/comments
+```
+
+---
+
+## Create Document Comment
+
+```
+POST /documents/{document_id}/comments
+```
+
+Request:
+
+```json
+{
+	"clip_node_id": "client-generated uuid, or null",
+	"text": "Double check this excerpt"
+}
+```
+
+`clip_node_id` is set to pin the comment to a `clipBlock` node (a note on
+a clip); left `null` for a comment anchored to a run of prose text, whose
+real position anchor is a TipTap `comment` mark the frontend applies to
+the selection after this row is created (`docs/1100_document_builder.md`
+§5).
+
+Response `anchor`:
+
+```json
+{
+	"kind": "document",
+	"document_id": "uuid",
+	"clip_node_id": "client-generated uuid, or null",
+	"excerpt": "resolved fresh from current content, or null if the anchor is gone"
+}
+```
+
+`excerpt` is resolved fresh from the document's current content on every
+read, like a clip block's own excerpt — never stored, and `null` if the
+anchored clip node or comment mark can no longer be found (e.g. the clip
+was removed from the document).
+
+---
+
+## List Document Comments
+
+```
+GET /documents/{document_id}/comments
 ```
 
 ---

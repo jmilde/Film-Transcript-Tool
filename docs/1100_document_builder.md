@@ -11,10 +11,11 @@
 # 1. Purpose
 
 This document defines the Document Builder: project-scoped documents that
-mix a user's own prose with embedded clip blocks — non-editable references
-to a transcript token range and video, resolved fresh on every read. It
-replaces the workaround of keeping a separate Google Doc open and
-copy-pasting transcript excerpts into it while writing narration or notes.
+mix a user's own prose with embedded clip references — non-editable,
+inline references to a transcript token range and video, resolved fresh
+on every read. It replaces the workaround of keeping a separate Google
+Doc open and copy-pasting transcript excerpts into it while writing
+narration or notes.
 
 Related documents: `docs/100_product_spec.md` §15, `docs/300_architecture.md`
 §13, `docs/400_database.md` §21 (`Document` table), `docs/700_backend_api.md`
@@ -45,21 +46,27 @@ nodes:
 		"transcriptId": "uuid",
 		"videoId": "uuid",
 		"startTokenId": "uuid",
-		"endTokenId": "uuid",
-		"note": "user's own caption, or null"
+		"endTokenId": "uuid"
 	}
 }
 ```
 
-There is no separate block/position table. A rich-text tree doesn't fit
-the flat fractional-`position` pattern `TranscriptSegment`/
-`TranscriptToken` use, and there's in-repo precedent for storing an
-editor/agent's own opaque JSON blob (`ChatConversation
-.agent_message_history`).
+`clipBlock` is an inline atomic node (`group: "inline", atom: true`),
+not a block-level node — it sits within the surrounding paragraph flow
+like a styled span, not as its own card-shaped block. There is no
+separate block/position table. A rich-text tree doesn't fit the flat
+fractional-`position` pattern `TranscriptSegment`/`TranscriptToken` use,
+and there's in-repo precedent for storing an editor/agent's own opaque
+JSON blob (`ChatConversation.agent_message_history`).
 
-`note` is the clip's user-editable caption, kept structurally separate
-from the excerpt (which is never stored — always resolved fresh from
-tokens on read, exactly like a chat citation's excerpt).
+There is no `note` attr on the node. A clip's user-facing annotation is a
+regular `Comment` row instead, anchored via
+`DocumentCommentAnchor.clip_node_id = nodeId` (`docs/400_database.md`
+§13–14a) — this reuses the same comment/reply/resolve/search machinery
+transcript comments already have, rather than a bespoke per-clip caption
+field with none of that. The excerpt itself is never stored on the node
+either — always resolved fresh from tokens on read, exactly like a chat
+citation's excerpt.
 
 ## Concurrency
 
@@ -133,16 +140,25 @@ handful of queries, not one per clip.
 **Library: TipTap** (`@tiptap/react`, `@tiptap/starter-kit`,
 `@tiptap/core`) — the practical choice for a custom node that renders a
 real interactive React component inline (`ReactNodeViewRenderer`), needed
-for the clip block card.
+for the clip reference's node view.
 
 - Node schema: `StarterKit` restricted to `paragraph`, `heading` (h1–h2),
   bold/italic marks, bullet/ordered lists — no tables/images/code blocks
   for v1.
-- Custom `clipBlock` node: `atom: true` (non-editable, no direct text
-  content), attrs as in §2, plus an `insertClipBlockAt(pos, attrs)`
-  command for programmatic insertion.
-- The card (thumbnail, video name, timecode, non-editable excerpt,
-  editable note, play button) is styled off the chat citation card.
+- Custom `clipBlock` node: `group: "inline", inline: true, atom: true,
+  selectable: true` (non-editable, no direct text content, but
+  selectable via a native ProseMirror `NodeSelection` — click, or
+  arrow-key onto it), attrs as in §2, plus an `insertClipBlockAt(pos,
+  attrs)` command for programmatic insertion that lands the node inline
+  within the surrounding text rather than always opening a new
+  paragraph.
+- Rendering: excerpt text with a persistent left border + background
+  tint (marks "this text is from source material"), plus an underline
+  reserved exclusively for "has a comment" — the two decoration channels
+  stack without colliding. Selecting the node shows a shared `BubbleMenu`
+  with Play/Comment/Remove actions (§6/§7); the node view itself renders
+  only the excerpt and its decoration classes, no inline controls of its
+  own.
 - Save: content changes are debounced (~1s) into a `PATCH` carrying the
   last-known `version`; a `409` shows the same conflict/reload banner
   pattern already used for token-edit conflicts.
@@ -157,11 +173,17 @@ for the clip block card.
 # 6. Global Panel UX
 
 **Mount point:** the top-level app shell, as a **persistent resizable
-column** docked as a sibling of the routed page — not an overlay/drawer
-(which would defeat the point of writing while still browsing) and not
-nested inside the video workspace's own resizable-panel group (so the two
-panel systems never fight over space). It collapses to a thin toggle rail
-when closed, and stays mounted across navigation between the project
+`Panel`** that is a sibling of the routed page's own `Panel` inside one
+shared top-level `Group` (react-resizable-panels) — not an overlay/drawer
+(which would defeat the point of writing while still browsing), and not
+a flat peer/fallback sidebar living outside the resizable-panel system.
+Being a first-class `Panel` in the same `Group` as the routed page means
+it resizes/collapses with the exact same mechanics as any other panel,
+and never fights the video workspace's own separate resizable-panel
+group (waveform/transcript) for space, since that group is nested one
+level down, inside the routed-page `Panel`, not a sibling of the document
+panel. It collapses to a thin toggle rail when closed (`collapsedSize`,
+not unmounted), and stays mounted across navigation between the project
 view, search, chat, and the video workspace.
 
 **Insert-queue flow:** an "Add to Document" entry point (transcript
@@ -172,28 +194,46 @@ mounted, it consumes the queued payload, resolves its display fields via
 the clip-blocks/resolve endpoint (§4), and inserts the node — so nothing
 is silently dropped if the panel or editor wasn't ready yet.
 
-**Player coordination:** clicking a clip block's play button reuses the
-video workspace's own player when that page is already open on the
-clip's video (seeking within it — never a second player for the same
-video at once); otherwise the panel renders its own lightweight preview
-player. That preview player deliberately does not share the video
-workspace's global playback state (current time, duration, waveform
-sync) — a second writer to that shared state would corrupt the
-workspace's own display for an unrelated video. It has no waveform or
-transcript sync, just play/pause/seek for the previewed range.
+**Player coordination:** clicking a clip reference's Play action (§7's
+bubble menu) reuses the video workspace's own player when that page is
+already open on the clip's video (seeking within it — never a second
+player for the same video at once); otherwise the panel renders its own
+lightweight preview player. That preview player deliberately does not
+share the video workspace's global playback state (current time,
+duration, waveform sync) — a second writer to that shared state would
+corrupt the workspace's own display for an unrelated video. It has no
+waveform or transcript sync, just play/pause/seek for the previewed
+range. Both players render identical chrome (play/pause, ±5s skip, 2x
+speed) from one shared presentational control component — the workspace
+player wires it to the global playback store, the preview player wires
+the same component to local state — so chrome parity is achieved without
+the preview player ever touching the shared store. Because the preview
+player has no accompanying waveform, its ±5s skip buttons are its only
+seek mechanism (the workspace player's primary scrub surface is the
+waveform, not this control row).
 
 ---
 
 # 7. Frontend Rendering Contract
 
-A clip block card renders:
+A clip reference renders inline, within the surrounding paragraph flow,
+not as a boxed card:
 
-- a thumbnail (or a placeholder icon if the video has none yet)
-- video name and timecode range
-- a folder breadcrumb, if the video is nested
-- the excerpt, quoted and non-editable
-- an editable note input, writing only the `note` attr
-- a play button (§6)
+- the excerpt text itself, non-editable, with a persistent left border +
+  background tint marking "this text is from source material"
+- an underline, added only once a comment exists on the clip (resolved
+  vs. unresolved rendered as two different underline colors) — reserved
+  exclusively for "has a comment", so it never collides with the
+  border/tint decoration
+- a selection ring when the node is the current `NodeSelection`
+
+Selecting the node (click, or arrow-key onto it) opens the shared
+`BubbleMenu` used across the editor (§5, `docs/800_frontend.md` §19),
+showing the excerpt and timecode range as a summary plus Play / Comment /
+Remove actions (§6) — the node view itself carries no inline controls,
+no thumbnail, no video name, and no folder breadcrumb; those richer
+display fields are resolved into the node's attrs (§4) for potential
+future use but are not currently part of the rendered UI.
 
 None of the resolved display fields are part of the document's authored
 prose — they're read-only decoration around a structural reference, drawn

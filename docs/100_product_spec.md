@@ -267,17 +267,20 @@ Exports MUST reflect the edited transcript.
 # 15. Document Builder
 
 Users MAY create one or more named documents per project, mixing their own
-prose with embedded clip blocks — non-editable references to a transcript
-token range and video, rendered as a small playable card whose excerpt is
-resolved fresh from the transcript on every read (so it can never drift
-from the source, even after later edits).
+prose with embedded clip references — non-editable, inline references to
+a transcript token range and video, rendered as styled text within the
+surrounding prose whose excerpt is resolved fresh from the transcript on
+every read (so it can never drift from the source, even after later
+edits).
 
-Clip blocks MUST be insertable from a transcript selection, a search
+Clip references MUST be insertable from a transcript selection, a search
 result, or a chat citation, via a persistent panel that stays open across
 navigation so users can browse, search, or ask questions while writing.
 
-Users MAY add their own editable note per clip block, kept separate from
-the clip's excerpt.
+Users MAY add their own comment/annotation per clip reference — this is a
+regular project comment anchored to the clip, not a bespoke per-clip
+field, so it supports the same replies/resolve/search as any other
+comment.
 
 See `docs/1100_document_builder.md` for the full design.
 

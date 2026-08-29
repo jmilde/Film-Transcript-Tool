@@ -333,8 +333,9 @@ shapes never leak past that boundary.
 # 13. Document Builder
 
 Users build project-scoped documents mixing their own prose with clip
-blocks — structured references to a transcript token range and video,
-rendered as a small playable card. Full design in
+references — structured, inline, non-editable references to a transcript
+token range and video, rendered as styled text within the surrounding
+prose rather than a boxed card. Full design in
 `docs/1100_document_builder.md`.
 
 Document CRUD (create/list/get/update/delete) and clip-block resolution
