@@ -1,10 +1,10 @@
+import { useState } from 'react'
 import { NodeViewWrapper } from '@tiptap/react'
 import type { ReactNodeViewProps } from '@tiptap/react'
-import { FolderIcon, PlayIcon, VideoIcon } from '../../components/icons'
-import { thumbnailUrl } from '../../api/hooks/useMedia'
-import { formatTime } from '../player/format'
+import { CommentIcon, PlayIcon, TrashIcon } from '../../components/icons'
 import { usePlaybackStore } from '../../store/playback'
 import { useDocumentPanelStore } from '../../store/documentPanel'
+import { useDocumentCommentsContext } from './documentCommentsContext'
 import type { ClipBlockAttrs } from './clipBlockNode'
 
 /** Read-only display fields the backend injects into `attrs` on every read
@@ -23,17 +23,30 @@ interface ResolvedClipFields {
 type ClipBlockNodeAttrs = ClipBlockAttrs & ResolvedClipFields
 
 /**
- * A clip block's card: thumbnail/video name/timecode/excerpt styled directly
- * off `ChatCitationCard`, plus an editable note (via `updateAttributes` —
- * never touches the excerpt) and a play button. The excerpt itself is
- * non-editable — it's read-only display data resolved fresh by the backend,
- * not part of the document's authored prose.
+ * A non-editable, atomic reference to a transcript excerpt, rendered as
+ * styled inline text within the document's normal paragraph flow (not a
+ * boxed card) — a persistent left border + background tint marks "this text
+ * is from source material"; an underline (added only once a comment exists)
+ * is reserved exclusively for comments, so the two channels stack without
+ * colliding. Selecting the node (click, or arrow-key onto it) reveals a
+ * minimal Play/Comment/Remove action row — this is an interim trigger until
+ * Phase E6 replaces it with the shared `BubbleMenu` popup.
  */
-export function ClipBlockView({ node, updateAttributes, selected }: ReactNodeViewProps) {
+export function ClipBlockView({ node, selected, deleteNode }: ReactNodeViewProps) {
   const attrs = node.attrs as ClipBlockNodeAttrs
   const activeVideoId = usePlaybackStore((s) => s.activeVideoId)
   const playSelection = usePlaybackStore((s) => s.playSelection)
   const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
+  const { clipCommentStatus, createClipComment } = useDocumentCommentsContext()
+  const [draftOpen, setDraftOpen] = useState(false)
+  const [draftText, setDraftText] = useState('')
+
+  const commentStatus = attrs.nodeId ? clipCommentStatus.get(attrs.nodeId) : undefined
+  const decorationClass = commentStatus
+    ? commentStatus.resolved
+      ? 'underline decoration-slate-300 decoration-2 underline-offset-2'
+      : 'underline decoration-violet-400 decoration-2 underline-offset-2'
+    : ''
 
   // Reuses VideoWorkspace's own player when it's already open on this clip's
   // video (so there's never two players for the same video); otherwise asks
@@ -51,60 +64,86 @@ export function ClipBlockView({ node, updateAttributes, selected }: ReactNodeVie
     }
   }
 
+  function submitComment() {
+    const text = draftText.trim()
+    if (!text || !attrs.nodeId) return
+    createClipComment(attrs.nodeId, text)
+    setDraftText('')
+    setDraftOpen(false)
+  }
+
   return (
     <NodeViewWrapper
+      as="span"
       data-clip-block=""
-      className={`my-2 rounded-lg border bg-white p-3 ${selected ? 'border-sky-400 ring-1 ring-sky-400' : 'border-slate-200'}`}
+      className={`border-l-2 border-teal-300 bg-teal-50 px-1 py-0.5 ${decorationClass} ${
+        selected ? 'ring-1 ring-sky-400' : ''
+      }`}
     >
-      <div className="flex items-start gap-3">
-        {attrs.thumbnail_token ? (
-          <img
-            src={thumbnailUrl(attrs.videoId, attrs.thumbnail_token)}
-            alt=""
-            className="h-10 w-16 shrink-0 rounded object-cover"
-          />
-        ) : (
-          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-slate-100">
-            <VideoIcon className="h-4 w-4 text-slate-400" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-slate-800">
-              {attrs.video_name ?? 'Clip'}
+      {attrs.excerpt ?? 'Clip'}
+      {selected && (
+        <span
+          contentEditable={false}
+          className="ml-1 inline-flex items-center gap-1 align-middle whitespace-nowrap"
+        >
+          <button
+            type="button"
+            aria-label="Play clip"
+            title="Play clip"
+            className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-slate-600"
+            onClick={handlePlay}
+          >
+            <PlayIcon className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="Comment on clip"
+            title="Comment on clip"
+            className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-slate-600"
+            onClick={() => setDraftOpen((open) => !open)}
+          >
+            <CommentIcon className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="Remove clip"
+            title="Remove clip"
+            className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-red-600"
+            onClick={() => deleteNode()}
+          >
+            <TrashIcon className="h-3.5 w-3.5" />
+          </button>
+          {draftOpen && (
+            <span className="inline-flex items-center gap-1">
+              <input
+                autoFocus
+                value={draftText}
+                onChange={(e) => setDraftText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitComment()
+                  if (e.key === 'Escape') setDraftOpen(false)
+                }}
+                placeholder="Add a comment…"
+                className="rounded border border-slate-300 px-1 py-0.5 text-xs text-slate-700 focus:border-sky-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={submitComment}
+                className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-white hover:bg-slate-700"
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftOpen(false)}
+                className="rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-white"
+              >
+                Cancel
+              </button>
             </span>
-            {attrs.start_time !== undefined && attrs.end_time !== undefined && (
-              <span className="shrink-0 font-mono text-xs text-slate-400">
-                {formatTime(attrs.start_time)} – {formatTime(attrs.end_time)}
-              </span>
-            )}
-            <button
-              type="button"
-              aria-label="Play clip"
-              title="Play clip"
-              className="ml-auto shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              onClick={handlePlay}
-            >
-              <PlayIcon className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          {attrs.folder_path && attrs.folder_path.length > 0 && (
-            <div className="flex items-center gap-1 truncate text-xs text-slate-400">
-              <FolderIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span className="truncate">{attrs.folder_path.join(' / ')}</span>
-            </div>
           )}
-          {attrs.excerpt !== undefined && (
-            <p className="truncate text-xs text-slate-500 italic">"{attrs.excerpt}"</p>
-          )}
-          <input
-            value={attrs.note ?? ''}
-            onChange={(e) => updateAttributes({ note: e.target.value || null })}
-            placeholder="Add a note…"
-            className="mt-1 w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:border-sky-400 focus:outline-none"
-          />
-        </div>
-      </div>
+        </span>
+      )}
     </NodeViewWrapper>
   )
 }

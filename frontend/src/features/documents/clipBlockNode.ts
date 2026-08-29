@@ -7,14 +7,15 @@ import { ClipBlockView } from './ClipBlockView'
  * round-tripped verbatim through save/load. Everything else a `clipBlock`
  * attrs object may carry (video_name, excerpt, thumbnail_token, ...) is a
  * read-only display field the backend injects fresh on every `GET`; see
- * `stripResolvedClipFields`. */
+ * `stripResolvedClipFields`. A clip's "note" is a regular `Comment` row
+ * anchored via `DocumentCommentAnchor.clip_node_id = nodeId` — not an attr
+ * here — so there is no `note` field. */
 export interface ClipBlockAttrs {
   nodeId: string
   transcriptId: string
   videoId: string
   startTokenId: string
   endTokenId: string
-  note: string | null
 }
 
 const RESOLVED_ONLY_KEYS = [
@@ -56,13 +57,16 @@ declare module '@tiptap/core' {
   }
 }
 
-/** A non-editable, atomic reference to a transcript token range (video +
- * range + user note). The excerpt/timecode/etc. shown by `ClipBlockView` are
- * never part of these attrs on disk — they're injected by the backend into a
- * response copy on every read (see `resolve_document_content`). */
+/** A non-editable, atomic reference to a transcript token range, rendered
+ * inline within the document's normal paragraph flow (not as a block-level
+ * card) — see the design record for why. The excerpt/timecode/etc. shown by
+ * `ClipBlockView` are never part of these attrs on disk — they're injected by
+ * the backend into a response copy on every read (see
+ * `resolve_document_content`). */
 export const ClipBlock = Node.create({
   name: 'clipBlock',
-  group: 'block',
+  group: 'inline',
+  inline: true,
   atom: true,
   selectable: true,
   draggable: false,
@@ -74,16 +78,23 @@ export const ClipBlock = Node.create({
       videoId: { default: null },
       startTokenId: { default: null },
       endTokenId: { default: null },
-      note: { default: null },
+      // Resolved-only display fields (see `RESOLVED_ONLY_KEYS`/
+      // `stripResolvedClipFields`) — never persisted, but must still be
+      // declared here: ProseMirror's schema silently drops any JSON attrs
+      // not declared on the node type when parsing content, both on
+      // `setContent` (load) and `insertContentAt` (insert), so without this
+      // the backend's injected excerpt/thumbnail/etc. would never actually
+      // reach `node.attrs` for `ClipBlockView` to read.
+      ...Object.fromEntries(RESOLVED_ONLY_KEYS.map((key) => [key, { default: null }])),
     }
   },
 
   parseHTML() {
-    return [{ tag: 'div[data-clip-block]' }]
+    return [{ tag: 'span[data-clip-block]' }]
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, { 'data-clip-block': '' })]
+    return ['span', mergeAttributes(HTMLAttributes, { 'data-clip-block': '' })]
   },
 
   addNodeView() {
@@ -92,10 +103,32 @@ export const ClipBlock = Node.create({
 
   addCommands() {
     return {
+      // An inline atom can't be a direct child of `doc` (only textblocks
+      // can). `pos` lands at a block boundary — parent `doc` — whenever the
+      // caller asks to insert at the very end of the document (that
+      // position sits *after* the last block closes, not inside it), not
+      // just for an empty document. Prefer stepping one position back into
+      // the preceding textblock over always wrapping a fresh paragraph, so
+      // "append at document end" reads as inline continuation of existing
+      // prose rather than a new paragraph every time.
       insertClipBlockAt:
         (pos, attrs) =>
-        ({ chain }) =>
-          chain().insertContentAt(pos, { type: this.name, attrs }).run(),
+        ({ chain, state }) => {
+          const clamped = Math.min(pos, state.doc.content.size)
+          const $pos = state.doc.resolve(clamped)
+          if ($pos.parent.type.name !== 'doc') {
+            return chain().insertContentAt(clamped, { type: this.name, attrs }).run()
+          }
+          if ($pos.nodeBefore?.isTextblock) {
+            return chain()
+              .insertContentAt(clamped - 1, { type: this.name, attrs })
+              .run()
+          }
+          return chain()
+            .insertContentAt(clamped, { type: 'paragraph', content: [] })
+            .insertContentAt(clamped + 1, { type: this.name, attrs })
+            .run()
+        },
     }
   },
 })
