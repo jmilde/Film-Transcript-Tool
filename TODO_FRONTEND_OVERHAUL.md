@@ -89,11 +89,11 @@ behind the two flagged below:
 
 ## Phase 1 — Theme variables
 
-- [ ] `frontend/src/index.css`: define the theme variable set inside `@theme { ... }` (Tailwind v4) for both light and dark — background/surface/border/text colors at a few elevation levels (page background, card surface, raised surface), one primary brand hue (with a couple of tint/shade steps for hover/active), and the semantic set (success/warning/danger/info, each as a single hue — no multi-step ramps needed for a project this size)
-- [ ] Add a `dark` variant strategy — Tailwind v4's `@custom-variant dark (&:where(.dark, .dark *));` class-based approach (not `prefers-color-scheme`, since the switch is manual per the confirmed decisions) — toggled by adding/removing a `dark` class on `<html>`
-- [ ] Define the type scale (a handful of heading/body sizes) and radius scale (e.g. `sm`/`md`/`lg`/`full`) as theme variables too, so `components/ui/` primitives reference them instead of ad hoc Tailwind values
-- [ ] Pick and wire the single font family (e.g. Inter via `@fontsource` or a system stack — whichever needs zero extra build config) in `@theme`'s `--font-*` and set it as the body default
-- [ ] Verify: a throwaway page (or `App.tsx` temporarily) renders visibly different colors/radii when `.dark` is toggled on `<html>` via devtools; remove the throwaway before committing
+- [x] `frontend/src/index.css`: define the theme variable set inside `@theme { ... }` (Tailwind v4) for both light and dark — background/surface/border/text colors at a few elevation levels (page background, card surface, raised surface), one primary brand hue (with a couple of tint/shade steps for hover/active), and the semantic set (success/warning/danger/info, each as a single hue — no multi-step ramps needed for a project this size)
+- [x] Add a `dark` variant strategy — Tailwind v4's `@custom-variant dark (&:where(.dark, .dark *));` class-based approach (not `prefers-color-scheme`, since the switch is manual per the confirmed decisions) — toggled by adding/removing a `dark` class on `<html>`
+- [x] Define the type scale (a handful of heading/body sizes) and radius scale (e.g. `sm`/`md`/`lg`/`full`) as theme variables too, so `components/ui/` primitives reference them instead of ad hoc Tailwind values
+- [x] Pick and wire the single font family (e.g. Inter via `@fontsource` or a system stack — whichever needs zero extra build config) in `@theme`'s `--font-*` and set it as the body default
+- [x] Verify: a throwaway page (or `App.tsx` temporarily) renders visibly different colors/radii when `.dark` is toggled on `<html>` via devtools; remove the throwaway before committing
 
 ## Phase 2 — Icon migration
 

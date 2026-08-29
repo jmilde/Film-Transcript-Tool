@@ -1,5 +1,134 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
 @plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Raw color/radius/type values, overridable per color-scheme by toggling
+   the `.dark` class on <html> (manual switch only — see CONTEXT.md /
+   TODO_FRONTEND_OVERHAUL.md, no `prefers-color-scheme` auto-detection). */
+:root {
+  --raw-page: oklch(98% 0.004 260);
+  --raw-surface: oklch(100% 0 0);
+  --raw-surface-raised: oklch(100% 0 0);
+  --raw-border: oklch(90% 0.01 260);
+  --raw-text: oklch(22% 0.02 260);
+  --raw-text-muted: oklch(48% 0.02 260);
+  --raw-text-inverted: oklch(98% 0.004 260);
+
+  --raw-brand: oklch(58% 0.19 260);
+  --raw-brand-hover: oklch(52% 0.19 260);
+  --raw-brand-active: oklch(46% 0.19 260);
+  --raw-brand-subtle: oklch(94% 0.03 260);
+  --raw-brand-text: oklch(46% 0.19 260);
+
+  --raw-success: oklch(62% 0.15 150);
+  --raw-success-subtle: oklch(94% 0.05 150);
+  --raw-success-text: oklch(42% 0.13 150);
+
+  --raw-warning: oklch(75% 0.15 80);
+  --raw-warning-subtle: oklch(94% 0.06 80);
+  --raw-warning-text: oklch(48% 0.13 80);
+
+  --raw-danger: oklch(58% 0.21 25);
+  --raw-danger-subtle: oklch(94% 0.05 25);
+  --raw-danger-text: oklch(48% 0.19 25);
+
+  --raw-info: oklch(62% 0.14 240);
+  --raw-info-subtle: oklch(94% 0.03 240);
+  --raw-info-text: oklch(46% 0.14 240);
+}
+
+.dark {
+  --raw-page: oklch(20% 0.01 260);
+  --raw-surface: oklch(25% 0.012 260);
+  --raw-surface-raised: oklch(29% 0.014 260);
+  --raw-border: oklch(36% 0.015 260);
+  --raw-text: oklch(95% 0.005 260);
+  --raw-text-muted: oklch(72% 0.015 260);
+  --raw-text-inverted: oklch(20% 0.01 260);
+
+  --raw-brand: oklch(70% 0.17 260);
+  --raw-brand-hover: oklch(76% 0.16 260);
+  --raw-brand-active: oklch(62% 0.18 260);
+  --raw-brand-subtle: oklch(32% 0.06 260);
+  --raw-brand-text: oklch(80% 0.13 260);
+
+  --raw-success: oklch(70% 0.15 150);
+  --raw-success-subtle: oklch(32% 0.06 150);
+  --raw-success-text: oklch(80% 0.14 150);
+
+  --raw-warning: oklch(78% 0.14 80);
+  --raw-warning-subtle: oklch(34% 0.06 80);
+  --raw-warning-text: oklch(84% 0.13 80);
+
+  --raw-danger: oklch(68% 0.19 25);
+  --raw-danger-subtle: oklch(34% 0.08 25);
+  --raw-danger-text: oklch(82% 0.14 25);
+
+  --raw-info: oklch(72% 0.13 240);
+  --raw-info-subtle: oklch(32% 0.05 240);
+  --raw-info-text: oklch(82% 0.1 240);
+}
+
+/* Map the runtime-overridable raw values into Tailwind v4 theme keys, so
+   `bg-page`, `text-muted`, `border-border`, etc. resolve to whichever
+   color-scheme is active instead of a value baked in at build time. */
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-page: var(--raw-page);
+  --color-surface: var(--raw-surface);
+  --color-surface-raised: var(--raw-surface-raised);
+  --color-border: var(--raw-border);
+  --color-text: var(--raw-text);
+  --color-text-muted: var(--raw-text-muted);
+  --color-text-inverted: var(--raw-text-inverted);
+
+  --color-brand: var(--raw-brand);
+  --color-brand-hover: var(--raw-brand-hover);
+  --color-brand-active: var(--raw-brand-active);
+  --color-brand-subtle: var(--raw-brand-subtle);
+  --color-brand-text: var(--raw-brand-text);
+
+  --color-success: var(--raw-success);
+  --color-success-subtle: var(--raw-success-subtle);
+  --color-success-text: var(--raw-success-text);
+  --color-warning: var(--raw-warning);
+  --color-warning-subtle: var(--raw-warning-subtle);
+  --color-warning-text: var(--raw-warning-text);
+  --color-danger: var(--raw-danger);
+  --color-danger-subtle: var(--raw-danger-subtle);
+  --color-danger-text: var(--raw-danger-text);
+  --color-info: var(--raw-info);
+  --color-info-subtle: var(--raw-info-subtle);
+  --color-info-text: var(--raw-info-text);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+
+  --text-h1: 1.875rem;
+  --text-h1--line-height: 2.25rem;
+  --text-h1--font-weight: 600;
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 2rem;
+  --text-h2--font-weight: 600;
+  --text-h3: 1.125rem;
+  --text-h3--line-height: 1.5rem;
+  --text-h3--font-weight: 600;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.125rem;
+}
+
+body {
+  background-color: var(--color-page);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
 
 /* Tailwind's preflight doesn't set a pointer cursor on buttons (browsers
    don't either, unlike links), so every clickable control needs it explicitly. */
