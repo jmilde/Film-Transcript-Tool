@@ -216,3 +216,4 @@ backend/storage
 
 # claude code folder
 .claude/
+.playwright
