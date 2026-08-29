@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
@@ -226,7 +227,7 @@ export function TranscriptViewer({
   const [popupPos, setPopupPos] = useState<{
     top: number
     left: number
-    placement: 'above' | 'below'
+    placement: 'above' | 'below' | 'top'
   } | null>(null)
 
   useEffect(() => {
@@ -235,37 +236,62 @@ export function TranscriptViewer({
   }, [currentMatch])
 
   // Floats the selection toolbar above the selected token range (matching
-  // the document editor's BubbleMenu) instead of pinning it to the panel
-  // header. Positions are computed in the scroll container's own content
-  // coordinate space (offsetTop/offsetLeft), not the viewport, so the popup
-  // naturally scrolls together with the tokens beneath it without needing a
-  // scroll listener — an absolutely positioned descendant of the
-  // `position: relative` scrolling element scrolls with its content.
+  // the document editor's BubbleMenu), portaled to `document.body` and
+  // positioned with `position: fixed` in viewport coordinates — not as an
+  // absolutely positioned child of the scrollable transcript panel, which
+  // clipped the popup any time it would render partly outside that panel's
+  // own box. Recomputed on every selection change, on scroll, and on
+  // resize; when there isn't room on either side of the selection it clamps
+  // to the top of the viewport instead of disappearing off-screen.
   useLayoutEffect(() => {
-    if (selectedTokens.length === 0) {
-      setPopupPos(null)
-      return
-    }
     const container = scrollContainerRef.current
-    const firstEl = tokenRefs.current.get(selectedTokens[0].id)
-    const lastEl = tokenRefs.current.get(selectedTokens[selectedTokens.length - 1].id)
-    if (!container || !firstEl || !lastEl) {
+    if (!container || selectedTokens.length === 0) {
       setPopupPos(null)
       return
     }
-    const top = Math.min(firstEl.offsetTop, lastEl.offsetTop)
-    const bottom = Math.max(
-      firstEl.offsetTop + firstEl.offsetHeight,
-      lastEl.offsetTop + lastEl.offsetHeight,
-    )
-    const left = (firstEl.offsetLeft + lastEl.offsetLeft + lastEl.offsetWidth) / 2
-    const GAP = 8
-    // A rough height estimate is enough here — it only decides which side
-    // of the selection to render on, not the popup's actual layout.
-    const ESTIMATED_POPUP_HEIGHT = 44
-    const placement: 'above' | 'below' =
-      top - ESTIMATED_POPUP_HEIGHT - GAP < container.scrollTop ? 'below' : 'above'
-    setPopupPos({ top: placement === 'above' ? top - GAP : bottom + GAP, left, placement })
+
+    function recompute() {
+      const firstEl = tokenRefs.current.get(selectedTokens[0].id)
+      const lastEl = tokenRefs.current.get(selectedTokens[selectedTokens.length - 1].id)
+      if (!firstEl || !lastEl) {
+        setPopupPos(null)
+        return
+      }
+      const firstRect = firstEl.getBoundingClientRect()
+      const lastRect = lastEl.getBoundingClientRect()
+      const top = Math.min(firstRect.top, lastRect.top)
+      const bottom = Math.max(firstRect.bottom, lastRect.bottom)
+      const midX = (firstRect.left + lastRect.right) / 2
+
+      const EDGE = 8
+      const GAP = 8
+      // Rough estimates — only used to decide placement/clamping, not the
+      // popup's actual rendered size.
+      const ESTIMATED_HEIGHT = 48
+      const ESTIMATED_HALF_WIDTH = 160
+      const left = Math.min(
+        Math.max(midX, EDGE + ESTIMATED_HALF_WIDTH),
+        window.innerWidth - EDGE - ESTIMATED_HALF_WIDTH,
+      )
+
+      if (top - ESTIMATED_HEIGHT - GAP >= EDGE) {
+        setPopupPos({ top: top - GAP, left, placement: 'above' })
+      } else if (bottom + ESTIMATED_HEIGHT + GAP <= window.innerHeight - EDGE) {
+        setPopupPos({ top: bottom + GAP, left, placement: 'below' })
+      } else {
+        // No room above or below (a huge selection filling the viewport) —
+        // pin to the top of the viewport rather than hiding.
+        setPopupPos({ top: EDGE, left, placement: 'top' })
+      }
+    }
+
+    recompute()
+    container.addEventListener('scroll', recompute, { passive: true })
+    window.addEventListener('resize', recompute)
+    return () => {
+      container.removeEventListener('scroll', recompute)
+      window.removeEventListener('resize', recompute)
+    }
   }, [selectedTokens, mergeDraft, commentDraft])
 
   function stepMatch(direction: 1 | -1) {
@@ -319,17 +345,46 @@ export function TranscriptViewer({
   }
 
   // Ctrl/Cmd+S commits an in-progress edit and always prevents the browser's
-  // "Save page" dialog, since edits are meant to be saved this way. The
-  // listener is registered once and reads commitEdit through a ref so it
-  // isn't re-subscribed on every keystroke/playback tick.
+  // "Save page" dialog, since edits are meant to be saved this way. Backspace/
+  // Delete deletes the current token selection — the same "clear it to
+  // delete it" rule as the Edit draft's empty-confirm, just without having
+  // to open the draft first. Both are read through refs so the listener is
+  // registered once and isn't re-subscribed on every keystroke/playback tick.
   const commitEditRef = useRef(commitEdit)
   commitEditRef.current = commitEdit
+
+  const backspaceDeleteRef = useRef<() => boolean>(() => false)
+  backspaceDeleteRef.current = () => {
+    if (!canEdit || editingTokenId !== null || mergeDraft !== null || commentDraft !== null) {
+      return false
+    }
+    if (selectedTokens.length === 0) return false
+    deleteSelection()
+    return true
+  }
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         commitEditRef.current()
+        return
+      }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        const target = e.target
+        // Let normal text editing happen inside any focused input/textarea
+        // (search box, comment/edit drafts) or contenteditable — this
+        // shortcut is only for a token range selected in the transcript
+        // itself.
+        if (
+          target instanceof HTMLElement &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+        ) {
+          return
+        }
+        if (backspaceDeleteRef.current()) {
+          e.preventDefault()
+        }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -578,13 +633,11 @@ export function TranscriptViewer({
         </div>
       )}
 
-      <div
-        ref={scrollContainerRef}
-        className="relative flex-1 space-y-4 overflow-y-auto p-4 select-none"
-      >
-        {selectionInfo && popupPos && (
+      {selectionInfo &&
+        popupPos &&
+        createPortal(
           <div
-            className="absolute z-10 w-max max-w-[90%] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+            className="fixed z-50 w-max max-w-[90vw] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
             style={{
               top: popupPos.top,
               left: popupPos.left,
@@ -627,8 +680,11 @@ export function TranscriptViewer({
                 onClear={() => clearSelection()}
               />
             )}
-          </div>
+          </div>,
+          document.body,
         )}
+
+      <div ref={scrollContainerRef} className="flex-1 space-y-4 overflow-y-auto p-4 select-none">
         {speakerGroups.map((group) => (
           <div key={group.key}>
             <div className="mb-1 text-xs font-semibold text-slate-500">

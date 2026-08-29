@@ -395,6 +395,49 @@ describe('TranscriptViewer', () => {
     await waitFor(() => expect(deleted.sort()).toEqual(['tok-a', 'tok-b']))
   })
 
+  it('deletes the whole selection on Backspace', async () => {
+    const deleted: string[] = []
+    server.use(
+      http.delete('http://localhost:8000/tokens/:tokenId', ({ params }) => {
+        deleted.push(params.tokenId as string)
+        return HttpResponse.json({})
+      }),
+    )
+    renderViewer()
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    fireEvent.keyDown(document, { key: 'Backspace' })
+
+    await waitFor(() => expect(deleted.sort()).toEqual(['tok-a', 'tok-b']))
+  })
+
+  it('does not delete on Backspace while a draft input is focused', async () => {
+    let mergeCalled = false
+    server.use(
+      http.post('http://localhost:8000/tokens/merge', () => {
+        mergeCalled = true
+        return HttpResponse.json({})
+      }),
+    )
+    renderViewer()
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const mergeInput = screen.getByDisplayValue('Hello world')
+    fireEvent.keyDown(mergeInput, { key: 'Backspace' })
+
+    // The input itself should still be there (draft not dismissed) and no
+    // deletion or merge was triggered by the keystroke.
+    expect(screen.getByDisplayValue('Hello world')).toBeInTheDocument()
+    expect(mergeCalled).toBe(false)
+  })
+
   it('shows Edit for a cross-segment selection but does not merge non-empty replacement text', async () => {
     let mergeCalled = false
     server.use(

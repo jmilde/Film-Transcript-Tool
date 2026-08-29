@@ -596,6 +596,13 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
           <BubbleMenu
             editor={editor}
             shouldShow={shouldShowBubble}
+            // Fixed strategy + appending to <body> takes the menu out of the
+            // narrow document panel's own clipped/scrolling box entirely, so
+            // floating-ui's flip/shift middleware clamp it against the real
+            // viewport edges instead of letting it run past the right edge
+            // of the screen (the panel sits flush against it).
+            options={{ strategy: 'fixed', shift: { padding: 8 } }}
+            appendTo={() => document.body}
             className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
           >
             {commentDraft ? (

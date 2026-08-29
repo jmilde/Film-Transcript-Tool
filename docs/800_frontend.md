@@ -203,10 +203,13 @@ Users can disable auto-follow.
 Users select transcript ranges by dragging over text.
 
 A selection shows a popup floating above the selected range (tracking it as
-the drag extends, and flipping to below the selection if there's no room
-above), rather than a bar docked to the panel header — the same "hover
-above the selection" pattern the document editor's bubble menu uses. It
-displays:
+the drag extends, flipping to below the selection if there's no room above,
+and pinning to the top of the viewport if there's no room on either side),
+rather than a bar docked to the panel header — the same "hover above the
+selection" pattern the document editor's bubble menu uses. The popup is
+rendered outside the scrollable transcript panel (fixed to the viewport,
+not clipped by the panel's own box), so it's never hidden just because its
+ideal position would fall partly outside the panel. It displays:
 
 - selected text
 - start timecode
@@ -222,6 +225,11 @@ Available actions:
 - copy
 - add to document (queues a clip block insert into the document panel's
   active document — see §19)
+
+Backspace/Delete also deletes the current selection directly (without
+opening the edit popup first), as long as focus isn't inside a text input
+(the search box, or an open edit/comment draft) — same "clear it to delete
+it" rule as above, just via a shortcut.
 
 ---
 
@@ -417,6 +425,11 @@ Search
 Ctrl/Cmd + S
 
 Save
+
+
+Backspace / Delete
+
+Delete the current transcript selection (§10)
 ```
 
 Additional shortcuts may be added later.

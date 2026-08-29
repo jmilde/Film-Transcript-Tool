@@ -166,6 +166,12 @@ for the clip reference's node view.
   only the excerpt and its decoration classes, no inline controls of its
   own. Selecting a plain text range shows the same `BubbleMenu` with just
   Copy/Comment — formatting lives in the fixed toolbar above, not here.
+  The menu positions against the real viewport (`strategy: "fixed"`,
+  appended to `<body>`) rather than being confined to the document panel's
+  own scrolling box, so it stays fully on-screen instead of running past
+  the panel's edge — the panel is docked flush against the right side of
+  the window, so an unclamped menu could otherwise render partly off the
+  edge of the screen.
 - Save: content changes are debounced (~1s) into a `PATCH` carrying the
   last-known `version`; a `409` shows the same conflict/reload banner
   pattern already used for token-edit conflicts.
