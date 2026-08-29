@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { DocumentEditor } from './DocumentEditor'
 import { AuthProvider } from '../../auth/AuthProvider'
 import { useCommentsStore } from '../../store/comments'
+import { useDocumentPanelStore } from '../../store/documentPanel'
 import { server } from '../../test/server'
 import type { Document } from '../../api/hooks/useDocuments'
 
@@ -47,12 +48,12 @@ function selectWithinText(root: HTMLElement, text: string, start: number, end: n
   document.dispatchEvent(new Event('selectionchange'))
 }
 
-function renderEditor() {
+function renderEditor(documentId: string = DOCUMENT_ID) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <AuthProvider>
-        <DocumentEditor projectId={PROJECT_ID} documentId={DOCUMENT_ID} />
+        <DocumentEditor projectId={PROJECT_ID} documentId={documentId} />
       </AuthProvider>
     </QueryClientProvider>,
   )
@@ -354,6 +355,146 @@ describe('DocumentEditor', () => {
     // clip-vs-text discrimination is covered directly below instead; the
     // full clip popup (Play/Comment/Remove, and Remove actually deleting the
     // node) is on the Phase E6 manual verification checklist.
+  })
+
+  describe('insertion-point marker', () => {
+    const PROSE_DOC: Document = {
+      ...DOCUMENT,
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello there' }] }],
+      },
+    }
+
+    function mockClipRoutes() {
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
+      )
+      server.use(
+        http.patch('http://localhost:8000/documents/d-1', () =>
+          HttpResponse.json({ ...PROSE_DOC, version: 2 }),
+        ),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
+      )
+      server.use(
+        http.post(
+          'http://localhost:8000/documents/d-1/clip-blocks/resolve',
+          async ({ request }) => {
+            const body = (await request.json()) as { start_token_id: string }
+            return HttpResponse.json({
+              transcript_id: 't-1',
+              video_id: 'v-1',
+              video_name: 'Video',
+              segment_id: 'seg-1',
+              start_token_id: body.start_token_id,
+              end_token_id: body.start_token_id,
+              start_time: 1,
+              end_time: 2,
+              speaker_name: null,
+              language: null,
+              excerpt: body.start_token_id === 'tok-a' ? 'CLIP1' : 'CLIP2',
+              thumbnail_token: null,
+              folder_path: [],
+            })
+          },
+        ),
+      )
+    }
+
+    it('lands a queued insert at the marked position, then advances the marker past it', async () => {
+      mockClipRoutes()
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 6, 6) // collapsed cursor before "there"
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Mark insert point here' }))
+      expect(await screen.findByText('Insert point set')).toBeInTheDocument()
+
+      useDocumentPanelStore.getState().queueInsert({
+        transcriptId: 't-1',
+        videoId: 'v-1',
+        startTokenId: 'tok-a',
+        endTokenId: 'tok-a',
+      })
+
+      await waitFor(() => {
+        expect(container.querySelector('p')?.textContent).toBe('Hello CLIP1there')
+      })
+      // The marker isn't consumed by the insert — it stays set, having
+      // advanced to just after the node that was just inserted.
+      expect(screen.getByText('Insert point set')).toBeInTheDocument()
+
+      useDocumentPanelStore.getState().queueInsert({
+        transcriptId: 't-1',
+        videoId: 'v-1',
+        startTokenId: 'tok-b',
+        endTokenId: 'tok-b',
+      })
+
+      await waitFor(() => {
+        expect(container.querySelector('p')?.textContent).toBe('Hello CLIP1CLIP2there')
+      })
+    })
+
+    // "An unrelated edit before the marker shifts its mapped position
+    // forward" is covered directly at the plugin level instead of here —
+    // see `insertMarker.test.ts`. Reproducing it through `DocumentEditor`
+    // would need a DOM-selection edit *after* the marker's widget
+    // decoration has already split the paragraph's text into two runs
+    // around a zero-width sibling node; combined with the jsdom
+    // DOM-selection-simulation technique this file otherwise uses
+    // (`selectWithinText`, which depends on ProseMirror's DOM-selection-read
+    // path — itself dependent on real click/focus geometry jsdom doesn't
+    // provide), the result was order-dependent rather than a reflection of
+    // the behavior under test. The plugin-level test proves the mapping;
+    // this describe block's other tests prove `DocumentEditor` reads that
+    // mapped position correctly at insert time.
+
+    it('clears the marker on demand, falling back to end-of-document inserts', async () => {
+      mockClipRoutes()
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 6, 6)
+      await userEvent.click(await screen.findByRole('button', { name: 'Mark insert point here' }))
+      expect(await screen.findByText('Insert point set')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clear insert point' }))
+      expect(
+        await screen.findByRole('button', { name: 'Mark insert point here' }),
+      ).toBeInTheDocument()
+
+      useDocumentPanelStore.getState().queueInsert({
+        transcriptId: 't-1',
+        videoId: 'v-1',
+        startTokenId: 'tok-a',
+        endTokenId: 'tok-a',
+      })
+
+      await waitFor(() => {
+        expect(container.querySelector('p')?.textContent).toBe('Hello thereCLIP1')
+      })
+    })
+
+    // Not covered by an integration test here: reproducing "an edit lands
+    // while the resolve POST is still in flight" needs either fake timers
+    // (this suite uses the real 1s autosave debounce, which a previous
+    // test's still-pending timer can fire mid-test and disrupt) or a gated
+    // MSW handler layered on top of the same jsdom DOM-selection-simulation
+    // technique documented elsewhere in this file as fragile around
+    // focus/`posAtCoords` — combining both made the test's outcome depend on
+    // suite run order rather than on the behavior under test. The fix itself
+    // (reading `insertMarkerPluginKey.getState(editor.state)` inside
+    // `onSuccess`, not before the `resolveClipBlock.mutate` call) is
+    // covered analytically: `insertMarker.test.ts` proves the plugin maps a
+    // set position through an intervening transaction, and the test above
+    // proves the same mapping end-to-end when the edit happens before the
+    // queued insert is even dispatched. What's untested is only the
+    // difference in *when* the read happens relative to the network
+    // round-trip, which the code change guarantees by construction.
   })
 
   it('a clip gains an underline once a comment is added to it, surviving a reload', async () => {

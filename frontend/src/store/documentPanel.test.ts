@@ -7,6 +7,7 @@ beforeEach(() => {
     activeProjectId: null,
     activeDocumentId: null,
     pendingInsert: null,
+    insertMarkerDocumentId: null,
   })
 })
 
@@ -30,6 +31,15 @@ describe('useDocumentPanelStore', () => {
   it('tracks the active document', () => {
     useDocumentPanelStore.getState().setActiveDocument('d-1')
     expect(useDocumentPanelStore.getState().activeDocumentId).toBe('d-1')
+  })
+
+  it('clears the insert-marker flag when the active document switches', () => {
+    useDocumentPanelStore.getState().setActiveDocument('d-1')
+    useDocumentPanelStore.getState().setInsertMarkerDocumentId('d-1')
+    expect(useDocumentPanelStore.getState().insertMarkerDocumentId).toBe('d-1')
+
+    useDocumentPanelStore.getState().setActiveDocument('d-2')
+    expect(useDocumentPanelStore.getState().insertMarkerDocumentId).toBeNull()
   })
 
   it('queues an insert and opens the panel, consuming the payload once', () => {

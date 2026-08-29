@@ -247,3 +247,18 @@ export function BulletListIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function PinIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M10 2.5v8M6 6.5h8M5.5 10.5h9L13 17l-3-2-3 2 1.5-6.5Z" strokeLinejoin="round" />
+    </svg>
+  )
+}

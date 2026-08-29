@@ -33,6 +33,12 @@ interface DocumentPanelState {
   activeDocumentId: string | null
   pendingInsert: ClipInsertPayload | null
   previewClip: ClipPreview | null
+  // Thin flag only — *whether* the active document has an insert point
+  // marked, not the position itself (that lives in `insertMarker.ts`'s
+  // ProseMirror plugin state, the only thing that can keep it correctly
+  // mapped through edits). Lets other components render "a marker is set"
+  // without reaching into the editor instance.
+  insertMarkerDocumentId: string | null
   open: (projectId: string) => void
   close: () => void
   setActiveProject: (projectId: string | null) => void
@@ -40,6 +46,7 @@ interface DocumentPanelState {
   queueInsert: (payload: ClipInsertPayload) => void
   consumePendingInsert: () => ClipInsertPayload | null
   setPreviewClip: (clip: ClipPreview | null) => void
+  setInsertMarkerDocumentId: (documentId: string | null) => void
 }
 
 export const useDocumentPanelStore = create<DocumentPanelState>((set, get) => ({
@@ -48,10 +55,14 @@ export const useDocumentPanelStore = create<DocumentPanelState>((set, get) => ({
   activeDocumentId: null,
   pendingInsert: null,
   previewClip: null,
+  insertMarkerDocumentId: null,
   open: (projectId) => set({ isOpen: true, activeProjectId: projectId }),
   close: () => set({ isOpen: false }),
   setActiveProject: (projectId) => set({ activeProjectId: projectId }),
-  setActiveDocument: (documentId) => set({ activeDocumentId: documentId }),
+  // Switching documents always leaves the old marker behind — it's plugin
+  // state on an editor instance that's about to be torn down/rebuilt.
+  setActiveDocument: (documentId) =>
+    set({ activeDocumentId: documentId, insertMarkerDocumentId: null }),
   queueInsert: (payload) => set({ pendingInsert: payload, isOpen: true }),
   consumePendingInsert: () => {
     const payload = get().pendingInsert
@@ -59,4 +70,5 @@ export const useDocumentPanelStore = create<DocumentPanelState>((set, get) => ({
     return payload
   },
   setPreviewClip: (clip) => set({ previewClip: clip }),
+  setInsertMarkerDocumentId: (documentId) => set({ insertMarkerDocumentId: documentId }),
 }))
