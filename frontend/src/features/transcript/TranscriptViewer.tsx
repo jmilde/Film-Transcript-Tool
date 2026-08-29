@@ -13,6 +13,7 @@ import { transcriptAnchor, useCreateComment } from '../../api/hooks/useComments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
+import { SelectionToolbar } from '../toolbar/SelectionToolbar'
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -25,6 +26,7 @@ import {
   SearchIcon,
   TrashIcon,
 } from '../../components/icons'
+import type { ToolbarAction } from '../toolbar/SelectionToolbar'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Token, Transcript } from '../../api/hooks/useTranscripts'
 import type { Comment } from '../../api/hooks/useComments'
@@ -371,6 +373,55 @@ export function TranscriptViewer({
     clearSelection()
   }
 
+  const toolbarActions: ToolbarAction[] = []
+  if (selectionInfo) {
+    toolbarActions.push(
+      {
+        id: 'play',
+        icon: PlayIcon,
+        label: 'Play selection',
+        variant: 'primary',
+        onClick: () => onPlaySelection(selectionInfo.startTime, selectionInfo.endTime),
+      },
+      {
+        id: 'copy',
+        icon: CopyIcon,
+        label: 'Copy',
+        onClick: () => void navigator.clipboard.writeText(selectionInfo.text),
+      },
+    )
+    if (canMerge) {
+      toolbarActions.push({
+        id: 'edit',
+        icon: EditIcon,
+        label: 'Edit',
+        onClick: () => setMergeDraft(selectionInfo.text),
+      })
+    }
+    if (canEdit) {
+      toolbarActions.push({
+        id: 'comment',
+        icon: CommentIcon,
+        label: 'Comment',
+        variant: 'highlight',
+        onClick: () => setCommentDraft(''),
+      })
+      toolbarActions.push({
+        id: 'add-to-document',
+        icon: DocumentIcon,
+        label: 'Add to Document',
+        onClick: addSelectionToDocument,
+      })
+      toolbarActions.push({
+        id: 'delete',
+        icon: TrashIcon,
+        label: 'Delete',
+        variant: 'danger',
+        onClick: deleteSelection,
+      })
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
@@ -459,139 +510,39 @@ export function TranscriptViewer({
 
       {selectionInfo &&
         (mergeDraft !== null ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
-            <span className="text-slate-500">Edit to:</span>
-            <input
-              autoFocus
-              value={mergeDraft}
-              onChange={(e) => setMergeDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmMerge()
-                if (e.key === 'Escape') setMergeDraft(null)
-              }}
-              className="rounded border border-sky-400 px-1 py-0.5"
-            />
-            <button
-              type="button"
-              className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700"
-              onClick={confirmMerge}
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
-              onClick={() => setMergeDraft(null)}
-            >
-              Cancel
-            </button>
-          </div>
+          <SelectionToolbar
+            mode="draft"
+            draft={{
+              label: 'Edit to:',
+              value: mergeDraft,
+              onChange: setMergeDraft,
+              onConfirm: confirmMerge,
+              onCancel: () => setMergeDraft(null),
+            }}
+          />
         ) : commentDraft !== null ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-violet-100 bg-violet-50 px-4 py-2 text-xs text-slate-600">
-            <span className="text-slate-500">Comment:</span>
-            <input
-              autoFocus
-              value={commentDraft}
-              onChange={(e) => setCommentDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmComment()
-                if (e.key === 'Escape') setCommentDraft(null)
-              }}
-              className="min-w-48 flex-1 rounded border border-violet-400 px-1 py-0.5"
-            />
-            <button
-              type="button"
-              className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700"
-              onClick={confirmComment}
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
-              onClick={() => setCommentDraft(null)}
-            >
-              Cancel
-            </button>
-          </div>
+          <SelectionToolbar
+            mode="draft"
+            draft={{
+              label: 'Comment:',
+              value: commentDraft,
+              onChange: setCommentDraft,
+              onConfirm: confirmComment,
+              onCancel: () => setCommentDraft(null),
+              accentClass: 'border-violet-100 bg-violet-50',
+              inputAccentClass: 'border-violet-400',
+            }}
+          />
         ) : (
-          <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
-            <span className="font-mono">
-              {formatTime(selectionInfo.startTime)} – {formatTime(selectionInfo.endTime)}
-            </span>
-            <span className="max-w-xs truncate italic">"{selectionInfo.text}"</span>
-            <button
-              type="button"
-              aria-label="Play selection"
-              title="Play selection"
-              className="rounded bg-slate-800 p-1.5 text-white hover:bg-slate-700"
-              onClick={() => onPlaySelection(selectionInfo.startTime, selectionInfo.endTime)}
-            >
-              <PlayIcon className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Copy"
-              title="Copy"
-              className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
-              onClick={() => void navigator.clipboard.writeText(selectionInfo.text)}
-            >
-              <CopyIcon className="h-4 w-4" />
-            </button>
-            {canMerge && (
-              <button
-                type="button"
-                aria-label="Edit"
-                title="Edit"
-                className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
-                onClick={() => setMergeDraft(selectionInfo.text)}
-              >
-                <EditIcon className="h-4 w-4" />
-              </button>
-            )}
-            {canEdit && (
-              <button
-                type="button"
-                aria-label="Comment"
-                title="Comment"
-                className="rounded border border-violet-300 p-1.5 text-violet-700 hover:bg-violet-50"
-                onClick={() => setCommentDraft('')}
-              >
-                <CommentIcon className="h-4 w-4" />
-              </button>
-            )}
-            {canEdit && (
-              <button
-                type="button"
-                aria-label="Add to Document"
-                title="Add to Document"
-                className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
-                onClick={addSelectionToDocument}
-              >
-                <DocumentIcon className="h-4 w-4" />
-              </button>
-            )}
-            {canEdit && (
-              <button
-                type="button"
-                aria-label="Delete"
-                title="Delete"
-                className="rounded border border-red-300 p-1.5 text-red-600 hover:bg-red-50"
-                onClick={deleteSelection}
-              >
-                <TrashIcon className="h-4 w-4" />
-              </button>
-            )}
-            <button
-              type="button"
-              className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              onClick={() => clearSelection()}
-              aria-label="Clear selection"
-              title="Clear selection"
-            >
-              <CloseIcon className="h-4 w-4" />
-            </button>
-          </div>
+          <SelectionToolbar
+            mode="actions"
+            summary={{
+              text: selectionInfo.text,
+              timecode: `${formatTime(selectionInfo.startTime)} – ${formatTime(selectionInfo.endTime)}`,
+            }}
+            actions={toolbarActions}
+            onClear={() => clearSelection()}
+          />
         ))}
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4 select-none">

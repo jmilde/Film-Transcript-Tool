@@ -104,10 +104,10 @@ not re-litigate these while implementing):
 - [ ] Verify manually: select prose text, add a comment, reload — highlight and thread persist; edit text before the comment — mark stays attached to the right words (deferred to a consolidated manual pass after Phase E9, once the panel is properly integrated into `AppShell`)
 
 ## Phase E5 — Extract shared `SelectionToolbar`
-- [ ] New `frontend/src/features/toolbar/SelectionToolbar.tsx` + `ToolbarAction` type: `{id, icon, label, variant?, active?, onClick}[]`, a `summary: {text, timecode?}` prop, and support for the existing "swap to inline draft input" mode (the Comment button's type-then-Confirm/Cancel flow)
-- [ ] Extract `TranscriptViewer.tsx`'s existing inline toolbar block (Play/Copy/Edit/Comment/Add to Document/Delete) into this component — pure extraction, zero behavior change; `TranscriptViewer` keeps its existing token-selection state and action implementations, just builds a `ToolbarAction[]` and renders `<SelectionToolbar>`
-- [ ] Move/adapt existing toolbar-behavior tests
-- [ ] Verify: `TranscriptViewer` behavior unchanged (existing tests pass with import-path-only diffs)
+- [x] New `frontend/src/features/toolbar/SelectionToolbar.tsx` + `ToolbarAction` type: `{id, icon, label, variant?, active?, onClick}[]`, a `summary: {text, timecode?}` prop, and support for the existing "swap to inline draft input" mode (the Comment button's type-then-Confirm/Cancel flow)
+- [x] Extract `TranscriptViewer.tsx`'s existing inline toolbar block (Play/Copy/Edit/Comment/Add to Document/Delete) into this component — pure extraction, zero behavior change; `TranscriptViewer` keeps its existing token-selection state and action implementations, just builds a `ToolbarAction[]` and renders `<SelectionToolbar>`
+- [x] Move/adapt existing toolbar-behavior tests — added new `SelectionToolbar.test.tsx` unit tests (summary/actions, clear button, draft mode Confirm/Cancel/Enter/Escape); `TranscriptViewer.test.tsx`'s existing integration tests needed zero changes
+- [x] Verify: `TranscriptViewer` behavior unchanged (existing 27 tests pass byte-for-byte unchanged)
 
 ## Phase E6 — Document formatting/comment `BubbleMenu`
 - [ ] Add `@tiptap/extension-bubble-menu` as a direct dependency in `frontend/package.json`
