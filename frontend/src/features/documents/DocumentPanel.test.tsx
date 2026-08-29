@@ -2,12 +2,14 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocumentPanel } from './DocumentPanel'
 import { AuthProvider } from '../../auth/AuthProvider'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { server } from '../../test/server'
 import type { DocumentSummary } from '../../api/hooks/useDocuments'
+import type { RefObject } from 'react'
+import type { PanelImperativeHandle } from 'react-resizable-panels'
 
 const PROJECT_ID = 'p-1'
 
@@ -27,15 +29,31 @@ function documentBody(id: string, title: string) {
   }
 }
 
-function renderPanel() {
+function renderPanel(panelRef?: RefObject<PanelImperativeHandle | null>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <AuthProvider>
-        <DocumentPanel />
+        <DocumentPanel panelRef={panelRef} />
       </AuthProvider>
     </QueryClientProvider>,
   )
+}
+
+function fakePanelRef(): RefObject<PanelImperativeHandle | null> & {
+  collapse: ReturnType<typeof vi.fn>
+  expand: ReturnType<typeof vi.fn>
+} {
+  const collapse = vi.fn()
+  const expand = vi.fn()
+  const handle: PanelImperativeHandle = {
+    collapse,
+    expand,
+    getSize: () => ({ asPercentage: 0, inPixels: 0 }),
+    isCollapsed: () => false,
+    resize: () => {},
+  }
+  return Object.assign({ current: handle }, { collapse, expand })
 }
 
 beforeEach(() => {
@@ -121,5 +139,42 @@ describe('DocumentPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Delete document' }))
 
     await waitFor(() => expect(useDocumentPanelStore.getState().activeDocumentId).toBeNull())
+  })
+
+  describe('panel collapse/expand bridging', () => {
+    // The real `Panel` geometry can't be asserted on in jsdom (the group's
+    // pixel width is always 0 — see `test/setup.ts`'s `ResizeObserver` stub
+    // comment), so this exercises the bridging effect itself against a fake
+    // `panelRef`, rather than the library's actual layout output.
+    it('collapses the given panelRef when isOpen is false, on mount', () => {
+      useDocumentPanelStore.setState({ isOpen: false, activeProjectId: PROJECT_ID })
+      const panelRef = fakePanelRef()
+
+      renderPanel(panelRef)
+
+      expect(panelRef.collapse).toHaveBeenCalledTimes(1)
+      expect(panelRef.expand).not.toHaveBeenCalled()
+    })
+
+    it('expands the given panelRef once isOpen flips to true', async () => {
+      useDocumentPanelStore.setState({ isOpen: false, activeProjectId: PROJECT_ID })
+      const panelRef = fakePanelRef()
+      renderPanel(panelRef)
+
+      useDocumentPanelStore.setState({ isOpen: true })
+
+      await waitFor(() => expect(panelRef.expand).toHaveBeenCalledTimes(1))
+    })
+
+    it('collapses again once isOpen flips back to false', async () => {
+      useDocumentPanelStore.setState({ isOpen: true, activeProjectId: PROJECT_ID })
+      const panelRef = fakePanelRef()
+      renderPanel(panelRef)
+      expect(panelRef.expand).toHaveBeenCalledTimes(1)
+
+      useDocumentPanelStore.setState({ isOpen: false })
+
+      await waitFor(() => expect(panelRef.collapse).toHaveBeenCalledTimes(1))
+    })
   })
 })

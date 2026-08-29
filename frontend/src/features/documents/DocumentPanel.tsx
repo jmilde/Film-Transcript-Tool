@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import type { RefObject } from 'react'
+import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { useCreateDocument, useDeleteDocument, useDocuments } from '../../api/hooks/useDocuments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { DocumentEditor } from './DocumentEditor'
@@ -7,12 +9,19 @@ import { CloseIcon, DocumentIcon, TrashIcon } from '../../components/icons'
 
 /**
  * The persistent, project-scoped document-builder panel docked in `AppShell`
- * as a sibling of the routed page (not nested in `VideoWorkspace`'s own
- * resizable-panel `Group`, so the two panel systems never fight over space).
- * Collapses to a thin toggle rail when closed; stays mounted across
- * navigation so browsing and writing can happen at the same time.
+ * as a resizable `Panel` sibling of the routed page, inside the same
+ * `Group`. Collapses to a thin toggle rail when closed (mirrored onto the
+ * `Panel` via `panelRef.collapse()`/`.expand()`, bridged from the `isOpen`
+ * store flag below); stays mounted across navigation so browsing and
+ * writing can happen at the same time.
  */
-export function DocumentPanel() {
+export function DocumentPanel({
+  panelRef,
+}: {
+  /** Optional so existing standalone tests (rendered outside `AppShell`'s
+   * `Panel`) don't need to fabricate one — the effect below just no-ops. */
+  panelRef?: RefObject<PanelImperativeHandle | null>
+}) {
   const isOpen = useDocumentPanelStore((s) => s.isOpen)
   const activeProjectId = useDocumentPanelStore((s) => s.activeProjectId)
   const activeDocumentId = useDocumentPanelStore((s) => s.activeDocumentId)
@@ -35,6 +44,15 @@ export function DocumentPanel() {
     }
   }, [documents, activeDocumentId, setActiveDocument])
 
+  // One-directional bridge: the store's `isOpen` flag is the single source
+  // of truth, mirrored onto the `Panel`'s own collapsed state. Both methods
+  // are no-ops if the panel is already in the target state (or, in tests
+  // that render this component standalone, if `panelRef` is undefined).
+  useEffect(() => {
+    if (isOpen) panelRef?.current?.expand()
+    else panelRef?.current?.collapse()
+  }, [isOpen, panelRef])
+
   if (!isOpen) {
     return (
       <button
@@ -43,7 +61,7 @@ export function DocumentPanel() {
         title="Documents"
         onClick={() => activeProjectId && openPanel(activeProjectId)}
         disabled={!activeProjectId}
-        className="flex w-10 shrink-0 items-start justify-center border-l border-slate-200 bg-white py-4 text-slate-400 hover:bg-slate-50 hover:text-slate-600 disabled:opacity-40"
+        className="flex h-full w-full items-start justify-center border-l border-slate-200 bg-white py-4 text-slate-400 hover:bg-slate-50 hover:text-slate-600 disabled:opacity-40"
       >
         <DocumentIcon className="h-5 w-5" />
       </button>
@@ -65,7 +83,7 @@ export function DocumentPanel() {
   }
 
   return (
-    <div className="flex w-96 shrink-0 flex-col border-l border-slate-200 bg-white">
+    <div className="flex h-full flex-col border-l border-slate-200 bg-white">
       <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
         <DocumentIcon className="h-4 w-4 text-slate-400" />
         <span className="text-sm font-semibold text-slate-700">Documents</span>

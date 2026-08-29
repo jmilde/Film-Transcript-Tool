@@ -167,7 +167,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="mb-3 flex items-center gap-3">
         <Link
           to={video ? `/projects/${video.project_id}` : '/'}

@@ -93,7 +93,7 @@ function ChatPageInner({
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-5xl gap-4">
+    <div className="mx-auto flex h-full max-w-5xl gap-4">
       <ChatHistorySidebar
         projectId={projectId}
         activeConversationId={conversationId}
