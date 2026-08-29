@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
@@ -9,20 +10,24 @@ import {
   useMergeTokens,
   useSplitToken,
 } from '../../api/hooks/useTokens'
-import { useCreateComment } from '../../api/hooks/useComments'
+import { transcriptAnchor, useCreateComment } from '../../api/hooks/useComments'
+import { useDocumentPanelStore } from '../../store/documentPanel'
+import { clipBlockMarkerHtml, writeClipToClipboard } from '../documents/clipClipboard'
 import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
+import { SelectionToolbar } from '../toolbar/SelectionToolbar'
 import {
   ChevronDownIcon,
   ChevronUpIcon,
   CloseIcon,
   CommentIcon,
   CopyIcon,
+  DocumentIcon,
   EditIcon,
   PlayIcon,
   SearchIcon,
-  TrashIcon,
 } from '../../components/icons'
+import type { ToolbarAction } from '../toolbar/SelectionToolbar'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Token, Transcript } from '../../api/hooks/useTranscripts'
 import type { Comment } from '../../api/hooks/useComments'
@@ -38,6 +43,9 @@ interface TranscriptViewerProps {
    * viewer can still watch, select, and copy, but not edit/delete/merge/split
    * tokens or comment. */
   canEdit: boolean
+  /** The video this transcript belongs to — needed to anchor an inserted
+   * clip block to a video, not just a transcript. */
+  videoId: string
 }
 
 interface SpeakerGroup {
@@ -52,9 +60,12 @@ interface SpeakerGroup {
  * it into view. Consecutive segments spoken by the same speaker are grouped
  * under a single speaker header, matching how the transcript reads out loud.
  * Clicking a token seeks the video there; dragging across tokens selects a
- * range, showing its text/timecodes and play/copy/edit/comment/delete
- * actions. Double-clicking a token edits its text inline — clearing it
- * deletes the token, typing a space splits it into multiple tokens. Ranges
+ * range, showing its text/timecodes and play/copy/edit/comment actions —
+ * there is no separate delete action; clearing the Edit draft to empty text
+ * deletes the whole selection, the same "clear it to delete it" rule
+ * double-clicking a single token already uses. Double-clicking a token edits
+ * its text inline — clearing it deletes the token, typing a space splits it
+ * into multiple tokens. Ranges
  * covered by a comment are underlined (violet while unresolved, gray once
  * resolved). An inline search finds and steps through matches in this
  * transcript.
@@ -67,6 +78,7 @@ export function TranscriptViewer({
   onSeekToken,
   onPlaySelection,
   canEdit,
+  videoId,
 }: TranscriptViewerProps) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const autoFollow = usePlaybackStore((s) => s.autoFollow)
@@ -77,6 +89,7 @@ export function TranscriptViewer({
   const extendSelection = useSelectionStore((s) => s.extend)
   const finishSelection = useSelectionStore((s) => s.finish)
   const clearSelection = useSelectionStore((s) => s.clear)
+  const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
 
   const transcriptId = transcript?.id ?? ''
   const editToken = useEditToken(transcriptId)
@@ -180,8 +193,10 @@ export function TranscriptViewer({
   const commentedTokenInfo = useMemo(() => {
     const map = new Map<string, { resolved: boolean }>()
     for (const comment of comments ?? []) {
-      const a = tokenIndex.get(comment.start_token_id)
-      const b = tokenIndex.get(comment.end_token_id)
+      const anchor = transcriptAnchor(comment)
+      if (!anchor) continue
+      const a = tokenIndex.get(anchor.start_token_id)
+      const b = tokenIndex.get(anchor.end_token_id)
       if (a === undefined || b === undefined) continue
       const [lo, hi] = a <= b ? [a, b] : [b, a]
       for (let i = lo; i <= hi; i++) {
@@ -208,11 +223,76 @@ export function TranscriptViewer({
   useEffect(() => setMatchIndex(0), [searchQuery])
 
   const tokenRefs = useRef(new Map<string, HTMLSpanElement>())
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [popupPos, setPopupPos] = useState<{
+    top: number
+    left: number
+    placement: 'above' | 'below' | 'top'
+  } | null>(null)
 
   useEffect(() => {
     if (!currentMatch) return
     tokenRefs.current.get(currentMatch.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [currentMatch])
+
+  // Floats the selection toolbar above the selected token range (matching
+  // the document editor's BubbleMenu), portaled to `document.body` and
+  // positioned with `position: fixed` in viewport coordinates — not as an
+  // absolutely positioned child of the scrollable transcript panel, which
+  // clipped the popup any time it would render partly outside that panel's
+  // own box. Recomputed on every selection change, on scroll, and on
+  // resize; when there isn't room on either side of the selection it clamps
+  // to the top of the viewport instead of disappearing off-screen.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container || selectedTokens.length === 0) {
+      setPopupPos(null)
+      return
+    }
+
+    function recompute() {
+      const firstEl = tokenRefs.current.get(selectedTokens[0].id)
+      const lastEl = tokenRefs.current.get(selectedTokens[selectedTokens.length - 1].id)
+      if (!firstEl || !lastEl) {
+        setPopupPos(null)
+        return
+      }
+      const firstRect = firstEl.getBoundingClientRect()
+      const lastRect = lastEl.getBoundingClientRect()
+      const top = Math.min(firstRect.top, lastRect.top)
+      const bottom = Math.max(firstRect.bottom, lastRect.bottom)
+      const midX = (firstRect.left + lastRect.right) / 2
+
+      const EDGE = 8
+      const GAP = 8
+      // Rough estimates — only used to decide placement/clamping, not the
+      // popup's actual rendered size.
+      const ESTIMATED_HEIGHT = 48
+      const ESTIMATED_HALF_WIDTH = 160
+      const left = Math.min(
+        Math.max(midX, EDGE + ESTIMATED_HALF_WIDTH),
+        window.innerWidth - EDGE - ESTIMATED_HALF_WIDTH,
+      )
+
+      if (top - ESTIMATED_HEIGHT - GAP >= EDGE) {
+        setPopupPos({ top: top - GAP, left, placement: 'above' })
+      } else if (bottom + ESTIMATED_HEIGHT + GAP <= window.innerHeight - EDGE) {
+        setPopupPos({ top: bottom + GAP, left, placement: 'below' })
+      } else {
+        // No room above or below (a huge selection filling the viewport) —
+        // pin to the top of the viewport rather than hiding.
+        setPopupPos({ top: EDGE, left, placement: 'top' })
+      }
+    }
+
+    recompute()
+    container.addEventListener('scroll', recompute, { passive: true })
+    window.addEventListener('resize', recompute)
+    return () => {
+      container.removeEventListener('scroll', recompute)
+      window.removeEventListener('resize', recompute)
+    }
+  }, [selectedTokens, mergeDraft, commentDraft])
 
   function stepMatch(direction: 1 | -1) {
     if (searchMatches.length === 0) return
@@ -265,17 +345,46 @@ export function TranscriptViewer({
   }
 
   // Ctrl/Cmd+S commits an in-progress edit and always prevents the browser's
-  // "Save page" dialog, since edits are meant to be saved this way. The
-  // listener is registered once and reads commitEdit through a ref so it
-  // isn't re-subscribed on every keystroke/playback tick.
+  // "Save page" dialog, since edits are meant to be saved this way. Backspace/
+  // Delete deletes the current token selection — the same "clear it to
+  // delete it" rule as the Edit draft's empty-confirm, just without having
+  // to open the draft first. Both are read through refs so the listener is
+  // registered once and isn't re-subscribed on every keystroke/playback tick.
   const commitEditRef = useRef(commitEdit)
   commitEditRef.current = commitEdit
+
+  const backspaceDeleteRef = useRef<() => boolean>(() => false)
+  backspaceDeleteRef.current = () => {
+    if (!canEdit || editingTokenId !== null || mergeDraft !== null || commentDraft !== null) {
+      return false
+    }
+    if (selectedTokens.length === 0) return false
+    deleteSelection()
+    return true
+  }
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         commitEditRef.current()
+        return
+      }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        const target = e.target
+        // Let normal text editing happen inside any focused input/textarea
+        // (search box, comment/edit drafts) or contenteditable — this
+        // shortcut is only for a token range selected in the transcript
+        // itself.
+        if (
+          target instanceof HTMLElement &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+        ) {
+          return
+        }
+        if (backspaceDeleteRef.current()) {
+          e.preventDefault()
+        }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -320,11 +429,24 @@ export function TranscriptViewer({
     setEditingText(token.text)
   }
 
+  // Clearing the draft to empty deletes the whole selection, regardless of
+  // segment span — mirrors the single-token double-click-to-clear pattern
+  // (commitEdit above), so there's one "clear text to delete" rule instead of
+  // a separate Delete action. Replacing with non-empty text is still a real
+  // merge, which the backend only allows within one segment; a cross-segment
+  // selection with non-empty text is left as a no-op (draft stays open) since
+  // there's no destination token to write it to.
   function confirmMerge() {
-    if (mergeDraft === null || mergeDraft.trim() === '') return
+    if (mergeDraft === null) return
+    const trimmed = mergeDraft.trim()
+    if (trimmed === '') {
+      deleteSelection()
+      return
+    }
+    if (!canMerge) return
     mergeTokens.mutate({
       tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
-      text: mergeDraft.trim(),
+      text: trimmed,
     })
     setMergeDraft(null)
     clearSelection()
@@ -341,11 +463,88 @@ export function TranscriptViewer({
     clearSelection()
   }
 
+  // Writes both a plain-text and a marker-HTML clipboard entry so pasting
+  // into a document reconstructs an inline clip reference (not just the
+  // excerpt string) while pasting elsewhere still yields plain text — see
+  // `clipClipboard.ts`. Anchored to whichever transcript (original or
+  // translation) is currently on screen, same as `addSelectionToDocument`.
+  function copySelection() {
+    if (!transcript || selectedTokens.length === 0 || !selectionInfo) return
+    void writeClipToClipboard(
+      selectionInfo.text,
+      clipBlockMarkerHtml(
+        {
+          nodeId: crypto.randomUUID(),
+          transcriptId: transcript.id,
+          videoId,
+          startTokenId: selectedTokens[0].id,
+          endTokenId: selectedTokens[selectedTokens.length - 1].id,
+        },
+        selectionInfo.text,
+      ),
+    )
+  }
+
+  // Anchors the clip to whichever transcript (original or translation) is
+  // currently on screen — not forced to the original, unlike chat citations
+  // (see docs/1100_document_builder.md's anchor-resolution rationale).
+  function addSelectionToDocument() {
+    if (!transcript || selectedTokens.length === 0) return
+    queueInsert({
+      transcriptId: transcript.id,
+      videoId,
+      startTokenId: selectedTokens[0].id,
+      endTokenId: selectedTokens[selectedTokens.length - 1].id,
+    })
+    clearSelection()
+  }
+
   function deleteSelection() {
     deleteTokens.mutate({
       tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
     })
+    setMergeDraft(null)
     clearSelection()
+  }
+
+  const toolbarActions: ToolbarAction[] = []
+  if (selectionInfo) {
+    toolbarActions.push(
+      {
+        id: 'play',
+        icon: PlayIcon,
+        label: 'Play selection',
+        variant: 'primary',
+        onClick: () => onPlaySelection(selectionInfo.startTime, selectionInfo.endTime),
+      },
+      {
+        id: 'copy',
+        icon: CopyIcon,
+        label: 'Copy',
+        onClick: copySelection,
+      },
+    )
+    if (canEdit) {
+      toolbarActions.push({
+        id: 'edit',
+        icon: EditIcon,
+        label: 'Edit',
+        onClick: () => setMergeDraft(selectionInfo.text),
+      })
+      toolbarActions.push({
+        id: 'comment',
+        icon: CommentIcon,
+        label: 'Comment',
+        variant: 'highlight',
+        onClick: () => setCommentDraft(''),
+      })
+      toolbarActions.push({
+        id: 'add-to-document',
+        icon: DocumentIcon,
+        label: 'Add to Document',
+        onClick: addSelectionToDocument,
+      })
+    }
   }
 
   return (
@@ -435,132 +634,57 @@ export function TranscriptViewer({
       )}
 
       {selectionInfo &&
-        (mergeDraft !== null ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
-            <span className="text-slate-500">Edit to:</span>
-            <input
-              autoFocus
-              value={mergeDraft}
-              onChange={(e) => setMergeDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmMerge()
-                if (e.key === 'Escape') setMergeDraft(null)
-              }}
-              className="rounded border border-sky-400 px-1 py-0.5"
-            />
-            <button
-              type="button"
-              className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700"
-              onClick={confirmMerge}
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
-              onClick={() => setMergeDraft(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : commentDraft !== null ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-violet-100 bg-violet-50 px-4 py-2 text-xs text-slate-600">
-            <span className="text-slate-500">Comment:</span>
-            <input
-              autoFocus
-              value={commentDraft}
-              onChange={(e) => setCommentDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmComment()
-                if (e.key === 'Escape') setCommentDraft(null)
-              }}
-              className="min-w-48 flex-1 rounded border border-violet-400 px-1 py-0.5"
-            />
-            <button
-              type="button"
-              className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700"
-              onClick={confirmComment}
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
-              onClick={() => setCommentDraft(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
-            <span className="font-mono">
-              {formatTime(selectionInfo.startTime)} – {formatTime(selectionInfo.endTime)}
-            </span>
-            <span className="max-w-xs truncate italic">"{selectionInfo.text}"</span>
-            <button
-              type="button"
-              aria-label="Play selection"
-              title="Play selection"
-              className="rounded bg-slate-800 p-1.5 text-white hover:bg-slate-700"
-              onClick={() => onPlaySelection(selectionInfo.startTime, selectionInfo.endTime)}
-            >
-              <PlayIcon className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Copy"
-              title="Copy"
-              className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
-              onClick={() => void navigator.clipboard.writeText(selectionInfo.text)}
-            >
-              <CopyIcon className="h-4 w-4" />
-            </button>
-            {canMerge && (
-              <button
-                type="button"
-                aria-label="Edit"
-                title="Edit"
-                className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100"
-                onClick={() => setMergeDraft(selectionInfo.text)}
-              >
-                <EditIcon className="h-4 w-4" />
-              </button>
+        popupPos &&
+        createPortal(
+          <div
+            className="fixed z-50 w-max max-w-[90vw] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+            style={{
+              top: popupPos.top,
+              left: popupPos.left,
+              transform:
+                popupPos.placement === 'above' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            }}
+          >
+            {mergeDraft !== null ? (
+              <SelectionToolbar
+                mode="draft"
+                draft={{
+                  label: 'Edit to:',
+                  value: mergeDraft,
+                  onChange: setMergeDraft,
+                  onConfirm: confirmMerge,
+                  onCancel: () => setMergeDraft(null),
+                }}
+              />
+            ) : commentDraft !== null ? (
+              <SelectionToolbar
+                mode="draft"
+                draft={{
+                  label: 'Comment:',
+                  value: commentDraft,
+                  onChange: setCommentDraft,
+                  onConfirm: confirmComment,
+                  onCancel: () => setCommentDraft(null),
+                  accentClass: 'border-violet-100 bg-violet-50',
+                  inputAccentClass: 'border-violet-400',
+                }}
+              />
+            ) : (
+              <SelectionToolbar
+                mode="actions"
+                summary={{
+                  text: selectionInfo.text,
+                  timecode: `${formatTime(selectionInfo.startTime)} – ${formatTime(selectionInfo.endTime)}`,
+                }}
+                actions={toolbarActions}
+                onClear={() => clearSelection()}
+              />
             )}
-            {canEdit && (
-              <button
-                type="button"
-                aria-label="Comment"
-                title="Comment"
-                className="rounded border border-violet-300 p-1.5 text-violet-700 hover:bg-violet-50"
-                onClick={() => setCommentDraft('')}
-              >
-                <CommentIcon className="h-4 w-4" />
-              </button>
-            )}
-            {canEdit && (
-              <button
-                type="button"
-                aria-label="Delete"
-                title="Delete"
-                className="rounded border border-red-300 p-1.5 text-red-600 hover:bg-red-50"
-                onClick={deleteSelection}
-              >
-                <TrashIcon className="h-4 w-4" />
-              </button>
-            )}
-            <button
-              type="button"
-              className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              onClick={() => clearSelection()}
-              aria-label="Clear selection"
-              title="Clear selection"
-            >
-              <CloseIcon className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
+          </div>,
+          document.body,
+        )}
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 select-none">
+      <div ref={scrollContainerRef} className="flex-1 space-y-4 overflow-y-auto p-4 select-none">
         {speakerGroups.map((group) => (
           <div key={group.key}>
             <div className="mb-1 text-xs font-semibold text-slate-500">

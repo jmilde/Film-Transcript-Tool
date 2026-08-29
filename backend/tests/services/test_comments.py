@@ -1,5 +1,8 @@
+from typing import Any
+
 import pytest
-from app.models.comment import CommentRange, CommentReply
+from app.models.comment import CommentRange, CommentReply, DocumentCommentAnchor
+from app.models.document import Document
 from app.models.folder import Folder
 from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
@@ -10,8 +13,10 @@ from app.services.comments import (
     CommentRangeInvalidError,
     add_reply,
     create_comment,
+    create_document_comment,
     set_resolved,
 )
+from app.services.documents import resolve_document_comment_excerpt
 from app.services.transcripts import create_transcript_from_normalized
 from app.transcription.normalize import normalize
 from sqlalchemy import select
@@ -131,6 +136,134 @@ def test_add_reply(db_session: Session, user: User) -> None:
     assert stored is not None
     assert stored.text == "Agreed"
     assert stored.comment_id == comment.id
+
+
+def _document(
+    db: Session, project: Project, user: User, content: dict[str, Any] | None = None
+) -> Document:
+    document = Document(
+        project_id=project.id,
+        title="Draft",
+        content=content or {"type": "doc", "content": []},
+        created_by=user.id,
+        updated_by=user.id,
+    )
+    db.add(document)
+    db.flush()
+    return document
+
+
+def test_create_document_comment_clip_node(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    document = _document(db_session, project, user)
+
+    comment = create_document_comment(
+        db_session, document, clip_node_id="node-1", text="Nice moment", user_id=user.id
+    )
+
+    assert comment.document_id == document.id
+    assert comment.transcript_id is None
+    anchor = db_session.execute(
+        select(DocumentCommentAnchor).where(DocumentCommentAnchor.comment_id == comment.id)
+    ).scalar_one()
+    assert anchor.clip_node_id == "node-1"
+
+
+def test_create_document_comment_prose_has_no_clip_node(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    document = _document(db_session, project, user)
+
+    comment = create_document_comment(
+        db_session, document, clip_node_id=None, text="Rephrase this", user_id=user.id
+    )
+
+    anchor = db_session.execute(
+        select(DocumentCommentAnchor).where(DocumentCommentAnchor.comment_id == comment.id)
+    ).scalar_one()
+    assert anchor.clip_node_id is None
+
+
+def test_resolve_document_comment_excerpt_clip_node(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    transcript = _transcript(db_session, project, user, "clip")
+    tokens = _tokens(db_session, transcript, 0)  # Hello / there.
+    content = {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "clipBlock",
+                        "attrs": {
+                            "nodeId": "node-1",
+                            "transcriptId": str(transcript.id),
+                            "startTokenId": str(tokens[0].id),
+                            "endTokenId": str(tokens[1].id),
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    document = _document(db_session, project, user, content)
+    comment = create_document_comment(
+        db_session, document, clip_node_id="node-1", text="Nice moment", user_id=user.id
+    )
+
+    excerpt = resolve_document_comment_excerpt(
+        db_session, document, comment_id=comment.id, clip_node_id="node-1"
+    )
+
+    assert excerpt == "Hello there."
+
+
+def test_resolve_document_comment_excerpt_missing_clip_node_returns_none(
+    db_session: Session, user: User
+) -> None:
+    project = _project(db_session, user)
+    document = _document(db_session, project, user)
+    comment = create_document_comment(
+        db_session, document, clip_node_id="node-missing", text="orphaned", user_id=user.id
+    )
+
+    excerpt = resolve_document_comment_excerpt(
+        db_session, document, comment_id=comment.id, clip_node_id="node-missing"
+    )
+
+    assert excerpt is None
+
+
+def test_resolve_document_comment_excerpt_prose_mark(db_session: Session, user: User) -> None:
+    project = _project(db_session, user)
+    document = _document(db_session, project, user)
+    comment = create_document_comment(
+        db_session, document, clip_node_id=None, text="Rephrase this", user_id=user.id
+    )
+    document.content = {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    {"type": "text", "text": "Some "},
+                    {
+                        "type": "text",
+                        "text": "marked words",
+                        "marks": [{"type": "comment", "attrs": {"commentId": str(comment.id)}}],
+                    },
+                    {"type": "text", "text": " after"},
+                ],
+            }
+        ],
+    }
+    db_session.flush()
+
+    excerpt = resolve_document_comment_excerpt(
+        db_session, document, comment_id=comment.id, clip_node_id=None
+    )
+
+    assert excerpt == "marked words"
 
 
 def test_set_resolved(db_session: Session, user: User) -> None:

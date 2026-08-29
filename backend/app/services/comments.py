@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import BadRequestError, NotFoundError
-from app.models.comment import Comment, CommentRange, CommentReply
+from app.models.comment import Comment, CommentRange, CommentReply, DocumentCommentAnchor
+from app.models.document import Document
 from app.models.transcript import Transcript, TranscriptToken
 
 
@@ -61,6 +62,38 @@ def create_comment(
             end_token_id=end_token_id,
         )
     )
+    session.flush()
+    return comment
+
+
+def create_document_comment(
+    session: Session,
+    document: Document,
+    *,
+    clip_node_id: str | None,
+    text: str,
+    user_id: uuid.UUID,
+) -> Comment:
+    """Create a comment anchored to ``document``.
+
+    Mirrors ``create_comment``'s shape for the document side of the polymorphic
+    anchor. Never touches ``document.content`` — a prose-text comment's actual
+    position anchor is a TipTap `comment` mark the frontend applies to the
+    editor separately (see `docs/1100_document_builder.md`); a clip-node
+    comment's anchor is `clip_node_id` alone, since a clip node is immutable
+    read-only content that never needs an in-editor mark of its own.
+    """
+    comment = Comment(
+        document_id=document.id,
+        project_id=document.project_id,
+        text=text,
+        resolved=False,
+        created_by=user_id,
+        updated_by=user_id,
+    )
+    session.add(comment)
+    session.flush()
+    session.add(DocumentCommentAnchor(comment_id=comment.id, clip_node_id=clip_node_id))
     session.flush()
     return comment
 

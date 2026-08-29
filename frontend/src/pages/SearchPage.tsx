@@ -4,6 +4,7 @@ import { useSearchGroups } from '../api/hooks/useSearch'
 import type { SearchHit } from '../api/hooks/useSearch'
 import { SearchVideoGroupCard } from '../features/search/SearchVideoGroupCard'
 import type { PendingSearchNav } from '../features/search/types'
+import { useDocumentPanelStore } from '../store/documentPanel'
 
 export function SearchPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -15,6 +16,9 @@ function SearchPageInner({ projectId }: { projectId: string }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const navigate = useNavigate()
+
+  const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
+  useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
 
   const q = searchParams.get('q') ?? ''
   const [input, setInput] = useState(q)

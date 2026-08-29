@@ -5,6 +5,7 @@ import { useCreateFolder } from '../api/hooks/useFolders'
 import { FolderTree } from '../features/folders/FolderTree'
 import { FolderPanel } from '../features/folders/FolderPanel'
 import { MembersPanel } from '../features/members/MembersPanel'
+import { useDocumentPanelStore } from '../store/documentPanel'
 
 export function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -16,6 +17,9 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
   const { data: project, isPending, isError } = useProject(projectId)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const navigate = useNavigate()
+
+  const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
+  useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

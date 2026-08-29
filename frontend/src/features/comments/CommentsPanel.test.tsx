@@ -14,14 +14,17 @@ const TRANSCRIPT_ID = 't-1'
 
 const COMMENT: Comment = {
   id: 'c-1',
-  transcript_id: TRANSCRIPT_ID,
   created_by: 'user-a',
   text: 'Check this quote',
   resolved: false,
-  start_token_id: 'tok-a',
-  end_token_id: 'tok-b',
-  in_time: 1,
-  out_time: 2,
+  anchor: {
+    kind: 'transcript',
+    transcript_id: TRANSCRIPT_ID,
+    start_token_id: 'tok-a',
+    end_token_id: 'tok-b',
+    in_time: 1,
+    out_time: 2,
+  },
   created_at: '2026-01-01T00:00:00Z',
   replies: [
     { id: 'r-1', created_by: 'user-b', text: 'Agreed', created_at: '2026-01-01T00:01:00Z' },

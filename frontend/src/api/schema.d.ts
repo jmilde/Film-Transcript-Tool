@@ -449,6 +449,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{document_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List For Document */
+        get: operations["list_for_document_documents__document_id__comments_get"];
+        put?: never;
+        /** Create For Document */
+        post: operations["create_for_document_documents__document_id__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/comments/{comment_id}/replies": {
         parameters: {
             query?: never;
@@ -611,7 +629,18 @@ export interface paths {
         put?: never;
         /**
          * Ask
-         * @description Ask a question over the project's transcripts; enqueues no job — synchronous.
+         * @description Ask a question over the project's transcripts; enqueues no job.
+         *
+         *     Streams server-sent events on the same request/response rather than a
+         *     single JSON body: a ``status`` event each time the agent starts a search
+         *     (so the UI can show "Searching for ..." live), then one terminal event —
+         *     ``done`` with the persisted message, or ``error``.
+         *
+         *     A bad ``conversation_id`` is checked here, before the stream starts, so
+         *     it can still be a normal 404 — once ``StreamingResponse`` sends headers
+         *     (200), the status code can no longer change, so ``stream_answer_question``
+         *     turns that same case into an ``error`` event instead as a defensive
+         *     fallback (e.g. a delete racing this request).
          */
         post: operations["ask_projects__project_id__chat_post"];
         delete?: never;
@@ -631,6 +660,66 @@ export interface paths {
         get: operations["get_conversation_projects__project_id__chat__conversation_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Project Documents */
+        get: operations["list_project_documents_projects__project_id__documents_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_projects__project_id__documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get */
+        get: operations["get_documents__document_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete */
+        delete: operations["delete_documents__document_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update */
+        patch: operations["update_documents__document_id__patch"];
+        trace?: never;
+    };
+    "/documents/{document_id}/clip-blocks/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Clip Block Route
+         * @description Lets the editor populate a newly inserted node's attrs immediately, without a
+         *     full document round-trip. ``document`` only gates access — the clip itself can
+         *     reference any transcript, since a clip's source video need not be the one
+         *     the document is scoped to (documents are project-scoped, not video-scoped).
+         */
+        post: operations["resolve_clip_block_route_documents__document_id__clip_blocks_resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -657,15 +746,6 @@ export interface components {
             question: string;
             /** Conversation Id */
             conversation_id?: string | null;
-        };
-        /** ChatAskResponse */
-        ChatAskResponse: {
-            /**
-             * Conversation Id
-             * Format: uuid
-             */
-            conversation_id: string;
-            message: components["schemas"]["ChatMessageRead"];
         };
         /**
          * ChatCitation
@@ -768,6 +848,75 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * ClipBlockRead
+         * @description A clip block's resolved display fields, mirroring ``ChatCitation``.
+         *
+         *     Resolved fresh from the referenced tokens on every read — nothing here is
+         *     persisted on ``Document.content``, so the excerpt can't drift from edits
+         *     made to the source transcript.
+         */
+        ClipBlockRead: {
+            /**
+             * Transcript Id
+             * Format: uuid
+             */
+            transcript_id: string;
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+            /** Video Name */
+            video_name: string;
+            /**
+             * Segment Id
+             * Format: uuid
+             */
+            segment_id: string;
+            /**
+             * Start Token Id
+             * Format: uuid
+             */
+            start_token_id: string;
+            /**
+             * End Token Id
+             * Format: uuid
+             */
+            end_token_id: string;
+            /** Start Time */
+            start_time: number;
+            /** End Time */
+            end_time: number;
+            /** Speaker Name */
+            speaker_name: string | null;
+            /** Language */
+            language: string | null;
+            /** Excerpt */
+            excerpt: string;
+            /** Thumbnail Token */
+            thumbnail_token: string | null;
+            /** Folder Path */
+            folder_path: string[];
+        };
+        /** ClipBlockResolveRequest */
+        ClipBlockResolveRequest: {
+            /**
+             * Transcript Id
+             * Format: uuid
+             */
+            transcript_id: string;
+            /**
+             * Start Token Id
+             * Format: uuid
+             */
+            start_token_id: string;
+            /**
+             * End Token Id
+             * Format: uuid
+             */
+            end_token_id: string;
+        };
         /** CommentCreate */
         CommentCreate: {
             /**
@@ -791,11 +940,6 @@ export interface components {
              */
             id: string;
             /**
-             * Transcript Id
-             * Format: uuid
-             */
-            transcript_id: string;
-            /**
              * Created By
              * Format: uuid
              */
@@ -804,20 +948,8 @@ export interface components {
             text: string;
             /** Resolved */
             resolved: boolean;
-            /**
-             * Start Token Id
-             * Format: uuid
-             */
-            start_token_id: string;
-            /**
-             * End Token Id
-             * Format: uuid
-             */
-            end_token_id: string;
-            /** In Time */
-            in_time: number;
-            /** Out Time */
-            out_time: number;
+            /** Anchor */
+            anchor: components["schemas"]["TranscriptCommentAnchor"] | components["schemas"]["DocumentCommentAnchorRead"];
             /**
              * Created At
              * Format: date-time
@@ -855,6 +987,95 @@ export interface components {
         CommentUpdate: {
             /** Resolved */
             resolved?: boolean | null;
+        };
+        /** DocumentCommentAnchorRead */
+        DocumentCommentAnchorRead: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "document";
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Clip Node Id */
+            clip_node_id: string | null;
+            /** Excerpt */
+            excerpt: string | null;
+        };
+        /** DocumentCommentCreate */
+        DocumentCommentCreate: {
+            /** Clip Node Id */
+            clip_node_id?: string | null;
+            /** Text */
+            text: string;
+        };
+        /** DocumentCreate */
+        DocumentCreate: {
+            /** Title */
+            title: string;
+        };
+        /** DocumentRead */
+        DocumentRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Title */
+            title: string;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * DocumentSummary
+         * @description List-view shape — no ``content``, keeping the panel's document switcher cheap.
+         */
+        DocumentSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** DocumentUpdate */
+        DocumentUpdate: {
+            /** Title */
+            title?: string | null;
+            /** Content */
+            content?: {
+                [key: string]: unknown;
+            } | null;
+            /** Expected Version */
+            expected_version: number;
         };
         /** ExportCreate */
         ExportCreate: {
@@ -1239,6 +1460,33 @@ export interface components {
             tokens: components["schemas"]["TokenSplitPiece"][];
             /** Expected Version */
             expected_version: number;
+        };
+        /** TranscriptCommentAnchor */
+        TranscriptCommentAnchor: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "transcript";
+            /**
+             * Transcript Id
+             * Format: uuid
+             */
+            transcript_id: string;
+            /**
+             * Start Token Id
+             * Format: uuid
+             */
+            start_token_id: string;
+            /**
+             * End Token Id
+             * Format: uuid
+             */
+            end_token_id: string;
+            /** In Time */
+            in_time: number;
+            /** Out Time */
+            out_time: number;
         };
         /** TranscriptRead */
         TranscriptRead: {
@@ -2433,6 +2681,72 @@ export interface operations {
             };
         };
     };
+    list_for_document_documents__document_id__comments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_for_document_documents__document_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentCommentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reply_comments__comment_id__replies_post: {
         parameters: {
             query?: never;
@@ -2819,7 +3133,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatAskResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -2852,6 +3166,202 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatMessageRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_project_documents_projects__project_id__documents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_projects__project_id__documents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_documents__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_documents__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_documents__document_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_clip_block_route_documents__document_id__clip_blocks_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClipBlockResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClipBlockRead"];
                 };
             };
             /** @description Validation Error */

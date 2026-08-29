@@ -270,14 +270,17 @@ describe('VideoWorkspace', () => {
         HttpResponse.json([
           {
             id: 'comment-1',
-            transcript_id: TRANSCRIPT_ID,
             created_by: 'user-a',
             text: 'Check this',
             resolved: false,
-            start_token_id: '00000000-0000-0000-0000-0000000000k1',
-            end_token_id: '00000000-0000-0000-0000-0000000000k2',
-            in_time: 0,
-            out_time: 2,
+            anchor: {
+              kind: 'transcript',
+              transcript_id: TRANSCRIPT_ID,
+              start_token_id: '00000000-0000-0000-0000-0000000000k1',
+              end_token_id: '00000000-0000-0000-0000-0000000000k2',
+              in_time: 0,
+              out_time: 2,
+            },
             created_at: '2026-01-01T00:00:00Z',
             replies: [],
           },
