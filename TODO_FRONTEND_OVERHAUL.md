@@ -108,13 +108,13 @@ New `frontend/src/components/ui/` folder. Each primitive is a thin,
 typed wrapper over plain Tailwind using Phase 1's theme variables — no
 new runtime dependency for these.
 
-- [ ] `Button.tsx` — variants (primary/secondary/ghost/destructive), sizes, disabled state, matches inspo's rounded-corner language
-- [ ] `Input.tsx` / `Textarea.tsx` — replace the ad hoc `className="rounded border border-slate-300 px-3 py-1.5 text-sm"` inputs scattered across `Projects.tsx`, `ProjectView.tsx`'s `NewFolder`, `SearchPage.tsx`, `ChatInput.tsx`, etc.
-- [ ] `Card.tsx` — the airy/pastel variant used on browsing pages and a plain/dense variant used in the workspace (one component, a `variant` prop — not two components, to avoid duplicating the base styles)
-- [ ] `Badge.tsx` — pill-shaped, dot-prefixed, semantic-colored (mirrors the inspo's status pills) — used for e.g. job/processing status, search hit "kind" labels
-- [ ] `Breadcrumb.tsx` — presentational only (`items: {label, href?}[]`), no data-fetching; used by Phase 6
-- [ ] Tests: one test file per primitive covering variants/states via RTL, not snapshot-only
-- [ ] Verify: `npm run test` green, `npm run typecheck` clean
+- [x] `Button.tsx` — variants (primary/secondary/ghost/destructive), sizes, disabled state, matches inspo's rounded-corner language
+- [x] `Input.tsx` / `Textarea.tsx` — replace the ad hoc `className="rounded border border-slate-300 px-3 py-1.5 text-sm"` inputs scattered across `Projects.tsx`, `ProjectView.tsx`'s `NewFolder`, `SearchPage.tsx`, `ChatInput.tsx`, etc. (primitives built here; call sites migrate in Phase 10/11)
+- [x] `Card.tsx` — the airy/pastel variant used on browsing pages and a plain/dense variant used in the workspace (one component, a `variant` prop — not two components, to avoid duplicating the base styles)
+- [x] `Badge.tsx` — pill-shaped, dot-prefixed, semantic-colored (mirrors the inspo's status pills) — used for e.g. job/processing status, search hit "kind" labels
+- [x] `Breadcrumb.tsx` — presentational only (`items: {label, href?}[]`), no data-fetching; used by Phase 6
+- [x] Tests: one test file per primitive covering variants/states via RTL, not snapshot-only
+- [x] Verify: `npm run test` green, `npm run typecheck` clean
 
 ## Phase 4 — Radix-backed overlay primitives
 
