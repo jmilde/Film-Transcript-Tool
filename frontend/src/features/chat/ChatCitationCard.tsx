@@ -13,10 +13,6 @@ interface ChatCitationCardProps {
  * answer text. Visually modeled on `SearchVideoGroupCard` (thumbnail, video
  * name, folder breadcrumb, excerpt, timecode) but sized as a standalone card
  * rather than a list of hits within a video group.
- *
- * No "Add to Document" entry point here — clip inserts are queued only from
- * a transcript selection (docs/1100_document_builder.md §6), not from a
- * citation card.
  */
 export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
   return (
@@ -38,7 +34,9 @@ export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-slate-800">{citation.video_name}</span>
+          <span className="truncate text-sm font-medium text-slate-800">
+            {citation.video_name}
+          </span>
           <span className="shrink-0 font-mono text-xs text-slate-400">
             {formatTime(citation.start_time)}
           </span>

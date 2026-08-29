@@ -35,19 +35,6 @@ function VideoRouteStub() {
 }
 
 function renderSearchPage(initialPath = `/projects/${PROJECT_ID}/search`) {
-  server.use(
-    http.get(`http://localhost:8000/projects/${PROJECT_ID}`, () =>
-      HttpResponse.json({
-        id: PROJECT_ID,
-        name: 'Project',
-        description: null,
-        archived_at: null,
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-        my_role: 'editor',
-      }),
-    ),
-  )
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [

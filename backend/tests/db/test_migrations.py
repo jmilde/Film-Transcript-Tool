@@ -12,7 +12,6 @@ EXPECTED_TABLES = {
     "transcript_chunks",
     "chat_conversations",
     "chat_messages",
-    "documents",
 }
 
 

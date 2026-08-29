@@ -482,12 +482,7 @@ They are not stored unless converted into:
 
 - comments
 - exports
-- clip blocks in a document (see `docs/1100_document_builder.md`) —
-  anchored to whichever transcript (original or translation) was on
-  screen when selected, unlike chat citations, which always resolve to
-  the original transcript (§13; chat resolves via chunk-level time
-  overlap, not token identity, so there's no equivalent way to force a
-  clip block onto the original)
+- future annotations
 
 ---
 

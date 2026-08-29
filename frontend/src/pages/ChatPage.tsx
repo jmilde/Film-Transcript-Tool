@@ -6,7 +6,6 @@ import { ChatHistorySidebar } from '../features/chat/ChatHistorySidebar'
 import { ChatInput } from '../features/chat/ChatInput'
 import { ChatMessageList } from '../features/chat/ChatMessageList'
 import type { PendingSearchNav } from '../features/search/types'
-import { useDocumentPanelStore } from '../store/documentPanel'
 
 export function ChatPage() {
   const { projectId, conversationId } = useParams<{
@@ -41,9 +40,6 @@ function ChatPageInner({
   const { data: messages } = useChatConversation(projectId, conversationId)
   const ask = useAskChat(projectId)
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
-
-  const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
-  useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
 
   // Landing on the bare `/chat` route (not `/chat/new`, no id in the URL)
   // defaults to the most recently active conversation rather than a blank
@@ -90,7 +86,7 @@ function ChatPageInner({
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-5xl gap-4">
+    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-5xl gap-4">
       <ChatHistorySidebar
         projectId={projectId}
         activeConversationId={conversationId}

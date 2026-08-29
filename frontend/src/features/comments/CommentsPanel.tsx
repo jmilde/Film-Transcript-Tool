@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/context'
-import { transcriptAnchor, useReplyToComment, useResolveComment } from '../../api/hooks/useComments'
+import { useReplyToComment, useResolveComment } from '../../api/hooks/useComments'
 import { useSelectionStore } from '../../store/selection'
 import { useCommentsStore } from '../../store/comments'
 import { formatTime } from '../player/format'
@@ -37,11 +37,9 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
 
   function locate(comment: Comment) {
-    const anchor = transcriptAnchor(comment)
-    if (!anchor) return
     select(comment.id)
-    if (transcriptId) setSelectionRange(transcriptId, anchor.start_token_id, anchor.end_token_id)
-    onLocate(anchor.in_time)
+    if (transcriptId) setSelectionRange(transcriptId, comment.start_token_id, comment.end_token_id)
+    onLocate(comment.in_time)
   }
 
   function submitReply(commentId: string) {
@@ -51,11 +49,7 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
     setReplyDrafts((d) => ({ ...d, [commentId]: '' }))
   }
 
-  const sortedComments =
-    comments &&
-    [...comments].sort(
-      (a, b) => (transcriptAnchor(a)?.in_time ?? 0) - (transcriptAnchor(b)?.in_time ?? 0),
-    )
+  const sortedComments = comments && [...comments].sort((a, b) => a.in_time - b.in_time)
 
   return (
     <div className="space-y-2">
@@ -71,7 +65,6 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
 
       {sortedComments?.map((comment) => {
         const isOpen = openIds.has(comment.id)
-        const anchor = transcriptAnchor(comment)
         return (
           <div
             key={comment.id}
@@ -84,9 +77,8 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
                 type="button"
                 className="font-mono text-xs text-slate-500 hover:underline"
                 onClick={() => locate(comment)}
-                disabled={!anchor}
               >
-                {anchor ? `${formatTime(anchor.in_time)} – ${formatTime(anchor.out_time)}` : null}
+                {formatTime(comment.in_time)} – {formatTime(comment.out_time)}
               </button>
               <button
                 type="button"

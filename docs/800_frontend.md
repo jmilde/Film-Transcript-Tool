@@ -19,7 +19,6 @@ The frontend is responsible for:
 - video playback
 - transcript editing
 - comments
-- documents
 - search
 - exports
 
@@ -84,37 +83,17 @@ Mobile support is not a Version 1 goal.
 
 # 4. Application Layout
 
-The application consists of a navigation bar, the routed main workspace,
-and a persistent document panel — mounted once in the top-level app shell
-(not per page), so it stays open across navigation instead of resetting
-when the user moves between pages.
-
-The routed workspace and the document panel are both resizable `Panel`s
-of one shared top-level `Group` (react-resizable-panels), not a flat
-peer/fallback layout — the document panel is a first-class member of the
-same resizable-panel system as the page it sits beside, so the two never
-fight over space and resize/collapse using identical mechanics:
+The application consists of three main areas.
 
 ```
 ------------------------------------------------
 | Navigation                                   |
 ------------------------------------------------
-| Group (horizontal)                           |
-|  ------------------------------------------  |
-|  | Panel: routed page  | Panel: Document   |  |
-|  | (Outlet)             | Panel             |  |
-|  |                      |                   |  |
-|  ------------------------------------------  |
+|                                              |
+| Main Workspace                               |
+|                                              |
 ------------------------------------------------
 ```
-
-The document panel's `Panel` is `collapsible`, collapsing to a thin
-toggle rail (matching `collapsedSize`) when closed rather than unmounting
-— it stays mounted across navigation. Its `minSize` is a fixed pixel value
-(not a percentage of the `Group`), so it can't be dragged down to an
-unusably narrow width on a smaller window — it either sits at a real
-working width or collapses to the rail, never something in between that's
-too cramped to use. See §19 Document Builder UI.
 
 ---
 
@@ -202,14 +181,7 @@ Users can disable auto-follow.
 
 Users select transcript ranges by dragging over text.
 
-A selection shows a popup floating above the selected range (tracking it as
-the drag extends, flipping to below the selection if there's no room above,
-and pinning to the top of the viewport if there's no room on either side),
-rather than a bar docked to the panel header — the same "hover above the
-selection" pattern the document editor's bubble menu uses. The popup is
-rendered outside the scrollable transcript panel (fixed to the viewport,
-not clipped by the panel's own box), so it's never hidden just because its
-ideal position would fall partly outside the panel. It displays:
+A selection displays:
 
 - selected text
 - start timecode
@@ -218,18 +190,9 @@ ideal position would fall partly outside the panel. It displays:
 Available actions:
 
 - play selection
-- edit — clearing the text to empty deletes the whole selection (any
-  token span, not just a single segment); replacing it with new text is a
-  same-segment merge. There is no separate delete action.
 - comment
+- edit
 - copy
-- add to document (queues a clip block insert into the document panel's
-  active document — see §19)
-
-Backspace/Delete also deletes the current selection directly (without
-opening the edit popup first), as long as focus isn't inside a text input
-(the search box, or an open edit/comment draft) — same "clear it to delete
-it" rule as above, just via a shortcut.
 
 ---
 
@@ -314,9 +277,7 @@ can not
 
 # 13. Comments UI
 
-Comments appear attached to a transcript range or, from the document
-panel, to a document (a run of prose text or a clip reference) — see §18
-Comment State and §19 Document Builder UI.
+Comments appear attached to transcript ranges.
 
 A comment displays:
 
@@ -346,11 +307,6 @@ Selecting a result:
 - opens the relevant video
 - seeks to the location
 - highlights the transcript range
-
-Search results do not offer "add to document" — that entry point exists
-only from a live transcript selection (§10), so a clip's anchor is always
-chosen deliberately from the transcript itself rather than from a search
-snippet.
 
 ---
 
@@ -382,10 +338,6 @@ Selecting a citation card:
 - seeks to the location
 - highlights the full cited token range in the **original** transcript pane,
   even when the citation matched via a translation
-
-A citation card does not offer "add to document" — same reasoning as
-Search UI above; the only entry point for a clip insert is a transcript
-selection (§10).
 
 ---
 
@@ -425,11 +377,6 @@ Search
 Ctrl/Cmd + S
 
 Save
-
-
-Backspace / Delete
-
-Delete the current transcript selection (§10)
 ```
 
 Additional shortcuts may be added later.
@@ -469,108 +416,9 @@ Important UI state includes:
 - open threads
 - selected comment
 
-This state is anchor-agnostic: a comment's `anchor` may be a transcript
-range or a document (§13 Comments UI, `docs/700_backend_api.md` §11), but
-which reply threads are expanded and which comment is selected is tracked
-the same way regardless of anchor kind.
-
 ---
 
-## Document Panel State
-
-- open/closed
-- active project (synced from whichever project-scoped page is current)
-- active document
-- pending clip insert (queued until the editor is ready to receive it)
-- preview clip (set when a clip's video isn't already open in the video
-  workspace, so the panel renders its own preview player)
-- insert-marker flag: whether the active document currently has an insert
-  point marked (not the position itself, which lives in the editor's own
-  ProseMirror plugin state so it stays correctly mapped through edits) —
-  lets other components render "a marker is set" without reaching into the
-  editor instance. The marker itself is set automatically from wherever the
-  cursor last was in the document (no manual "mark insert point" action),
-  and its decoration keeps rendering after the editor loses focus, so it
-  stays visible while browsing/searching/asking elsewhere before the next
-  clip is queued.
-
----
-
-# 19. Document Builder UI
-
-A persistent, project-scoped panel (§4) for building documents that mix
-prose with clip blocks. Docked as a resizable column, not an overlay — an
-overlay covering page content would defeat the point of writing while
-still able to browse/search/ask.
-
-Panel contents:
-
-- a document switcher: list, create, rename, delete, select the active
-  document
-- a fixed formatting toolbar (Bold/Italic/Heading 1/Heading 2/Bullet
-  list), pinned above the document rather than floating — it applies from
-  wherever the cursor is, so it doesn't need a selection to appear, unlike
-  the contextual bubble menu below
-- a rich-text editor (TipTap) over the active document's content,
-  rendered as a bounded white "page" (bordered, padded, subtle shadow)
-  against a gray backdrop, rather than filling the panel edge-to-edge —
-  what actually reads as "a document" instead of plain panel content
-- each clip block renders inline, within the surrounding prose, as
-  excerpt text with a persistent left border + background tint (marking
-  "this text is from source material") — not a boxed card. An underline
-  is added only once a comment exists on the clip, so the two decoration
-  channels (source-material tint, has-a-comment underline) stack without
-  colliding. A clip's user-facing note is not part of the node's own
-  rendering — it is a regular comment (see below) — and the excerpt
-  itself is never directly editable
-- selecting a clip block (click, or arrow-key onto it) shows a shared
-  bubble menu with Play / Comment / Remove actions (§12-equivalent
-  `SelectionToolbar`/`BubbleMenu` pattern), rather than the card itself
-  carrying inline controls; selecting a plain text range shows the same
-  bubble menu with just Copy / Comment (formatting lives in the fixed
-  toolbar above, not here)
-
-A clip's annotation is a regular Comment (§13) anchored via
-`DocumentCommentAnchor.clip_node_id`, created through the bubble menu's
-Comment action — it is not a `note` attribute stored on the clip node
-itself, so clip annotations get the same reply/resolve/search treatment
-as any other comment instead of a bespoke field.
-
-The only add-to-document entry point is a transcript selection (§10) —
-Search results and chat citation cards don't offer it (§14, §15). Queuing
-a clip insert this way opens the panel if closed; if the panel or its
-editor isn't mounted yet, the insert is queued and applied once it is, so
-nothing is silently dropped.
-
-## Player Coordination
-
-Clicking a clip reference's Play action always plays it in the document
-panel's own lightweight preview player (no waveform/transcript sync, unlike
-the full workspace player) — never the video workspace's player, even when
-that page is already open on the same video. The two players are kept
-fully separate on purpose, so writing in the document panel can never
-hijack or reseek whatever the user has open in the workspace.
-
-Both players render identical play/pause/±5s-skip/2x-speed chrome from
-one shared, purely-presentational control component: the workspace
-player wires it to the global playback store, while the panel's preview
-player wires the same component to local state instead (it deliberately
-never touches the global store — a second writer there would corrupt the
-workspace's own display for an unrelated video). The preview player has
-no waveform, so — unlike the full workspace player, where the waveform is
-the primary scrub/seek surface — its only seek mechanism is the ±5s skip
-buttons.
-
-## Concurrency
-
-A stale save (the document was edited elsewhere since this client last
-read it) shows the same conflict banner pattern used for token edits
-(§12) — the local attempt is not overwritten or silently retried; the
-user must reload before continuing.
-
----
-
-# 20. Future Extensions
+# 19. Future Extensions
 
 The frontend should allow future additions:
 

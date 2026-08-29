@@ -14,12 +14,7 @@ const KIND_LABEL: Record<string, string> = {
   comment: 'Comment',
 }
 
-/**
- * One video's search matches (docs §14): thumbnail, name, folder path, then
- * every hit. No "Add to Document" entry point here — clip inserts are
- * queued only from a transcript selection (docs/1100_document_builder.md
- * §6), not from a search hit.
- */
+/** One video's search matches (docs §14): thumbnail, name, folder path, then every hit. */
 export function SearchVideoGroupCard({ group, onSelectHit }: SearchVideoGroupCardProps) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -51,7 +46,7 @@ export function SearchVideoGroupCard({ group, onSelectHit }: SearchVideoGroupCar
             key={`${hit.kind}-${hit.id}`}
             type="button"
             onClick={() => onSelectHit(hit)}
-            className="flex w-full min-w-0 items-center gap-3 border-b border-slate-100 px-4 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+            className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
           >
             <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
               {KIND_LABEL[hit.kind] ?? hit.kind}

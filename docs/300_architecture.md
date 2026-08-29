@@ -152,7 +152,6 @@ The backend handles:
 - video metadata
 - transcript management
 - comments
-- documents (document builder)
 - exports
 - processing orchestration
 
@@ -330,32 +329,7 @@ shapes never leak past that boundary.
 
 ---
 
-# 13. Document Builder
-
-Users build project-scoped documents mixing their own prose with clip
-references — structured, inline, non-editable references to a transcript
-token range and video, rendered as styled text within the surrounding
-prose rather than a boxed card. Full design in
-`docs/1100_document_builder.md`.
-
-Document CRUD (create/list/get/update/delete) and clip-block resolution
-are **synchronous** backend operations, like Comments — not asynchronous
-like Exports or transcription, since neither involves external services or
-heavy processing.
-
-A clip block's excerpt, timecode, speaker, thumbnail, and folder path are
-never persisted — they are resolved fresh from the referenced transcript's
-live tokens on every read, the same pattern chat citations (§12) and
-full-text search results use, so a clip can never drift from edits made to
-its source transcript after the clip was inserted.
-
-The frontend hosts documents in a persistent panel that stays mounted
-across navigation (not a page), so a user can browse, search, or ask
-questions while writing — see `docs/800_frontend.md`.
-
----
-
-# 14. Authentication
+# 13. Authentication
 
 Authentication is provided by Supabase.
 
@@ -369,7 +343,7 @@ Authentication information is used by the backend for:
 
 ---
 
-# 15. Docker Deployment
+# 14. Docker Deployment
 
 The development environment SHOULD run through Docker Compose.
 
@@ -397,7 +371,7 @@ may be configured separately.
 
 ---
 
-# 16. Future Deployment
+# 15. Future Deployment
 
 The architecture SHOULD allow:
 
@@ -429,7 +403,7 @@ without changing application behaviour.
 
 ---
 
-# 17. Out of Scope
+# 16. Out of Scope
 
 The architecture does not currently include:
 

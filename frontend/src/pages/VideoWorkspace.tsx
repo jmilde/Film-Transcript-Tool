@@ -6,10 +6,9 @@ import { useProject } from '../api/hooks/useProjects'
 import { proxyUrl, useMediaToken, useWaveform } from '../api/hooks/useMedia'
 import { useSpeakers } from '../api/hooks/useSpeakers'
 import { useTranscript, useTranscripts } from '../api/hooks/useTranscripts'
-import { transcriptAnchor, useComments } from '../api/hooks/useComments'
+import { useComments } from '../api/hooks/useComments'
 import { usePlaybackStore } from '../store/playback'
 import { useSelectionStore } from '../store/selection'
-import { useDocumentPanelStore } from '../store/documentPanel'
 import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
@@ -49,11 +48,6 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
 
   // Reset playback state when switching videos.
   useEffect(() => resetPlayback, [videoId, resetPlayback])
-
-  const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
-  useEffect(() => {
-    if (project) setActiveProject(project.id)
-  }, [project, setActiveProject])
 
   // Pauses playback once it reaches the end of a "play selection" request.
   const selectionEndRef = useRef<number | null>(null)
@@ -110,17 +104,6 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     void videoRef.current.play()
   }
 
-  // Lets the document panel reuse this page's own player for a clip from
-  // this video, instead of spawning a second one (see store/playback.ts).
-  // `playSelection` only closes over refs, so capturing it once per video
-  // (rather than re-setting every render) is safe — it always reads the
-  // current ref values regardless of which render's closure gets stored.
-  const setActiveVideo = usePlaybackStore((s) => s.setActiveVideo)
-  useEffect(() => {
-    setActiveVideo(videoId, playSelection)
-    return () => setActiveVideo(null, null)
-  }, [videoId, setActiveVideo])
-
   // Applies a pending search-result navigation: seek to it and highlight its
   // range. Transcript-kind results carry their own token id/time directly;
   // comment-kind results only carry the comment id, so its anchor range is
@@ -142,11 +125,10 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
       )
     } else if (pendingSearch.kind === 'comment' && comments) {
       const comment = comments.find((c) => c.id === pendingSearch.id)
-      const anchor = comment && transcriptAnchor(comment)
-      if (anchor) {
+      if (comment) {
         appliedSearchRef.current = true
-        seek(anchor.in_time)
-        setSelectionRange(anchor.transcript_id, anchor.start_token_id, anchor.end_token_id)
+        seek(comment.in_time)
+        setSelectionRange(comment.transcript_id, comment.start_token_id, comment.end_token_id)
       }
     } else if (pendingSearch.kind === 'speaker') {
       appliedSearchRef.current = true
@@ -167,7 +149,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-[calc(100vh-8rem)] flex-col">
       <div className="mb-3 flex items-center gap-3">
         <Link
           to={video ? `/projects/${video.project_id}` : '/'}
@@ -218,7 +200,6 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
                     canEdit={canEdit}
-                    videoId={videoId}
                   />
                 </div>
               </Panel>
@@ -245,7 +226,6 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
                     canEdit={canEdit}
-                    videoId={videoId}
                   />
                 </div>
               </Panel>
@@ -259,7 +239,6 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               onSeekToken={seek}
               onPlaySelection={playSelection}
               canEdit={canEdit}
-              videoId={videoId}
             />
           )}
         </Panel>

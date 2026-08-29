@@ -12,7 +12,6 @@ from app.core.errors import ForbiddenError, NotFoundError
 from app.core.media_token import verify_media_token
 from app.db.session import get_db
 from app.models.comment import Comment
-from app.models.document import Document
 from app.models.export import Export
 from app.models.folder import Folder
 from app.models.job import ProcessingJob
@@ -227,18 +226,6 @@ def require_comment_access(
         raise NotFoundError("Comment not found")
     _require_membership(db, comment.project_id, user.id, min_role=MembershipRole.EDITOR)
     return comment
-
-
-def require_document_access(
-    document_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> Document:
-    document = db.get(Document, document_id)
-    if document is None:
-        raise NotFoundError("Document not found")
-    _require_membership(db, document.project_id, user.id)
-    return document
 
 
 def require_export_access(

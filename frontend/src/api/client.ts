@@ -46,16 +46,11 @@ export class ApiError extends Error {
   }
 }
 
-/** Narrow an openapi-fetch result to its data, throwing an `ApiError` on failure.
- *
- * Success is determined by `response.ok`, not by whether `data` is present:
- * openapi-fetch returns `{ data: undefined }` for a successful 204 (e.g.
- * `DELETE`), which `data === undefined` would otherwise misclassify as a
- * failure. */
+/** Narrow an openapi-fetch result to its data, throwing an `ApiError` on failure. */
 export function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
-  if (!result.response.ok) {
+  if (result.error !== undefined || result.data === undefined) {
     const body = (result.error as { error?: ErrorBody } | undefined)?.error
     throw new ApiError(result.response.status, body?.message ?? 'Request failed', body?.code, body)
   }
-  return result.data as T
+  return result.data
 }

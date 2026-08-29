@@ -21,7 +21,6 @@ The database stores:
 - transcripts
 - transcript editing data
 - comments
-- documents
 - processing state
 
 The database uses PostgreSQL.
@@ -436,24 +435,14 @@ Deleted tokens remain stored.
 
 # 13. Comment
 
-A comment is attached to either a transcript range or a document — exactly
-one of `transcript_id`/`document_id` is set (enforced by a check
-constraint), so a single table/query covers both. For a transcript
-comment, the token range lives in Comment Range (§14); for a document
-comment, the anchor lives in Document Comment Anchor (§14a). `project_id`
-is denormalized here (as elsewhere) purely for O(1) authorization — a
-comment never moves between projects.
+A comment is attached to a transcript range.
 
 ## Fields
 
 ```
 id
 
-transcript_id (nullable)
-
-document_id (nullable)
-
-project_id
+transcript_id
 
 created_by
 
@@ -470,8 +459,7 @@ updated_at
 
 # 14. Comment Range
 
-Defines which transcript tokens a comment belongs to. Only present for a
-transcript-anchored comment (`Comment.transcript_id` set).
+Defines which transcript tokens a comment belongs to.
 
 ## Fields
 
@@ -483,33 +471,6 @@ comment_id
 start_token_id
 
 end_token_id
-```
-
----
-
-# 14a. Document Comment Anchor
-
-Where a document-anchored comment attaches within the document's content.
-Only present for a document-anchored comment (`Comment.document_id` set).
-
-`clip_node_id` is set when the comment is pinned to a `clipBlock` node's
-stable `nodeId` attribute (a note on a clip). It is `null` when the
-comment is anchored to a run of prose text instead — that case's real
-position anchor is a TipTap `comment` mark carrying this row's
-`comment_id`, living in the document's own JSON content tree rather than
-a relational column, since prose position must ride ProseMirror's
-transaction mapping through edits exactly like the mark's other data.
-
-## Fields
-
-```
-id
-
-comment_id
-
-clip_node_id (nullable)
-
-created_at
 ```
 
 ---
@@ -731,57 +692,7 @@ citation cards — distinct from `agent_message_history`.
 
 ---
 
-# 21. Document
-
-A user-authored document mixing prose with embedded clip blocks, scoped to
-a project (see `docs/1100_document_builder.md`). A project may have
-multiple documents.
-
-## Fields
-
-```
-id
-
-project_id
-
-title
-
-content
-
-version
-
-created_by
-
-created_at
-
-updated_by
-
-updated_at
-```
-
-`content` is the whole document as one opaque JSON tree (a TipTap/
-ProseMirror document): prose nodes plus custom `clipBlock` nodes, each
-carrying `{nodeId, transcriptId, videoId, startTokenId, endTokenId}` — an
-inline atomic reference, not a block-level card. A clip's user-facing
-note/annotation is not an attr on the node at all; it is a regular
-Comment (§13) anchored via Document Comment Anchor's `clip_node_id` (§14a),
-so clip annotations reuse the same comment/reply/resolve machinery as
-transcript comments instead of a bespoke field. There is no separate
-block/position table — a rich-text tree doesn't fit the flat
-fractional-`position` pattern Transcript Segment/Transcript Token use. A
-clip block's excerpt, timecode, speaker, thumbnail, and folder path are
-never stored in `content` — like Transcript Chunk citations, they are
-resolved fresh from the referenced transcript's live tokens on every read,
-so a clip can never drift from later edits to its source.
-
-`version` is a whole-document optimistic-locking counter (same pattern as
-Transcript Token's `version`), incremented on every write; a `PATCH` must
-supply the `version` it last read or the write is rejected with a conflict
-rather than applied.
-
----
-
-# 22. Relationships
+# 21. Relationships
 
 Main relationships:
 
@@ -811,11 +722,11 @@ Video
 			 |-- Tokens
 ```
 
-Comments attach to either a transcript token range or a document (§13).
+Comments attach to transcript token ranges.
 
 ---
 
-# 23. Data Not Stored
+# 22. Data Not Stored
 
 The database does not store:
 
@@ -827,7 +738,7 @@ These belong in storage.
 
 ---
 
-# 24. Future Extensions
+# 23. Future Extensions
 
 The schema should allow future additions:
 

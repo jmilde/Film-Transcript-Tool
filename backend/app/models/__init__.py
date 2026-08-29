@@ -6,7 +6,6 @@ from app.models import (  # noqa: F401
     asset,
     chat,
     comment,
-    document,
     embedding,
     export,
     folder,

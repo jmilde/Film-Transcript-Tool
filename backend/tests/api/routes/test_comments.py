@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from typing import Any
 
 from app.models.folder import Folder
 from app.models.membership import MembershipRole, ProjectMembership
@@ -80,10 +79,8 @@ def test_create_and_list_comment(auth_client: TestClient, db_session: Session, u
     body = resp.json()
     assert body["text"] == "Check this quote"
     assert body["resolved"] is False
-    assert body["anchor"]["kind"] == "transcript"
-    assert body["anchor"]["transcript_id"] == str(transcript.id)
-    assert body["anchor"]["in_time"] == 0.0
-    assert body["anchor"]["out_time"] == 0.8
+    assert body["in_time"] == 0.0
+    assert body["out_time"] == 0.8
     assert body["replies"] == []
 
     listed = auth_client.get(f"/transcripts/{transcript.id}/comments").json()
@@ -168,114 +165,6 @@ def test_create_comment_non_member_forbidden(
             "text": "sneaky",
         },
     )
-    assert resp.status_code == 403
-
-
-def _seed_document(auth_client: TestClient, project_id: str) -> dict[str, Any]:
-    result: dict[str, Any] = auth_client.post(
-        f"/projects/{project_id}/documents", json={"title": "Draft"}
-    ).json()
-    return result
-
-
-def test_create_and_list_document_comment(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    project = Project(name="P", created_by=user.id, updated_by=user.id)
-    db_session.add(project)
-    db_session.flush()
-    db_session.add(
-        ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER)
-    )
-    db_session.flush()
-    document = _seed_document(auth_client, str(project.id))
-
-    resp = auth_client.post(
-        f"/documents/{document['id']}/comments",
-        json={"clip_node_id": "node-1", "text": "Nice moment"},
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["text"] == "Nice moment"
-    assert body["anchor"]["kind"] == "document"
-    assert body["anchor"]["document_id"] == document["id"]
-    assert body["anchor"]["clip_node_id"] == "node-1"
-    assert body["anchor"]["excerpt"] is None  # clip node not present in content yet
-    assert body["replies"] == []
-
-    listed = auth_client.get(f"/documents/{document['id']}/comments").json()
-    assert len(listed) == 1
-    assert listed[0]["id"] == body["id"]
-
-
-def test_create_document_comment_prose_anchor(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    project = Project(name="P", created_by=user.id, updated_by=user.id)
-    db_session.add(project)
-    db_session.flush()
-    db_session.add(
-        ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER)
-    )
-    db_session.flush()
-    document = _seed_document(auth_client, str(project.id))
-
-    resp = auth_client.post(
-        f"/documents/{document['id']}/comments",
-        json={"text": "Rephrase this"},
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["anchor"]["kind"] == "document"
-    assert body["anchor"]["clip_node_id"] is None
-
-
-def test_create_document_comment_non_member_forbidden(
-    app_client: Callable[[User], TestClient],
-    auth_client: TestClient,
-    db_session: Session,
-    user: User,
-    other_user: User,
-) -> None:
-    project = Project(name="P", created_by=user.id, updated_by=user.id)
-    db_session.add(project)
-    db_session.flush()
-    db_session.add(
-        ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER)
-    )
-    db_session.flush()
-    document = _seed_document(auth_client, str(project.id))
-
-    other = app_client(other_user)
-    resp = other.post(f"/documents/{document['id']}/comments", json={"text": "sneaky"})
-
-    assert resp.status_code == 403
-
-
-def test_create_document_comment_viewer_forbidden(
-    app_client: Callable[[User], TestClient],
-    auth_client: TestClient,
-    db_session: Session,
-    user: User,
-    other_user: User,
-) -> None:
-    project = Project(name="P", created_by=user.id, updated_by=user.id)
-    db_session.add(project)
-    db_session.flush()
-    db_session.add(
-        ProjectMembership(project_id=project.id, user_id=user.id, role=MembershipRole.OWNER)
-    )
-    db_session.add(
-        ProjectMembership(project_id=project.id, user_id=other_user.id, role=MembershipRole.VIEWER)
-    )
-    db_session.flush()
-    document = _seed_document(auth_client, str(project.id))
-
-    other = app_client(other_user)
-    resp = other.post(f"/documents/{document['id']}/comments", json={"text": "sneaky"})
-
     assert resp.status_code == 403
 
 
