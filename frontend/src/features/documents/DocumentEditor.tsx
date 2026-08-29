@@ -30,16 +30,16 @@ import type { ClipCommentStatus } from './documentCommentsContext'
 import { SelectionToolbar } from '../toolbar/SelectionToolbar'
 import type { ToolbarAction } from '../toolbar/SelectionToolbar'
 import {
-  BoldIcon,
-  BulletListIcon,
-  CommentIcon,
-  CopyIcon,
-  Heading1Icon,
-  Heading2Icon,
-  ItalicIcon,
-  PlayIcon,
-  TrashIcon,
-} from '../../components/icons'
+  Bold as BoldIcon,
+  List as BulletListIcon,
+  MessageSquare as CommentIcon,
+  Copy as CopyIcon,
+  Heading1 as Heading1Icon,
+  Heading2 as Heading2Icon,
+  Italic as ItalicIcon,
+  Play as PlayIcon,
+  Trash2 as TrashIcon,
+} from 'lucide-react'
 import { formatTime } from '../player/format'
 import type { Document } from '../../api/hooks/useDocuments'
 

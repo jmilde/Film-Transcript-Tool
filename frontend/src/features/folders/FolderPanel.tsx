@@ -2,7 +2,7 @@ import { useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useFolderContents } from '../../api/hooks/useFolders'
 import { useMoveVideo, useUploadVideo, useVideoProcessing } from '../../api/hooks/useVideos'
-import { FolderIcon, VideoIcon } from '../../components/icons'
+import { Folder as FolderIcon, Video as VideoIcon } from 'lucide-react'
 import { VIDEO_DND_TYPE } from './FolderTree'
 
 interface PanelProps {

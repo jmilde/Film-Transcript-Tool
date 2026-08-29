@@ -5,7 +5,7 @@ import { useCreateDocument, useDeleteDocument, useDocuments } from '../../api/ho
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { DocumentEditor } from './DocumentEditor'
 import { ClipPreviewPlayer } from './ClipPreviewPlayer'
-import { CloseIcon, DocumentIcon, TrashIcon } from '../../components/icons'
+import { FileText as DocumentIcon, Trash2 as TrashIcon, X as CloseIcon } from 'lucide-react'
 
 /**
  * The persistent, project-scoped document-builder panel docked in `AppShell`

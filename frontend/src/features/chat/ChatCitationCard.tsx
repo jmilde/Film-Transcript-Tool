@@ -1,4 +1,4 @@
-import { FolderIcon, VideoIcon } from '../../components/icons'
+import { Folder, Video } from 'lucide-react'
 import { thumbnailUrl } from '../../api/hooks/useMedia'
 import { formatTime } from '../player/format'
 import type { ChatCitation } from '../../api/hooks/useChat'
@@ -33,7 +33,7 @@ export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
         />
       ) : (
         <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-slate-100">
-          <VideoIcon className="h-4 w-4 text-slate-400" />
+          <Video className="h-4 w-4 text-slate-400" />
         </div>
       )}
       <div className="min-w-0 flex-1">
@@ -45,7 +45,7 @@ export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
         </div>
         {citation.folder_path.length > 0 && (
           <div className="flex items-center gap-1 truncate text-xs text-slate-400">
-            <FolderIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <Folder className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             <span className="truncate">{citation.folder_path.join(' / ')}</span>
           </div>
         )}

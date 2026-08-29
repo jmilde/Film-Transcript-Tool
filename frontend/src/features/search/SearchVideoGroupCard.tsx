@@ -1,4 +1,4 @@
-import { FolderIcon, VideoIcon } from '../../components/icons'
+import { Folder as FolderIcon, Video as VideoIcon } from 'lucide-react'
 import { thumbnailUrl } from '../../api/hooks/useMedia'
 import { formatTime } from '../player/format'
 import type { SearchHit, SearchVideoGroup } from '../../api/hooks/useSearch'

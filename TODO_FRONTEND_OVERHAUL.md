@@ -97,10 +97,10 @@ behind the two flagged below:
 
 ## Phase 2 — Icon migration
 
-- [ ] Inventory every icon currently exported from `frontend/src/components/icons.tsx` and find its closest `lucide-react` equivalent
-- [ ] Replace each call site (`grep -rl` for each icon component name across `src/`) with the `lucide-react` import; delete `icons.tsx` once nothing references it
-- [ ] Tests: any test asserting on icon presence via a custom component name (rather than role/text) needs updating to the new import — grep test files for the old icon names
-- [ ] Verify: `npm run build` (catches any dangling import), `npm run test` green
+- [x] Inventory every icon currently exported from `frontend/src/components/icons.tsx` and find its closest `lucide-react` equivalent
+- [x] Replace each call site (`grep -rl` for each icon component name across `src/`) with the `lucide-react` import; delete `icons.tsx` once nothing references it
+- [x] Tests: any test asserting on icon presence via a custom component name (rather than role/text) needs updating to the new import — grep test files for the old icon names
+- [x] Verify: `npm run build` (catches any dangling import), `npm run test` green
 
 ## Phase 3 — Core hand-rolled UI primitives
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateTranslation } from '../../api/hooks/useTranslate'
 import { useJob } from '../../api/hooks/useJobs'
-import { TranslateIcon } from '../../components/icons'
+import { Languages as TranslateIcon } from 'lucide-react'
 import type { TranscriptSummary } from '../../api/hooks/useTranscripts'
 
 interface TranslationControlProps {

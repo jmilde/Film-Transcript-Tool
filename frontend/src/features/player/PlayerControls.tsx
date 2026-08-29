@@ -1,5 +1,10 @@
 import { formatTime } from './format'
-import { PauseIcon, PlayIcon, SkipBackIcon, SkipForwardIcon } from '../../components/icons'
+import {
+  Pause as PauseIcon,
+  Play as PlayIcon,
+  SkipBack as SkipBackIcon,
+  SkipForward as SkipForwardIcon,
+} from 'lucide-react'
 
 export const SKIP_SECONDS = 5
 

@@ -8,7 +8,7 @@ import {
   type MembershipRole,
 } from '../../api/hooks/useMembers'
 import { ApiError } from '../../api/client'
-import { TrashIcon } from '../../components/icons'
+import { Trash2 as TrashIcon } from 'lucide-react'
 
 interface MembersPanelProps {
   projectId: string

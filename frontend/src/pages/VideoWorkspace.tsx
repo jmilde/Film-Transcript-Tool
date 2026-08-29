@@ -16,7 +16,7 @@ import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 import { CommentsPanel } from '../features/comments/CommentsPanel'
 import { TranslationControl } from '../features/translation/TranslationControl'
 import { ExportControl } from '../features/export/ExportControl'
-import { CloseIcon } from '../components/icons'
+import { X as CloseIcon } from 'lucide-react'
 import type { PendingSearchNav } from '../features/search/types'
 
 export function VideoWorkspace() {

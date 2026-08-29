@@ -17,16 +17,16 @@ import { findActiveTokenId } from './activeToken'
 import { formatTime } from '../player/format'
 import { SelectionToolbar } from '../toolbar/SelectionToolbar'
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  CloseIcon,
-  CommentIcon,
-  CopyIcon,
-  DocumentIcon,
-  EditIcon,
-  PlayIcon,
-  SearchIcon,
-} from '../../components/icons'
+  ChevronDown as ChevronDownIcon,
+  ChevronUp as ChevronUpIcon,
+  X as CloseIcon,
+  MessageSquare as CommentIcon,
+  Copy as CopyIcon,
+  FileText as DocumentIcon,
+  Pencil as EditIcon,
+  Play as PlayIcon,
+  Search as SearchIcon,
+} from 'lucide-react'
 import type { ToolbarAction } from '../toolbar/SelectionToolbar'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Token, Transcript } from '../../api/hooks/useTranscripts'

@@ -1,4 +1,4 @@
-import { CloseIcon } from '../../components/icons'
+import { X } from 'lucide-react'
 import type { ComponentType } from 'react'
 
 export interface ToolbarAction {
@@ -122,7 +122,7 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
           className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
           onClick={onClear}
         >
-          <CloseIcon className="h-4 w-4" />
+          <X className="h-4 w-4" />
         </button>
       )}
     </div>

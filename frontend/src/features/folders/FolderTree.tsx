@@ -6,7 +6,7 @@ import {
   type Folder,
 } from '../../api/hooks/useFolders'
 import { useMoveVideo } from '../../api/hooks/useVideos'
-import { FolderIcon } from '../../components/icons'
+import { Folder as FolderIcon } from 'lucide-react'
 
 // Custom MIME types used to identify what's being dragged, since native HTML5
 // drag-and-drop only exposes payloads (not types) on drop, not dragover.
