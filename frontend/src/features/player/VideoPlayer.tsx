@@ -1,20 +1,17 @@
 import { useState, type RefObject } from 'react'
 import { usePlaybackStore } from '../../store/playback'
-import { formatTime } from './format'
-import { PauseIcon, PlayIcon, SkipBackIcon, SkipForwardIcon } from '../../components/icons'
+import { PlayerControls } from './PlayerControls'
 
 interface PlayerProps {
   src: string
   videoRef: RefObject<HTMLVideoElement | null>
 }
 
-const SKIP_SECONDS = 5
-
 /**
  * Thin HTML5 player abstraction. Deliberately has no native controls — no
  * hover toolbar, and no click-to-seek on the video itself, since seeking is
  * meant to happen only via the waveform below it. Play/pause/skip/speed live
- * in a custom control row instead, and playback state is mirrored into the
+ * in the shared `PlayerControls` row instead, wired here to the global
  * playback store so other panels (waveform, transcript) can stay in sync.
  */
 export function VideoPlayer({ src, videoRef }: PlayerProps) {
@@ -57,52 +54,15 @@ export function VideoPlayer({ src, videoRef }: PlayerProps) {
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
-      <div className="flex items-center justify-center gap-2">
-        <button
-          type="button"
-          aria-label="Skip back 5 seconds"
-          title="Skip back 5s"
-          onClick={() => skip(-SKIP_SECONDS)}
-          className="rounded p-1.5 text-slate-600 hover:bg-slate-100"
-        >
-          <SkipBackIcon className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          aria-label={playing ? 'Pause' : 'Play'}
-          title={playing ? 'Pause' : 'Play'}
-          onClick={togglePlay}
-          className="rounded bg-slate-800 p-2 text-white hover:bg-slate-700"
-        >
-          {playing ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
-        </button>
-        <button
-          type="button"
-          aria-label="Skip forward 5 seconds"
-          title="Skip forward 5s"
-          onClick={() => skip(SKIP_SECONDS)}
-          className="rounded p-1.5 text-slate-600 hover:bg-slate-100"
-        >
-          <SkipForwardIcon className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Toggle 2x speed"
-          title="2x speed"
-          onClick={toggleSpeed}
-          className={`rounded border px-2 py-1 text-xs font-semibold ${
-            speed === 2
-              ? 'border-slate-800 bg-slate-800 text-white'
-              : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          2x
-        </button>
-      </div>
-      <div className="flex justify-between font-mono text-xs text-slate-500">
-        <span>{formatTime(currentTime)}</span>
-        <span>{formatTime(duration)}</span>
-      </div>
+      <PlayerControls
+        currentTime={currentTime}
+        duration={duration}
+        playing={playing}
+        speed={speed}
+        onTogglePlay={togglePlay}
+        onSkip={skip}
+        onToggleSpeed={toggleSpeed}
+      />
     </div>
   )
 }
