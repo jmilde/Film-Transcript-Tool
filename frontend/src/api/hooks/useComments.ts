@@ -3,6 +3,18 @@ import { api, unwrap } from '../client'
 import type { components } from '../schema'
 
 export type Comment = components['schemas']['CommentRead']
+export type TranscriptCommentAnchor = components['schemas']['TranscriptCommentAnchor']
+export type DocumentCommentAnchor = components['schemas']['DocumentCommentAnchorRead']
+
+/** Narrows a comment's polymorphic anchor to its transcript-range case. */
+export function transcriptAnchor(comment: Comment): TranscriptCommentAnchor | null {
+  return comment.anchor.kind === 'transcript' ? comment.anchor : null
+}
+
+/** Narrows a comment's polymorphic anchor to its document case. */
+export function documentAnchor(comment: Comment): DocumentCommentAnchor | null {
+  return comment.anchor.kind === 'document' ? comment.anchor : null
+}
 
 /** All comment threads (with replies) anchored to ranges in a transcript. */
 export function useComments(transcriptId: string | null) {
@@ -69,5 +81,35 @@ export function useResolveComment(transcriptId: string) {
         }),
       ),
     onSuccess: invalidate,
+  })
+}
+
+/** All comment threads (with replies) anchored to a document. */
+export function useDocumentComments(documentId: string | null) {
+  return useQuery({
+    queryKey: ['comments', 'document', documentId],
+    enabled: documentId !== null,
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/documents/{document_id}/comments', {
+          params: { path: { document_id: documentId as string } },
+        }),
+      ),
+  })
+}
+
+/** Create a comment anchored to a document (`POST /documents/{id}/comments`). */
+export function useCreateDocumentComment(documentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { clipNodeId?: string | null; text: string }) =>
+      unwrap(
+        await api.POST('/documents/{document_id}/comments', {
+          params: { path: { document_id: documentId } },
+          body: { clip_node_id: input.clipNodeId ?? null, text: input.text },
+        }),
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ['comments', 'document', documentId] }),
   })
 }

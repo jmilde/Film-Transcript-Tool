@@ -21,6 +21,7 @@ The API is responsible for:
 - transcript access
 - transcript editing
 - comments
+- documents
 - exports
 - processing status
 
@@ -564,6 +565,13 @@ trying again.
 
 # 11. Comments
 
+A comment anchors to either a transcript range or a document — the two
+create/list route pairs below both return the same `CommentRead` shape,
+whose `anchor` field is a discriminated union (`kind: "transcript" |
+"document"`) so a single comments UI can render both without a type
+switch at the call site. Reply and resolve are anchor-agnostic — one pair
+of routes handles both.
+
 ## Create Comment
 
 ```
@@ -580,12 +588,76 @@ Request:
 }
 ```
 
+Response `anchor`:
+
+```json
+{
+	"kind": "transcript",
+	"transcript_id": "uuid",
+	"start_token_id": "uuid",
+	"end_token_id": "uuid",
+	"in_time": 12.5,
+	"out_time": 14.0
+}
+```
+
+`in_time`/`out_time` are derived from the range's tokens on every read,
+not stored, so the comment's displayed timecode follows edits to those
+tokens.
+
 ---
 
 ## List Comments
 
 ```
 GET /transcripts/{transcript_id}/comments
+```
+
+---
+
+## Create Document Comment
+
+```
+POST /documents/{document_id}/comments
+```
+
+Request:
+
+```json
+{
+	"clip_node_id": "client-generated uuid, or null",
+	"text": "Double check this excerpt"
+}
+```
+
+`clip_node_id` is set to pin the comment to a `clipBlock` node (a note on
+a clip); left `null` for a comment anchored to a run of prose text, whose
+real position anchor is a TipTap `comment` mark the frontend applies to
+the selection after this row is created (`docs/1100_document_builder.md`
+§5).
+
+Response `anchor`:
+
+```json
+{
+	"kind": "document",
+	"document_id": "uuid",
+	"clip_node_id": "client-generated uuid, or null",
+	"excerpt": "resolved fresh from current content, or null if the anchor is gone"
+}
+```
+
+`excerpt` is resolved fresh from the document's current content on every
+read, like a clip block's own excerpt — never stored, and `null` if the
+anchored clip node or comment mark can no longer be found (e.g. the clip
+was removed from the document).
+
+---
+
+## List Document Comments
+
+```
+GET /documents/{document_id}/comments
 ```
 
 ---
@@ -730,7 +802,110 @@ a past conversation without re-asking (no retrieval re-run).
 
 ---
 
-# 14. Exports
+# 14. Documents
+
+Project-scoped documents mixing prose with clip blocks — see
+`docs/1100_document_builder.md`. Synchronous CRUD, like Comments — no job,
+no polling.
+
+## Create Document
+
+```
+POST /projects/{project_id}/documents
+```
+
+Request:
+
+```json
+{
+	"title": "Narration draft"
+}
+```
+
+Requires `editor` or above. Starts with empty `content`.
+
+---
+
+## List Documents
+
+```
+GET /projects/{project_id}/documents
+```
+
+Returns `{id, title, updated_at}` per document — no `content`, so the
+panel's document switcher stays cheap.
+
+---
+
+## Get Document
+
+```
+GET /documents/{document_id}
+```
+
+Returns the full document, with every `clipBlock` node in `content`
+augmented with its resolved display fields (excerpt, timecode, speaker,
+thumbnail token, folder path) — resolved fresh on every call, never
+persisted.
+
+---
+
+## Update Document
+
+```
+PATCH /documents/{document_id}
+```
+
+Request:
+
+```json
+{
+	"title": "Renamed",
+	"content": { "type": "doc", "content": [] },
+	"expected_version": 3
+}
+```
+
+`title`/`content` are each optional (omit to leave unchanged);
+`expected_version` is required. Whole-document optimistic locking, same
+`409 CONFLICT` shape as Transcript Tokens (§10) — a stale version is
+rejected before anything is mutated.
+
+---
+
+## Delete Document
+
+```
+DELETE /documents/{document_id}
+```
+
+---
+
+## Resolve Clip Block
+
+```
+POST /documents/{document_id}/clip-blocks/resolve
+```
+
+Request:
+
+```json
+{
+	"transcript_id": "uuid",
+	"start_token_id": "uuid",
+	"end_token_id": "uuid"
+}
+```
+
+Resolves one clip's display fields immediately, so the editor can populate
+a newly inserted node's attrs without a full document round-trip. The
+named transcript MUST belong to the same project as the document, or the
+response is `404` (not `403`, so cross-project transcript ids aren't
+distinguishable from unknown ones).
+
+---
+
+# 15. Exports
 
 ## Create Export
 
@@ -770,7 +945,7 @@ Use `GET /jobs/{job_id}` to track progress before completion.
 
 ---
 
-# 15. Health
+# 16. Health
 
 ## Health Check
 
@@ -790,7 +965,7 @@ Response:
 
 ---
 
-# 16. Future API Extensions
+# 17. Future API Extensions
 
 The API should allow future additions:
 
