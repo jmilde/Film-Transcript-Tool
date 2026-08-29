@@ -124,6 +124,65 @@
   --text-small--line-height: 1.125rem;
 }
 
+/* Overlay enter/exit animations keyed off Radix's own `data-state` attribute
+   (Dialog/Popover/Tooltip/DropdownMenu/Select) — lightweight CSS keyframes,
+   no separate animation library. Radix delays unmounting a closed overlay
+   until its `animate-fade-out`/`animate-scale-out` animation finishes. */
+@theme {
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-fade-out: fade-out 100ms ease-in;
+  --animate-scale-in: scale-in 150ms ease-out;
+  --animate-scale-out: scale-out 100ms ease-in;
+  --animate-slide-down: slide-down 150ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 body {
   background-color: var(--color-page);
   color: var(--color-text);

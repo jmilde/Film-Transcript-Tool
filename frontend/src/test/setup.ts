@@ -39,6 +39,14 @@ if (!URL.createObjectURL) {
   URL.revokeObjectURL = () => {}
 }
 
+// jsdom doesn't implement pointer capture, which Radix's Select uses to
+// track pointer interaction with its trigger/items.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false
+  Element.prototype.setPointerCapture = () => {}
+  Element.prototype.releasePointerCapture = () => {}
+}
+
 // jsdom doesn't implement layout, which ProseMirror (the document editor's
 // underlying engine) needs for click-to-position and scroll-into-view.
 // Zeroed-out geometry is fine for tests — nothing asserts on real layout.

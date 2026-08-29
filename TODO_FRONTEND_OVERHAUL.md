@@ -118,15 +118,15 @@ new runtime dependency for these.
 
 ## Phase 4 — Radix-backed overlay primitives
 
-- [ ] `Dialog.tsx` wrapping `@radix-ui/react-dialog` — used later for e.g. delete-confirmation flows that currently use bare `confirm()`/inline state (grep for those while here)
-- [ ] `Popover.tsx` wrapping `@radix-ui/react-popover`
-- [ ] `Tooltip.tsx` wrapping `@radix-ui/react-tooltip`
-- [ ] `DropdownMenu.tsx` wrapping `@radix-ui/react-dropdown-menu`
-- [ ] `Select.tsx` wrapping `@radix-ui/react-select` — candidate replacement for any native `<select>` (check `TranslationControl.tsx`, `ExportControl.tsx`, the document switcher in `DocumentPanel.tsx`)
-- [ ] Apply Phase 0's confirmed transition style: enter/exit animations on all of the above via Tailwind's `data-[state=open]:animate-*`/`data-[state=closed]:animate-*` utilities keyed off Radix's own `data-state` attribute (no separate animation library)
-- [ ] `CommandPalette.tsx` — built on `Dialog.tsx` (a dialog is exactly a command palette's structural shell: overlay + focus-trapped panel); this is the container Phase 7 fills with the search UI
-- [ ] Tests: focus-trap/escape-to-close/click-outside-to-close behavior for `Dialog`/`CommandPalette` (Radix provides the behavior; the test proves it's wired, not re-testing Radix itself)
-- [ ] Verify: `npm run test` green
+- [x] `Dialog.tsx` wrapping `@radix-ui/react-dialog` — used later for e.g. delete-confirmation flows that currently use bare `confirm()`/inline state (grep for those while here) — grep found none; nothing currently uses `confirm()`
+- [x] `Popover.tsx` wrapping `@radix-ui/react-popover`
+- [x] `Tooltip.tsx` wrapping `@radix-ui/react-tooltip`
+- [x] `DropdownMenu.tsx` wrapping `@radix-ui/react-dropdown-menu`
+- [x] `Select.tsx` wrapping `@radix-ui/react-select` — candidate replacement for any native `<select>` (check `TranslationControl.tsx`, `ExportControl.tsx`, the document switcher in `DocumentPanel.tsx`)
+- [x] Apply Phase 0's confirmed transition style: enter/exit animations on all of the above via Tailwind's `data-[state=open]:animate-*`/`data-[state=closed]:animate-*` utilities keyed off Radix's own `data-state` attribute (no separate animation library) — custom `@keyframes`/`--animate-*` theme vars added to `index.css` (Tailwind v4 has no built-in fade/scale/slide utilities, so these are hand-defined rather than pulled from a plugin)
+- [x] `CommandPalette.tsx` — built on `Dialog.tsx` (a dialog is exactly a command palette's structural shell: overlay + focus-trapped panel); this is the container Phase 7 fills with the search UI
+- [x] Tests: focus-trap/escape-to-close/click-outside-to-close behavior for `Dialog`/`CommandPalette` (Radix provides the behavior; the test proves it's wired, not re-testing Radix itself)
+- [x] Verify: `npm run test` green
 
 ## Phase 5 — Backend: expose folder breadcrumb on `VideoRead` (the one backend touch)
 
