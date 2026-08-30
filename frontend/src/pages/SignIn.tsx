@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { useAuth } from '../auth/context'
+import { Input } from '../components/ui/Input'
+import { Button } from '../components/ui/Button'
 
 export function SignIn() {
   const { session, signIn } = useAuth()
@@ -29,40 +31,36 @@ export function SignIn() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="flex min-h-screen items-center justify-center bg-page">
       <form
         onSubmit={onSubmit}
-        className="w-80 space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+        className="w-80 space-y-4 rounded-lg border border-border bg-surface p-6 shadow-sm"
       >
-        <h1 className="text-lg font-semibold text-slate-800">Film Transcript Tool</h1>
-        <label className="block text-sm">
-          <span className="text-slate-600">Email</span>
-          <input
+        <h1 className="text-h3 text-text">Film Transcript Tool</h1>
+        <label className="block text-body">
+          <span className="text-text-muted">Email</span>
+          <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full"
           />
         </label>
-        <label className="block text-sm">
-          <span className="text-slate-600">Password</span>
-          <input
+        <label className="block text-body">
+          <span className="text-text-muted">Password</span>
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full"
           />
         </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-        >
+        {error && <p className="text-body text-danger-text">{error}</p>}
+        <Button type="submit" disabled={busy} className="w-full">
           {busy ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
     </div>
   )

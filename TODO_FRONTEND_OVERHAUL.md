@@ -212,8 +212,8 @@ changes in this phase either.
 
 ## Phase 12 — Reskin: sign-in
 
-- [ ] `frontend/src/pages/SignIn.tsx`: restyle with the new primitives/theme (outside `AppShell`, so no header/breadcrumb — just visual consistency)
-- [ ] Verify: manual check, light and dark
+- [x] `frontend/src/pages/SignIn.tsx`: restyle with the new primitives/theme (outside `AppShell`, so no header/breadcrumb — just visual consistency)
+- [x] Verify: manual check, light and dark — checked via a temporary DOM overlay (not the real signed-out route: the active Playwright session was already authenticated and signing out would have required credentials nobody supplied to get back in, so this avoided stranding the session) reproducing `SignIn.tsx`'s exact markup/classes; readable and correctly contrasted in both themes
 
 ## Phase 13 — `frontend/CLAUDE.md`
 
