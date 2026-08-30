@@ -217,9 +217,9 @@ changes in this phase either.
 
 ## Phase 13 — `frontend/CLAUDE.md`
 
-- [ ] Create `frontend/CLAUDE.md`, mirroring `backend/CLAUDE.md`'s tone/structure: what lives in `components/ui/` and when to reach for each primitive, the Token-vs-theme-variable naming rule (link `CONTEXT.md`), when Radix is warranted vs. hand-rolling (link ADR 0002), the light/dark theme-variable convention (never hardcode a raw Tailwind color like `slate-500` in feature code — reference a theme variable), the flat-folder-not-atomic-design rule, and a pointer to the two ADRs for the nav/IA decisions
-- [ ] Leave a short "adding a new primitive" checklist (styled wrapper, variants via props not new components, a test file, an entry here) so this file stays current as the primitive set grows post-overhaul
-- [ ] Verify: read it back as if you were a fresh agent with no other context — does it actually let you make the same calls this TODO made, without re-deriving them?
+- [x] Create `frontend/CLAUDE.md`, mirroring `backend/CLAUDE.md`'s tone/structure: what lives in `components/ui/` and when to reach for each primitive, the Token-vs-theme-variable naming rule (link `CONTEXT.md`), when Radix is warranted vs. hand-rolling (link ADR 0002), the light/dark theme-variable convention (never hardcode a raw Tailwind color like `slate-500` in feature code — reference a theme variable), the flat-folder-not-atomic-design rule, and a pointer to the two ADRs for the nav/IA decisions — also added a `Commands` section (mirroring backend's) and the concrete semantic color mapping established during Phase 11, since "reference a theme variable" alone doesn't tell a fresh agent *which* one for a given meaning
+- [x] Leave a short "adding a new primitive" checklist (styled wrapper, variants via props not new components, a test file, an entry here) so this file stays current as the primitive set grows post-overhaul
+- [x] Verify: read it back as if you were a fresh agent with no other context — does it actually let you make the same calls this TODO made, without re-deriving them? — re-read end to end; it reconstructs the primitive-split rule, the Popover-migration pattern from Phase 10/11, the semantic color mapping, and the breadcrumb/searchOverlay state-ownership decisions without needing this TODO as a crutch
 
 ## Phase 14 — Full regression + manual verification
 
