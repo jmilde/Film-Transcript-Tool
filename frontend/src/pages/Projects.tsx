@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { useCreateProject, useProjects } from '../api/hooks/useProjects'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 
 export function Projects() {
   const { data: projects, isPending, isError } = useProjects()
@@ -18,45 +21,40 @@ export function Projects() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-slate-800">Projects</h2>
+        <h2 className="text-h2 text-text">Projects</h2>
         <form onSubmit={onCreate} className="flex gap-2">
-          <input
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="New project name"
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm"
           />
-          <button
-            type="submit"
-            disabled={createProject.isPending}
-            className="rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={createProject.isPending}>
             Create
-          </button>
+          </Button>
         </form>
       </div>
 
-      {isPending && <p className="text-slate-500">Loading projects…</p>}
-      {isError && <p className="text-red-600">Could not load projects.</p>}
+      {isPending && <p className="text-text-muted">Loading projects…</p>}
+      {isError && <p className="text-danger-text">Could not load projects.</p>}
       {projects && projects.length === 0 && (
-        <p className="text-slate-500">No projects yet. Create your first one above.</p>
+        <p className="text-text-muted">No projects yet. Create your first one above.</p>
       )}
       {projects && projects.length > 0 && (
-        <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
-            <li key={project.id} className="px-4 py-3">
+            <Card key={project.id} variant="airy" tint="brand">
               <Link
                 to={`/projects/${project.id}`}
-                className="font-medium text-slate-800 hover:text-slate-950 hover:underline"
+                className="text-h3 text-text hover:underline"
               >
                 {project.name}
               </Link>
               {project.description && (
-                <span className="ml-2 text-sm text-slate-500">{project.description}</span>
+                <p className="mt-1 text-small text-text-muted">{project.description}</p>
               )}
-            </li>
+            </Card>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )

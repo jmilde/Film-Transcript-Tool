@@ -23,7 +23,7 @@ export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
     <button
       type="button"
       onClick={onClick}
-      className="my-1 flex w-full max-w-md items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:bg-slate-50"
+      className="my-1 flex w-full max-w-md items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-left hover:bg-surface-raised"
     >
       {citation.thumbnail_token ? (
         <img
@@ -32,24 +32,24 @@ export function ChatCitationCard({ citation, onClick }: ChatCitationCardProps) {
           className="h-10 w-16 shrink-0 rounded object-cover"
         />
       ) : (
-        <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-slate-100">
-          <Video className="h-4 w-4 text-slate-400" />
+        <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-surface-raised">
+          <Video className="h-4 w-4 text-text-muted" />
         </div>
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-slate-800">{citation.video_name}</span>
-          <span className="shrink-0 font-mono text-xs text-slate-400">
+          <span className="truncate text-body font-medium text-text">{citation.video_name}</span>
+          <span className="shrink-0 font-mono text-small text-text-muted">
             {formatTime(citation.start_time)}
           </span>
         </div>
         {citation.folder_path.length > 0 && (
-          <div className="flex items-center gap-1 truncate text-xs text-slate-400">
-            <Folder className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <div className="flex items-center gap-1 truncate text-small text-text-muted">
+            <Folder className="h-3.5 w-3.5 shrink-0 text-text-muted" />
             <span className="truncate">{citation.folder_path.join(' / ')}</span>
           </div>
         )}
-        <p className="truncate text-xs text-slate-500">{citation.excerpt}</p>
+        <p className="truncate text-small text-text-muted">{citation.excerpt}</p>
       </div>
     </button>
   )

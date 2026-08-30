@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import { forwardRef, type ButtonHTMLAttributes } from 'react'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 export type ButtonSize = 'sm' | 'md'
@@ -21,19 +21,19 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 }
 
 /** Hand-rolled per ADR 0002 — Button's correctness doesn't hinge on focus
- * trapping/portals the way the overlay primitives do. */
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  className = '',
-  type = 'button',
-  ...props
-}: ButtonProps) {
+ * trapping/portals the way the overlay primitives do. Forwards its ref so it
+ * can be used as a Radix trigger via `asChild` (Popover/DropdownMenu/Tooltip
+ * need a real DOM ref to anchor/position against). */
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = 'primary', size = 'md', className = '', type = 'button', ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       className={`inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
       {...props}
     />
   )
-}
+})

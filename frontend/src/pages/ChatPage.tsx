@@ -101,7 +101,7 @@ function ChatPageInner({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-slate-800">Ask</h2>
+          <h2 className="text-h3 text-text">Ask</h2>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto">
@@ -115,9 +115,11 @@ function ChatPageInner({
               statusMessage={ask.statusMessage}
             />
           ) : (
-            <p className="text-sm text-slate-400">Ask a question about this project's videos.</p>
+            <p className="text-small text-text-muted">Ask a question about this project's videos.</p>
           )}
-          {ask.isError && <p className="text-sm text-red-600">Something went wrong. Try again.</p>}
+          {ask.isError && (
+            <p className="text-small text-danger-text">Something went wrong. Try again.</p>
+          )}
         </div>
 
         <div className="mt-3">

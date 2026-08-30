@@ -186,14 +186,14 @@ Apply Phase 1–4's theme variables/primitives and the airy/pastel card
 treatment. No behavior changes in this phase — pure visual/markup pass
 using the new primitives instead of ad hoc classes.
 
-- [ ] `frontend/src/pages/Projects.tsx`: project list as `Card`s (not a `<ul>` divide-y list), `Button`/`Input` primitives for create-project
-- [ ] `frontend/src/pages/ProjectView.tsx`: folder tree + `FolderPanel` restyled with the new `Card`/`Button` primitives; `NewFolder`'s inline form uses `Input`/`Button`
-- [ ] `frontend/src/features/folders/FolderTree.tsx`, `FolderPanel.tsx`: restyle rows/icons (lucide equivalents from Phase 2) consistent with the new palette
-- [ ] `frontend/src/features/search/SearchVideoGroupCard.tsx`: restyle as a `Card`, `Badge` for hit "kind"
-- [ ] `frontend/src/features/chat/ChatHistorySidebar.tsx`, `ChatMessageList.tsx`, `ChatCitationCard.tsx`, `ChatInput.tsx`: restyle with the new primitives; citation cards as `Card`s
-- [ ] `frontend/src/features/members/MembersPanel.tsx`: restyle using `Dialog`/`DropdownMenu` if it currently rolls its own popover/modal logic (check first — don't force Radix onto something that's already simple and correct)
-- [ ] Tests: existing tests for all of the above updated for new roles/text where markup changed (per the "update tests alongside" decision) — this is the bulk of the expected test churn
-- [ ] Verify: `npm run test` green, visually review each page in the browser (light and dark)
+- [x] `frontend/src/pages/Projects.tsx`: project list as `Card`s (not a `<ul>` divide-y list), `Button`/`Input` primitives for create-project
+- [x] `frontend/src/pages/ProjectView.tsx`: folder tree + `FolderPanel` restyled with the new `Card`/`Button` primitives; `NewFolder`'s inline form uses `Input`/`Button`
+- [x] `frontend/src/features/folders/FolderTree.tsx`, `FolderPanel.tsx`: restyle rows/icons (lucide equivalents from Phase 2) consistent with the new palette — `ProcessingBadge` also switched to the `Badge` primitive (it's exactly the pill-shaped semantic status indicator Badge was built for) and the upload button to `Button`
+- [x] `frontend/src/features/search/SearchVideoGroupCard.tsx`: restyle as a `Card`, `Badge` for hit "kind"
+- [x] `frontend/src/features/chat/ChatHistorySidebar.tsx`, `ChatMessageList.tsx`, `ChatCitationCard.tsx`, `ChatInput.tsx`: restyle with the new primitives; citation cards as `Card`s — `ChatCitationCard`/`ChatMessageList`'s message bubbles stay plain elements with theme-variable colors (not literally the `Card` component) since they're a `<button>` and chat-bubble shapes respectively, not a generic content card
+- [x] `frontend/src/features/members/MembersPanel.tsx`: restyle using `Dialog`/`DropdownMenu` if it currently rolls its own popover/modal logic (check first — don't force Radix onto something that's already simple and correct) — its hand-rolled `open`/`absolute` popover had no outside-click/Escape/focus-trap at all, so it wasn't "already correct"; migrated to Phase 4's `Popover`. Left the two native `<select>` role-pickers alone (genuinely simple/correct as native elements; migrating to the `Select` primitive would have forced a nontrivial test rewrite for no behavioral gain). Added `forwardRef` to `Button` so it composes with Radix `asChild` triggers (needed here, and will be needed again for DropdownMenu/Tooltip triggers in Phase 11)
+- [x] Tests: existing tests for all of the above updated for new roles/text where markup changed (per the "update tests alongside" decision) — this is the bulk of the expected test churn — in practice no test files needed changes; all of them asserted on text/role rather than classes, and the `MembersPanel` → `Popover` migration preserved every existing interaction (plus fixed the missing outside-click/Escape close for free)
+- [x] Verify: `npm run test` green, visually review each page in the browser (light and dark) — reviewed Projects, ProjectView (incl. the Members popover), Chat, and the search overlay via Playwright in both themes; a final `grep -rE "slate-|gray-|zinc-|neutral-|text-white|bg-white"` across every file touched in this phase returned nothing
 
 ## Phase 11 — Reskin: editing workspace
 

@@ -4,6 +4,8 @@ import { useFolderContents } from '../../api/hooks/useFolders'
 import { useMoveVideo, useUploadVideo, useVideoProcessing } from '../../api/hooks/useVideos'
 import { Folder as FolderIcon, Video as VideoIcon } from 'lucide-react'
 import { VIDEO_DND_TYPE } from './FolderTree'
+import { Button } from '../../components/ui/Button'
+import { Badge } from '../../components/ui/Badge'
 
 interface PanelProps {
   folderId: string | null
@@ -17,7 +19,7 @@ interface PanelProps {
 export function FolderPanel({ folderId, onSelectFolder }: PanelProps) {
   if (folderId === null) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-slate-500">
+      <div className="rounded-lg border border-dashed border-border p-8 text-center text-text-muted">
         Select a folder to see its videos, or create a folder to get started.
       </div>
     )
@@ -42,8 +44,8 @@ function FolderPanelInner({
   const lastClickedRef = useRef<string | null>(null)
   const navigate = useNavigate()
 
-  if (isPending) return <p className="text-slate-500">Loading…</p>
-  if (isError) return <p className="text-red-600">Could not load this folder.</p>
+  if (isPending) return <p className="text-text-muted">Loading…</p>
+  if (isError) return <p className="text-danger-text">Could not load this folder.</p>
 
   const videos = data.videos
   const folders = data.folders
@@ -113,15 +115,15 @@ function FolderPanelInner({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-slate-800">{data.folder.name}</h3>
+        <h3 className="text-h3 text-text">{data.folder.name}</h3>
         <UploadVideo folderId={folderId} onUploaded={(id) => setUploaded((v) => [...v, id])} />
       </div>
 
       {folders.length === 0 && videos.length === 0 ? (
-        <p className="text-sm text-slate-500">This folder is empty.</p>
+        <p className="text-small text-text-muted">This folder is empty.</p>
       ) : (
         <ul
-          className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white"
+          className="divide-y divide-border rounded-lg border border-border bg-surface"
           onClick={() => setSelected(new Set())}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes(VIDEO_DND_TYPE)) e.preventDefault()
@@ -144,11 +146,13 @@ function FolderPanelInner({
                   e.stopPropagation()
                   onSelectFolder(f.id)
                 }}
-                className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-slate-700 ${
-                  dragOverFolderId === f.id ? 'bg-slate-100 ring-1 ring-inset ring-slate-400' : 'hover:bg-slate-50'
+                className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-text ${
+                  dragOverFolderId === f.id
+                    ? 'bg-surface-raised ring-1 ring-inset ring-brand'
+                    : 'hover:bg-surface-raised'
                 }`}
               >
-                <FolderIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                <FolderIcon className="h-4 w-4 shrink-0 text-text-muted" />
                 <span className="truncate">{f.name}</span>
               </button>
             </li>
@@ -169,11 +173,11 @@ function FolderPanelInner({
                 }
               }}
               className={`flex cursor-pointer items-center gap-2 px-4 py-2.5 ${
-                selected.has(v.id) ? 'bg-slate-200' : 'hover:bg-slate-50'
+                selected.has(v.id) ? 'bg-brand-subtle' : 'hover:bg-surface-raised'
               }`}
             >
-              <VideoIcon className="h-4 w-4 shrink-0 text-slate-400" />
-              <span className="flex-1 truncate text-slate-800">{v.name}</span>
+              <VideoIcon className="h-4 w-4 shrink-0 text-text-muted" />
+              <span className="flex-1 truncate text-text">{v.name}</span>
               {uploaded.includes(v.id) && <ProcessingBadge videoId={v.id} />}
             </li>
           ))}
@@ -210,14 +214,9 @@ function UploadVideo({
         onChange={onChange}
         className="hidden"
       />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={uploadVideo.isPending}
-        className="rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-      >
+      <Button onClick={() => inputRef.current?.click()} disabled={uploadVideo.isPending} size="sm">
         {uploadVideo.isPending ? 'Uploading…' : 'Upload video'}
-      </button>
+      </Button>
     </>
   )
 }
@@ -230,23 +229,20 @@ function ProcessingBadge({ videoId }: { videoId: string }) {
   const allDone = jobs.length > 0 && jobs.every((j) => j.status === 'completed')
 
   let label = 'Processing…'
-  let tone = 'bg-amber-100 text-amber-800'
+  let variant: 'warning' | 'danger' | 'success' = 'warning'
   if (failed) {
     label = 'Failed'
-    tone = 'bg-red-100 text-red-800'
+    variant = 'danger'
   } else if (allDone) {
     label = 'Ready'
-    tone = 'bg-green-100 text-green-800'
+    variant = 'success'
   } else if (active) {
     label = `Processing: ${active.type}`
   }
 
   return (
-    <span
-      title={failed?.error_message ?? undefined}
-      className={`ml-3 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}
-    >
+    <Badge variant={variant} className="ml-3 shrink-0" title={failed?.error_message ?? undefined}>
       {label}
-    </span>
+    </Badge>
   )
 }
