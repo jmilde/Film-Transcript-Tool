@@ -43,8 +43,8 @@ export const CommentResolvedDecoration = Extension.create({
                 const resolved = resolvedByCommentId.get(commentId)
                 const className =
                   resolved === true
-                    ? 'underline decoration-slate-300 decoration-2 underline-offset-2'
-                    : 'underline decoration-violet-400 decoration-2 underline-offset-2'
+                    ? 'underline decoration-success decoration-2 underline-offset-2'
+                    : 'underline decoration-warning decoration-2 underline-offset-2'
                 decorations.push(Decoration.inline(pos, pos + node.nodeSize, { class: className }))
               }
             })

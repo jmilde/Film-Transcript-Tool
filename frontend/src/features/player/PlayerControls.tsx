@@ -43,7 +43,7 @@ export function PlayerControls({
           aria-label="Skip back 5 seconds"
           title="Skip back 5s"
           onClick={() => onSkip(-SKIP_SECONDS)}
-          className="rounded p-1.5 text-slate-600 hover:bg-slate-100"
+          className="rounded-md p-1.5 text-text-muted hover:bg-surface-raised"
         >
           <SkipBackIcon className="h-5 w-5" />
         </button>
@@ -52,7 +52,7 @@ export function PlayerControls({
           aria-label={playing ? 'Pause' : 'Play'}
           title={playing ? 'Pause' : 'Play'}
           onClick={onTogglePlay}
-          className="rounded bg-slate-800 p-2 text-white hover:bg-slate-700"
+          className="rounded-md bg-brand p-2 text-text-inverted hover:bg-brand-hover"
         >
           {playing ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
         </button>
@@ -61,7 +61,7 @@ export function PlayerControls({
           aria-label="Skip forward 5 seconds"
           title="Skip forward 5s"
           onClick={() => onSkip(SKIP_SECONDS)}
-          className="rounded p-1.5 text-slate-600 hover:bg-slate-100"
+          className="rounded-md p-1.5 text-text-muted hover:bg-surface-raised"
         >
           <SkipForwardIcon className="h-5 w-5" />
         </button>
@@ -70,16 +70,16 @@ export function PlayerControls({
           aria-label="Toggle 2x speed"
           title="2x speed"
           onClick={onToggleSpeed}
-          className={`rounded border px-2 py-1 text-xs font-semibold ${
+          className={`rounded-md border px-2 py-1 text-small font-semibold ${
             speed === 2
-              ? 'border-slate-800 bg-slate-800 text-white'
-              : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+              ? 'border-brand bg-brand text-text-inverted'
+              : 'border-border text-text-muted hover:bg-surface-raised'
           }`}
         >
           2x
         </button>
       </div>
-      <div className="flex justify-between font-mono text-xs text-slate-500">
+      <div className="flex justify-between font-mono text-small text-text-muted">
         <span>{formatTime(currentTime)}</span>
         <span>{formatTime(duration)}</span>
       </div>

@@ -55,7 +55,7 @@ export const InsertMarker = Extension.create({
                 const bar = document.createElement('span')
                 bar.setAttribute('data-insert-marker', '')
                 bar.className =
-                  'mx-px inline-block h-4 w-0.5 animate-pulse rounded-sm align-middle bg-sky-500 shadow-[0_0_0_3px_rgba(56,189,248,0.35)]'
+                  'mx-px inline-block h-4 w-0.5 animate-pulse rounded-sm align-middle bg-brand ring-[3px] ring-brand/35'
                 return bar
               }),
             ])

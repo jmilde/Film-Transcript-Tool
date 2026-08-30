@@ -535,7 +535,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   }
 
   if (isLoading || !editor) {
-    return <div className="p-6 text-center text-sm text-slate-400">Loading document…</div>
+    return <div className="p-6 text-center text-body text-text-muted">Loading document…</div>
   }
 
   return (
@@ -545,12 +545,12 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         onChange={(e) => setTitle(e.target.value)}
         onBlur={saveTitle}
         aria-label="Document title"
-        className="border-b border-slate-200 px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none"
+        className="border-b border-border bg-surface px-4 py-3 text-body font-medium text-text focus:outline-none"
       />
       {/* Fixed above the document (not floating) — formatting applies from
           wherever the cursor is, so it doesn't need a selection to show,
           unlike the contextual BubbleMenu below. */}
-      <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-3 py-1.5">
+      <div className="flex items-center gap-1 border-b border-border bg-surface px-3 py-1.5">
         {formattingActions.map((action) => {
           const Icon = action.icon
           return (
@@ -561,8 +561,8 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
               title={action.label}
               aria-pressed={action.active}
               onClick={action.onClick}
-              className={`rounded p-1.5 hover:bg-slate-100 ${
-                action.active ? 'bg-slate-200 text-slate-800' : 'text-slate-500'
+              className={`rounded-md p-1.5 hover:bg-surface-raised ${
+                action.active ? 'bg-brand-subtle text-brand-text' : 'text-text-muted'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -571,28 +571,28 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         })}
       </div>
       {isDocumentConflict(updateDocument.error) && (
-        <div className="flex items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <div className="flex items-center gap-3 border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
           <span>This document was edited by someone else. Your change was not saved.</span>
           <button
             type="button"
             onClick={reloadAfterConflict}
-            className="ml-auto rounded bg-red-600 px-2 py-1 font-medium text-white hover:bg-red-500"
+            className="ml-auto rounded-md bg-danger px-2 py-1 font-medium text-text-inverted hover:opacity-90"
           >
             Reload
           </button>
         </div>
       )}
       {updateDocument.isError && !isDocumentConflict(updateDocument.error) && (
-        <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <div className="border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
           Your last change could not be saved. Check your connection and permissions, then try
           again.
         </div>
       )}
       <DocumentCommentsContext.Provider value={{ clipCommentStatus }}>
-        {/* A gray backdrop behind a bounded white "page" (rather than the
+        {/* A recessed backdrop behind a bounded "page" (rather than the
             editor just filling the panel edge-to-edge) is what actually
             reads as "a document" instead of plain panel content. */}
-        <div className="relative flex-1 overflow-y-auto bg-slate-100" onClick={handleContentClick}>
+        <div className="relative flex-1 overflow-y-auto bg-page" onClick={handleContentClick}>
           <BubbleMenu
             editor={editor}
             shouldShow={shouldShowBubble}
@@ -603,7 +603,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
             // of the screen (the panel sits flush against it).
             options={{ strategy: 'fixed', shift: { padding: 8 } }}
             appendTo={() => document.body}
-            className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+            className="overflow-hidden rounded-md border border-border bg-surface shadow-lg"
           >
             {commentDraft ? (
               <SelectionToolbar
@@ -615,8 +615,8 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
                   onChange: setCommentDraftText,
                   onConfirm: () => void submitCommentDraft(),
                   onCancel: () => setCommentDraft(null),
-                  accentClass: 'border-violet-100 bg-violet-50',
-                  inputAccentClass: 'border-violet-400',
+                  accentClass: 'border-warning-subtle bg-warning-subtle',
+                  inputAccentClass: 'border-warning',
                 }}
               />
             ) : (
@@ -641,7 +641,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
             )}
           </BubbleMenu>
           <div className="mx-auto max-w-2xl px-4 py-6">
-            <div className="rounded-md border border-slate-200 bg-white px-8 py-8 shadow-sm">
+            <div className="rounded-md border border-border bg-surface px-8 py-8 shadow-sm">
               <EditorContent editor={editor} className="prose prose-sm max-w-none" />
             </div>
           </div>

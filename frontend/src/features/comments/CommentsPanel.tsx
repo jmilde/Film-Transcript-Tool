@@ -4,6 +4,8 @@ import { transcriptAnchor, useReplyToComment, useResolveComment } from '../../ap
 import { useSelectionStore } from '../../store/selection'
 import { useCommentsStore } from '../../store/comments'
 import { formatTime } from '../player/format'
+import { Input } from '../../components/ui/Input'
+import { Button } from '../../components/ui/Button'
 import type { Comment } from '../../api/hooks/useComments'
 
 interface CommentsPanelProps {
@@ -59,12 +61,14 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
 
   return (
     <div className="space-y-2">
-      <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Comments</h3>
+      <h3 className="text-small font-semibold tracking-wide text-text-muted uppercase">
+        Comments
+      </h3>
 
-      {isLoading && <div className="text-sm text-slate-400">Loading comments…</div>}
+      {isLoading && <div className="text-body text-text-muted">Loading comments…</div>}
 
       {!isLoading && (!comments || comments.length === 0) && (
-        <div className="text-sm text-slate-400">
+        <div className="text-body text-text-muted">
           No comments yet. Select a transcript range to add one.
         </div>
       )}
@@ -75,14 +79,16 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
         return (
           <div
             key={comment.id}
-            className={`rounded border px-3 py-2 text-sm ${
-              comment.id === selectedId ? 'border-sky-400 bg-sky-50' : 'border-slate-200 bg-white'
+            className={`rounded-md border px-3 py-2 text-body ${
+              comment.id === selectedId
+                ? 'border-brand bg-brand-subtle'
+                : 'border-border bg-surface'
             } ${comment.resolved ? 'opacity-60' : ''}`}
           >
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                className="font-mono text-xs text-slate-500 hover:underline"
+                className="font-mono text-small text-text-muted hover:underline"
                 onClick={() => locate(comment)}
                 disabled={!anchor}
               >
@@ -90,10 +96,10 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
               </button>
               <button
                 type="button"
-                className={`rounded border px-2 py-0.5 text-xs ${
+                className={`rounded-md border px-2 py-0.5 text-small ${
                   comment.resolved
-                    ? 'border-slate-300 text-slate-500 hover:bg-slate-100'
-                    : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                    ? 'border-border text-text-muted hover:bg-surface-raised'
+                    : 'border-success text-success-text hover:bg-success-subtle'
                 }`}
                 onClick={() =>
                   resolveComment.mutate({ commentId: comment.id, resolved: !comment.resolved })
@@ -103,15 +109,15 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
               </button>
             </div>
 
-            <p className="mt-1 text-slate-800">{comment.text}</p>
-            <div className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-text">{comment.text}</p>
+            <div className="mt-1 text-small text-text-muted">
               {authorLabel(comment.created_by, currentUserId)}
             </div>
 
             {comment.replies.length > 0 && (
               <button
                 type="button"
-                className="mt-1 text-xs text-sky-600 hover:underline"
+                className="mt-1 text-small text-brand-text hover:underline"
                 onClick={() => toggleOpen(comment.id)}
               >
                 {isOpen ? 'Hide' : 'Show'} {comment.replies.length}{' '}
@@ -121,31 +127,27 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
 
             {isOpen &&
               comment.replies.map((reply) => (
-                <div key={reply.id} className="mt-1 ml-3 border-l border-slate-200 pl-2 text-xs">
-                  <span className="text-slate-400">
+                <div key={reply.id} className="mt-1 ml-3 border-l border-border pl-2 text-small">
+                  <span className="text-text-muted">
                     {authorLabel(reply.created_by, currentUserId)}:
                   </span>{' '}
-                  <span className="text-slate-700">{reply.text}</span>
+                  <span className="text-text">{reply.text}</span>
                 </div>
               ))}
 
             <div className="mt-2 flex gap-1">
-              <input
+              <Input
                 value={replyDrafts[comment.id] ?? ''}
                 onChange={(e) => setReplyDrafts((d) => ({ ...d, [comment.id]: e.target.value }))}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') submitReply(comment.id)
                 }}
                 placeholder="Reply…"
-                className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs"
+                className="flex-1 text-small"
               />
-              <button
-                type="button"
-                className="rounded bg-slate-800 px-2 py-1 text-xs text-white hover:bg-slate-700"
-                onClick={() => submitReply(comment.id)}
-              >
+              <Button size="sm" onClick={() => submitReply(comment.id)}>
                 Reply
-              </button>
+              </Button>
             </div>
           </div>
         )

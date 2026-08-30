@@ -100,8 +100,8 @@ describe('TranscriptViewer', () => {
     renderViewer()
 
     expect(screen.getByText('Jordan')).toBeInTheDocument()
-    expect(screen.getByText('world')).toHaveClass('bg-amber-200')
-    expect(screen.getByText('Hello')).not.toHaveClass('bg-amber-200')
+    expect(screen.getByText('world')).toHaveClass('bg-info-subtle')
+    expect(screen.getByText('Hello')).not.toHaveClass('bg-info-subtle')
   })
 
   it('seeks the video on a plain click', () => {
@@ -163,8 +163,8 @@ describe('TranscriptViewer', () => {
 
     expect(screen.getByText('"Hello world again"')).toBeInTheDocument()
     expect(screen.getByText('0:00 – 0:03')).toBeInTheDocument()
-    expect(screen.getByText('Hello')).toHaveClass('bg-sky-200')
-    expect(screen.getByText('again')).toHaveClass('bg-sky-200')
+    expect(screen.getByText('Hello')).toHaveClass('bg-brand-subtle')
+    expect(screen.getByText('again')).toHaveClass('bg-brand-subtle')
   })
 
   it('plays the selection when "Play selection" is clicked', async () => {
@@ -580,7 +580,7 @@ describe('TranscriptViewer', () => {
     expect(useSelectionStore.getState().range).toBeNull()
   })
 
-  it('underlines tokens covered by a comment, gray once resolved', () => {
+  it('underlines tokens covered by a comment, success-colored once resolved', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
@@ -630,9 +630,9 @@ describe('TranscriptViewer', () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.getByText('Hello')).toHaveClass('decoration-violet-400')
-    expect(screen.getByText('again')).toHaveClass('decoration-slate-300')
-    expect(screen.getByText('world')).not.toHaveClass('decoration-violet-400')
+    expect(screen.getByText('Hello')).toHaveClass('decoration-warning')
+    expect(screen.getByText('again')).toHaveClass('decoration-success')
+    expect(screen.getByText('world')).not.toHaveClass('decoration-warning')
   })
 
   it('groups consecutive same-speaker segments under a single header', () => {
@@ -692,11 +692,11 @@ describe('TranscriptViewer', () => {
     await userEvent.type(screen.getByPlaceholderText('Find in transcript…'), 'o')
 
     expect(screen.getByText('1/2')).toBeInTheDocument()
-    expect(screen.getByText('Hello')).toHaveClass('bg-orange-300')
+    expect(screen.getByText('Hello')).toHaveClass('bg-warning')
 
     await userEvent.click(screen.getByRole('button', { name: 'Next match' }))
     expect(screen.getByText('2/2')).toBeInTheDocument()
-    expect(screen.getByText('world')).toHaveClass('bg-orange-300')
+    expect(screen.getByText('world')).toHaveClass('bg-warning')
 
     await userEvent.click(screen.getByRole('button', { name: 'Close search' }))
     expect(screen.queryByPlaceholderText('Find in transcript…')).not.toBeInTheDocument()

@@ -398,12 +398,12 @@ export function TranscriptViewer({
   }, [activeTokenId, autoFollow])
 
   if (isLoading) {
-    return <div className="p-6 text-center text-sm text-slate-400">Loading transcript…</div>
+    return <div className="p-6 text-center text-body text-text-muted">Loading transcript…</div>
   }
 
   if (!transcript || transcript.segments.length === 0) {
     return (
-      <div className="p-6 text-center text-sm text-slate-400">No transcript available yet.</div>
+      <div className="p-6 text-center text-body text-text-muted">No transcript available yet.</div>
     )
   }
 
@@ -549,10 +549,10 @@ export function TranscriptViewer({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-2">
         {searchOpen ? (
           <div className="flex flex-1 items-center gap-1">
-            <SearchIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <SearchIcon className="h-4 w-4 shrink-0 text-text-muted" />
             <input
               autoFocus
               value={searchQuery}
@@ -562,9 +562,9 @@ export function TranscriptViewer({
                 if (e.key === 'Escape') closeSearch()
               }}
               placeholder="Find in transcript…"
-              className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-xs"
+              className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-small text-text"
             />
-            <span className="shrink-0 font-mono text-xs text-slate-400">
+            <span className="shrink-0 font-mono text-small text-text-muted">
               {searchQuery
                 ? `${searchMatches.length > 0 ? matchIndex + 1 : 0}/${searchMatches.length}`
                 : ''}
@@ -575,7 +575,7 @@ export function TranscriptViewer({
               title="Previous match"
               disabled={searchMatches.length === 0}
               onClick={() => stepMatch(-1)}
-              className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+              className="rounded-md p-1 text-text-muted hover:bg-surface-raised disabled:opacity-40"
             >
               <ChevronUpIcon className="h-4 w-4" />
             </button>
@@ -585,7 +585,7 @@ export function TranscriptViewer({
               title="Next match"
               disabled={searchMatches.length === 0}
               onClick={() => stepMatch(1)}
-              className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+              className="rounded-md p-1 text-text-muted hover:bg-surface-raised disabled:opacity-40"
             >
               <ChevronDownIcon className="h-4 w-4" />
             </button>
@@ -594,7 +594,7 @@ export function TranscriptViewer({
               aria-label="Close search"
               title="Close search"
               onClick={closeSearch}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100"
+              className="rounded-md p-1 text-text-muted hover:bg-surface-raised"
             >
               <CloseIcon className="h-4 w-4" />
             </button>
@@ -605,28 +605,29 @@ export function TranscriptViewer({
             aria-label="Search transcript"
             title="Search transcript"
             onClick={() => setSearchOpen(true)}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100"
+            className="rounded-md p-1 text-text-muted hover:bg-surface-raised"
           >
             <SearchIcon className="h-4 w-4" />
           </button>
         )}
-        <label className="ml-auto flex items-center gap-2 text-xs text-slate-500">
+        <label className="ml-auto flex items-center gap-2 text-small text-text-muted">
           <input
             type="checkbox"
             checked={autoFollow}
             onChange={(e) => setAutoFollow(e.target.checked)}
+            className="accent-brand"
           />
           Auto-follow
         </label>
       </div>
 
       {conflict && (
-        <div className="flex items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <div className="flex items-center gap-3 border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
           <span>This was edited by someone else. Your change was not saved.</span>
           <button
             type="button"
             onClick={reloadAfterConflict}
-            className="ml-auto rounded bg-red-600 px-2 py-1 font-medium text-white hover:bg-red-500"
+            className="ml-auto rounded-md bg-danger px-2 py-1 font-medium text-text-inverted hover:opacity-90"
           >
             Reload
           </button>
@@ -637,7 +638,7 @@ export function TranscriptViewer({
         popupPos &&
         createPortal(
           <div
-            className="fixed z-50 w-max max-w-[90vw] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+            className="fixed z-50 w-max max-w-[90vw] overflow-hidden rounded-md border border-border bg-surface shadow-lg"
             style={{
               top: popupPos.top,
               left: popupPos.left,
@@ -665,8 +666,8 @@ export function TranscriptViewer({
                   onChange: setCommentDraft,
                   onConfirm: confirmComment,
                   onCancel: () => setCommentDraft(null),
-                  accentClass: 'border-violet-100 bg-violet-50',
-                  inputAccentClass: 'border-violet-400',
+                  accentClass: 'border-warning-subtle bg-warning-subtle',
+                  inputAccentClass: 'border-warning',
                 }}
               />
             ) : (
@@ -687,12 +688,12 @@ export function TranscriptViewer({
       <div ref={scrollContainerRef} className="flex-1 space-y-4 overflow-y-auto p-4 select-none">
         {speakerGroups.map((group) => (
           <div key={group.key}>
-            <div className="mb-1 text-xs font-semibold text-slate-500">
+            <div className="mb-1 text-small font-semibold text-text-muted">
               {group.speakerId
                 ? (speakerNames.get(group.speakerId) ?? 'Unknown speaker')
                 : 'Unknown speaker'}
             </div>
-            <p className="leading-relaxed text-slate-800">
+            <p className="leading-relaxed text-text">
               {group.tokens.map((token) => {
                 if (token.id === editingTokenId) {
                   return (
@@ -707,26 +708,30 @@ export function TranscriptViewer({
                         if (e.key === 'Escape') setEditingTokenId(null)
                       }}
                       style={{ width: `${Math.max(editingText.length, 3)}ch` }}
-                      className="rounded border border-sky-400 px-0.5 text-slate-800"
+                      className="rounded-sm border border-brand bg-surface px-0.5 text-text"
                     />
                   )
                 }
                 const isCurrentMatch = currentMatch?.id === token.id
                 const isMatch = matchIds.has(token.id)
+                // Selection (brand) > current search match (warning, vivid) >
+                // active/playing token (info) > other matches (warning-subtle)
+                // > plain hover — each state means something different, per
+                // the workspace's "color reserved for meaning" rule.
                 const bg = selectedIds.has(token.id)
-                  ? 'bg-sky-200'
+                  ? 'bg-brand-subtle'
                   : isCurrentMatch
-                    ? 'bg-orange-300'
+                    ? 'bg-warning'
                     : token.id === activeTokenId
-                      ? 'bg-amber-200'
+                      ? 'bg-info-subtle'
                       : isMatch
-                        ? 'bg-yellow-100'
-                        : 'hover:bg-slate-100'
+                        ? 'bg-warning-subtle'
+                        : 'hover:bg-surface-raised'
                 const comment = commentedTokenInfo.get(token.id)
                 const decoration = comment
                   ? comment.resolved
-                    ? 'underline decoration-slate-300 decoration-2 underline-offset-2'
-                    : 'underline decoration-violet-400 decoration-2 underline-offset-2'
+                    ? 'underline decoration-success decoration-2 underline-offset-2'
+                    : 'underline decoration-warning decoration-2 underline-offset-2'
                   : ''
                 return (
                   <span

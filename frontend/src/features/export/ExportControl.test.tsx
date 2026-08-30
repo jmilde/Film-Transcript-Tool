@@ -109,8 +109,10 @@ describe('ExportControl', () => {
     renderControl()
 
     await userEvent.click(screen.getByRole('button', { name: 'Export' }))
-    await userEvent.selectOptions(screen.getByLabelText(/Transcript$/i), TRANSLATION_ID)
-    await userEvent.selectOptions(screen.getByLabelText(/Format$/i), 'srt')
+    await userEvent.click(screen.getByRole('combobox', { name: 'Transcript' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'es' }))
+    await userEvent.click(screen.getByRole('combobox', { name: 'Format' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'SRT' }))
     await userEvent.click(screen.getByRole('button', { name: 'Generate' }))
 
     expect(await screen.findByRole('button', { name: 'Download' })).toBeInTheDocument()

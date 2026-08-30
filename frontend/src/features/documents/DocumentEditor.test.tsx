@@ -608,6 +608,6 @@ describe('DocumentEditor', () => {
       expect(container.querySelector('[data-clip-block]')?.className).toContain('underline')
     })
     // The clip's own border+tint channel is unaffected by the comment.
-    expect(container.querySelector('[data-clip-block]')?.className).toContain('border-teal-300')
+    expect(container.querySelector('[data-clip-block]')?.className).toContain('border-info')
   })
 })

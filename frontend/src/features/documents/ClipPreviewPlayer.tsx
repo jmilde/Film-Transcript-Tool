@@ -57,7 +57,7 @@ export function ClipPreviewPlayer({ videoId, startTime, endTime }: ClipPreviewPl
   }
 
   if (!media) {
-    return <div className="p-4 text-center text-xs text-slate-400">Loading preview…</div>
+    return <div className="p-4 text-center text-small text-text-muted">Loading preview…</div>
   }
 
   return (
@@ -85,7 +85,7 @@ export function ClipPreviewPlayer({ videoId, startTime, endTime }: ClipPreviewPl
       />
       <Link
         to={`/videos/${videoId}`}
-        className="block text-center text-xs text-slate-500 hover:underline"
+        className="block text-center text-small text-text-muted hover:underline"
       >
         Open in workspace →
       </Link>

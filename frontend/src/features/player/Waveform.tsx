@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { usePlaybackStore } from '../../store/playback'
+import { useThemeStore } from '../../store/theme'
 import { formatTime } from './format'
 
 interface WaveformProps {
@@ -31,6 +32,12 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
   const trailingTimeoutRef = useRef<number | null>(null)
 
   const displayTime = dragTime ?? currentTime
+  // Canvas fillStyle is imperative — it can't reference Tailwind classes, so
+  // the theme's raw CSS custom properties are read directly. `isDark` is a
+  // dependency purely to force a redraw with the other theme's values the
+  // moment the toggle flips (the properties themselves update instantly via
+  // the `.dark` class; this effect just wouldn't otherwise know to re-run).
+  const isDark = useThemeStore((s) => s.isDark)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -41,7 +48,11 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
     const { width, height } = canvas
     ctx.clearRect(0, 0, width, height)
 
-    ctx.fillStyle = '#cbd5e1'
+    const rootStyle = getComputedStyle(document.documentElement)
+    const barColor = rootStyle.getPropertyValue('--raw-text-muted').trim()
+    const playheadColor = rootStyle.getPropertyValue('--raw-info').trim()
+
+    ctx.fillStyle = barColor
     const n = peaks.length || 1
     const barW = Math.max(1, width / n)
     peaks.forEach((peak, i) => {
@@ -50,10 +61,10 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
     })
 
     if (duration > 0) {
-      ctx.fillStyle = '#0f172a'
+      ctx.fillStyle = playheadColor
       ctx.fillRect((displayTime / duration) * width, 0, 2, height)
     }
-  }, [peaks, displayTime, duration])
+  }, [peaks, displayTime, duration, isDark])
 
   useEffect(() => {
     return () => {
@@ -125,7 +136,7 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
   return (
     <div className="relative pt-5">
       <div
-        className="pointer-events-none absolute top-0 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-white"
+        className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-md bg-text px-1.5 py-0.5 font-mono text-[10px] text-page"
         style={{ left: `${labelLeft}%` }}
       >
         {formatTime(displayTime)}
@@ -138,7 +149,7 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="h-16 w-full cursor-pointer rounded bg-slate-50"
+        className="h-16 w-full cursor-pointer rounded-md bg-surface-raised"
       />
     </div>
   )

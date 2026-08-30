@@ -18,9 +18,11 @@ export interface ToolbarDraft {
   onChange: (value: string) => void
   onConfirm: () => void
   onCancel: () => void
-  /** Border/background accent for the draft row itself; defaults to amber. */
+  /** Border/background accent for the draft row itself; defaults to the
+   * brand hue (an in-progress edit). Comment drafts override to warning
+   * (an open note), matching the Comment button's `highlight` variant. */
   accentClass?: string
-  /** Border accent for the input field; defaults to sky. */
+  /** Border accent for the input field; defaults to brand. */
   inputAccentClass?: string
   placeholder?: string
 }
@@ -35,10 +37,10 @@ type SelectionToolbarProps =
   | { mode: 'draft'; draft: ToolbarDraft }
 
 const VARIANT_CLASSES: Record<NonNullable<ToolbarAction['variant']>, string> = {
-  primary: 'bg-slate-800 text-white hover:bg-slate-700',
-  default: 'border border-slate-300 text-slate-600 hover:bg-slate-100',
-  highlight: 'border border-violet-300 text-violet-700 hover:bg-violet-50',
-  danger: 'border border-red-300 text-red-600 hover:bg-red-50',
+  primary: 'bg-brand text-text-inverted hover:bg-brand-hover',
+  default: 'border border-border text-text-muted hover:bg-surface-raised',
+  highlight: 'border border-warning text-warning-text hover:bg-warning-subtle',
+  danger: 'border border-danger text-danger-text hover:bg-danger-subtle',
 }
 
 /**
@@ -55,11 +57,11 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
     const { draft } = props
     return (
       <div
-        className={`flex flex-wrap items-center gap-2 border-b px-4 py-2 text-xs text-slate-600 ${
-          draft.accentClass ?? 'border-amber-100 bg-amber-50'
+        className={`flex flex-wrap items-center gap-2 border-b px-4 py-2 text-small text-text-muted ${
+          draft.accentClass ?? 'border-brand-subtle bg-brand-subtle'
         }`}
       >
-        <span className="text-slate-500">{draft.label}</span>
+        <span className="text-text-muted">{draft.label}</span>
         <input
           autoFocus
           value={draft.value}
@@ -69,20 +71,20 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
             if (e.key === 'Enter') draft.onConfirm()
             if (e.key === 'Escape') draft.onCancel()
           }}
-          className={`min-w-48 flex-1 rounded border px-1 py-0.5 ${
-            draft.inputAccentClass ?? 'border-sky-400'
+          className={`min-w-48 flex-1 rounded-md border bg-surface px-1 py-0.5 text-text ${
+            draft.inputAccentClass ?? 'border-brand'
           }`}
         />
         <button
           type="button"
-          className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700"
+          className="rounded-md bg-brand px-2 py-1 text-text-inverted hover:bg-brand-hover"
           onClick={draft.onConfirm}
         >
           Confirm
         </button>
         <button
           type="button"
-          className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
+          className="rounded-md border border-border px-2 py-1 text-text hover:bg-surface-raised"
           onClick={draft.onCancel}
         >
           Cancel
@@ -93,7 +95,7 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
 
   const { summary, actions, onClear } = props
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-slate-600">
+    <div className="flex flex-wrap items-center gap-2 border-b border-brand-subtle bg-brand-subtle px-4 py-2 text-small text-text-muted">
       {summary.timecode && <span className="font-mono">{summary.timecode}</span>}
       <span className="max-w-xs truncate italic">&quot;{summary.text}&quot;</span>
       {actions.map((action) => {
@@ -105,8 +107,8 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
             aria-label={action.label}
             title={action.label}
             aria-pressed={action.active}
-            className={`rounded p-1.5 ${VARIANT_CLASSES[action.variant ?? 'default']} ${
-              action.active ? 'ring-1 ring-sky-400' : ''
+            className={`rounded-md p-1.5 ${VARIANT_CLASSES[action.variant ?? 'default']} ${
+              action.active ? 'ring-1 ring-brand' : ''
             }`}
             onClick={action.onClick}
           >
@@ -119,7 +121,7 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
           type="button"
           aria-label="Clear selection"
           title="Clear selection"
-          className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="ml-auto rounded-md p-1 text-text-muted hover:bg-surface-raised hover:text-text"
           onClick={onClear}
         >
           <X className="h-4 w-4" />

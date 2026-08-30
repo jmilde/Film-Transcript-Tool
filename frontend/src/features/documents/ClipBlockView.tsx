@@ -21,16 +21,16 @@ export function ClipBlockView({ node, selected }: ReactNodeViewProps) {
   const commentStatus = attrs.nodeId ? clipCommentStatus.get(attrs.nodeId) : undefined
   const decorationClass = commentStatus
     ? commentStatus.resolved
-      ? 'underline decoration-slate-300 decoration-2 underline-offset-2'
-      : 'underline decoration-violet-400 decoration-2 underline-offset-2'
+      ? 'underline decoration-success decoration-2 underline-offset-2'
+      : 'underline decoration-warning decoration-2 underline-offset-2'
     : ''
 
   return (
     <NodeViewWrapper
       as="span"
       data-clip-block=""
-      className={`border-l-2 border-teal-300 bg-teal-50 px-1 py-0.5 ${decorationClass} ${
-        selected ? 'ring-1 ring-sky-400' : ''
+      className={`border-l-2 border-info bg-info-subtle px-1 py-0.5 ${decorationClass} ${
+        selected ? 'ring-1 ring-brand' : ''
       }`}
     >
       {attrs.excerpt ?? 'Clip'}

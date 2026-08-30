@@ -160,7 +160,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const src = media ? proxyUrl(videoId, media.token) : undefined
 
   if (videoError) {
-    return <p className="text-red-600">Could not load this video.</p>
+    return <p className="text-danger-text">Could not load this video.</p>
   }
 
   return (
@@ -175,7 +175,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
           ) : (
             <ReturnToOrigin label="Back to search" onClick={() => openSearchOverlay()} />
           ))}
-        <h2 className="truncate text-lg font-semibold text-slate-800">{video?.name ?? 'Video'}</h2>
+        <h2 className="truncate text-h3 text-text">{video?.name ?? 'Video'}</h2>
         <div className="ml-auto flex items-center gap-2">
           <TranslationControl
             videoId={videoId}
@@ -195,13 +195,13 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
       {/* Numeric sizes are pixels in v4; strings without units are percentages. */}
       <Group
         orientation="horizontal"
-        className="flex-1 overflow-hidden rounded-lg border border-slate-200"
+        className="flex-1 overflow-hidden rounded-lg border border-border"
       >
-        <Panel defaultSize="55" minSize="30" className="bg-white">
+        <Panel defaultSize="55" minSize="30" className="bg-surface">
           {secondTranscriptId ? (
             <Group orientation="horizontal" className="h-full">
               <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
-                <div className="border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
+                <div className="border-b border-border px-4 py-1.5 text-small font-medium text-text-muted">
                   Original
                 </div>
                 <div className="min-h-0 flex-1">
@@ -217,16 +217,16 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                   />
                 </div>
               </Panel>
-              <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
+              <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
               <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
+                <div className="flex items-center justify-between border-b border-border px-4 py-1.5 text-small font-medium text-text-muted">
                   Translation ({secondTranscript?.language ?? '…'})
                   <button
                     type="button"
                     aria-label="Close translation"
                     title="Close translation"
                     onClick={() => setSecondTranscriptId(null)}
-                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    className="rounded-md p-0.5 text-text-muted hover:bg-surface-raised hover:text-text"
                   >
                     <CloseIcon className="h-3.5 w-3.5" />
                   </button>
@@ -258,13 +258,13 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
             />
           )}
         </Panel>
-        <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
+        <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
         <Panel defaultSize="45" minSize="25">
           <div className="h-full space-y-3 overflow-y-auto p-4">
             {src ? (
               <VideoPlayer src={src} videoRef={videoRef} />
             ) : (
-              <div className="flex aspect-video items-center justify-center rounded bg-slate-100 text-sm text-slate-400">
+              <div className="flex aspect-video items-center justify-center rounded bg-surface-raised text-body text-text-muted">
                 Loading player…
               </div>
             )}
