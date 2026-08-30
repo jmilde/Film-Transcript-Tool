@@ -40,6 +40,7 @@ class VideoRead(BaseModel):
     height: int | None
     assets: list[VideoAssetRead]
     jobs: list[VideoJobRead]
+    folder_path: list[str]
 
 
 class VideoUploadResponse(BaseModel):

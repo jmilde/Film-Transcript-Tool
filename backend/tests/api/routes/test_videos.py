@@ -90,6 +90,26 @@ def test_get_video_returns_assets_and_jobs(auth_client: TestClient, tmp_path: Pa
     assert uuid.UUID(body["project_id"])
     assert [a["type"] for a in body["assets"]] == ["original"]
     assert [j["type"] for j in body["jobs"]] == ["extract_metadata"]
+    # `_make_folder` creates a single root-level folder named "F".
+    assert body["folder_path"] == ["F"]
+
+
+def test_get_video_folder_path_nested(auth_client: TestClient, tmp_path: Path) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    pid = auth_client.post("/projects", json={"name": "P"}).json()["id"]
+    root = auth_client.post(f"/projects/{pid}/folders", json={"name": "Interviews"}).json()["id"]
+    child = auth_client.post(
+        f"/projects/{pid}/folders", json={"name": "Day 1", "parent_folder_id": root}
+    ).json()["id"]
+    vid = auth_client.post(
+        f"/folders/{child}/videos",
+        files={"file": ("clip.mp4", b"x", "video/mp4")},
+    ).json()["video_id"]
+
+    resp = auth_client.get(f"/videos/{vid}")
+
+    assert resp.status_code == 200
+    assert resp.json()["folder_path"] == ["Interviews", "Day 1"]
 
 
 def test_delete_video_cascades(

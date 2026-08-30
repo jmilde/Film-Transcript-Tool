@@ -31,6 +31,7 @@ from app.schemas.video import (
     VideoUpdate,
     VideoUploadResponse,
 )
+from app.services.folders import build_folder_breadcrumbs
 from app.services.pipeline import FIRST_STAGE
 from app.storage.base import Storage
 
@@ -60,6 +61,7 @@ def _video_read(db: Session, video: Video) -> VideoRead:
         .scalars()
         .all()
     )
+    folder_path = build_folder_breadcrumbs(db, [video.folder_id]).get(video.folder_id, [])
     return VideoRead(
         id=video.id,
         folder_id=video.folder_id,
@@ -72,6 +74,7 @@ def _video_read(db: Session, video: Video) -> VideoRead:
         height=video.height,
         assets=[VideoAssetRead.model_validate(a) for a in assets],
         jobs=[VideoJobRead.model_validate(j) for j in jobs],
+        folder_path=folder_path,
     )
 
 

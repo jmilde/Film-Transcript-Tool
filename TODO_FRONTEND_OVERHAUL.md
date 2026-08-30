@@ -141,11 +141,11 @@ redesign already solved this exact problem for search result groups
 (`backend/app/services/folders.py: build_folder_breadcrumbs`) — reuse it
 rather than inventing a second mechanism.
 
-- [ ] `backend/app/schemas/video.py`: add `folder_path: list[str]` to `VideoRead`
-- [ ] `backend/app/api/routes/videos.py`: in `_video_read()` (or wherever `VideoRead` is constructed for single-video fetches), call the existing `build_folder_breadcrumbs` for the video's `folder_id` and populate the new field — mirror exactly how `backend/app/services/search.py` already does this for search groups, don't reimplement
-- [ ] Tests first: extend `backend/tests/api/routes/test_videos.py`'s `VideoRead`-shape assertions for `folder_path` (flat, nested, root-level-folder cases — reuse `test_folders.py`'s existing fixture shapes from the search redesign work)
-- [ ] Verify: `make check` green
-- [ ] Run `make openapi` (repo root) and commit the regenerated `frontend/src/api/schema.d.ts` before starting Phase 6
+- [x] `backend/app/schemas/video.py`: add `folder_path: list[str]` to `VideoRead`
+- [x] `backend/app/api/routes/videos.py`: in `_video_read()` (or wherever `VideoRead` is constructed for single-video fetches), call the existing `build_folder_breadcrumbs` for the video's `folder_id` and populate the new field — mirror exactly how `backend/app/services/search.py` already does this for search groups, don't reimplement
+- [x] Tests first: extend `backend/tests/api/routes/test_videos.py`'s `VideoRead`-shape assertions for `folder_path` (flat, nested, root-level-folder cases — reuse `test_folders.py`'s existing fixture shapes from the search redesign work)
+- [x] Verify: `make check` green — lint/format/mypy clean; `pytest -m "not integration"` has pre-existing flakiness unrelated to this change (`sqlalchemy.exc.OperationalError` against the shared Supabase instance, different tests fail on each of two consecutive runs, e.g. `test_folders`/`test_tokens`/`test_transcripts`/`test_exports`); `test_videos.py` itself (incl. the two new/updated `folder_path` assertions) passed cleanly 21/21 both runs
+- [x] Run `make openapi` (repo root) and commit the regenerated `frontend/src/api/schema.d.ts` before starting Phase 6
 
 ## Phase 6 — Global navigation: uniform header + breadcrumb
 

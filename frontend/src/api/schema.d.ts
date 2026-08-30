@@ -1625,6 +1625,8 @@ export interface components {
             assets: components["schemas"]["VideoAssetRead"][];
             /** Jobs */
             jobs: components["schemas"]["VideoJobRead"][];
+            /** Folder Path */
+            folder_path: string[];
         };
         /** VideoSummary */
         VideoSummary: {
