@@ -21,9 +21,10 @@ export interface ClipPreview {
 /**
  * Global state (§17-equivalent "Document Panel State") for the persistent
  * document-builder panel docked in `AppShell`. Unlike page-scoped stores, this
- * one must survive navigation between ProjectView/SearchPage/ChatPage/
- * VideoWorkspace, since the whole point of the panel is to stay open while
- * browsing. `pendingInsert` bridges an "Add to Document" click to the editor:
+ * one must survive navigation between ProjectView/ChatPage/VideoWorkspace
+ * (and the global search overlay staying open across all of them), since the
+ * whole point of the panel is to stay open while browsing. `pendingInsert`
+ * bridges an "Add to Document" click to the editor:
  * if the panel/editor isn't mounted yet, the payload is queued here and
  * consumed once `DocumentEditor` mounts (see `consumePendingInsert`).
  */

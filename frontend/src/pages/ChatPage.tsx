@@ -74,9 +74,10 @@ function ChatPageInner({
     )
   }
 
-  // Reuses SearchPage's nav-state shape so VideoWorkspace's pending-search
-  // effect (seek + range-highlight in the original transcript pane) applies
-  // unchanged; endTokenId carries the full citation span, not just its start.
+  // Shares PendingSearchNav's shape with the search overlay's hit-click nav
+  // so VideoWorkspace's pending-search effect (seek + range-highlight in the
+  // original transcript pane) applies unchanged; endTokenId carries the full
+  // citation span, not just its start.
   function handleSelectCitation(citation: ChatCitation) {
     const nav: PendingSearchNav = {
       kind: 'transcript',

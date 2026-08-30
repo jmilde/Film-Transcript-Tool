@@ -44,8 +44,8 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const navigate = useNavigate()
   const openSearchOverlay = useSearchOverlayStore((s) => s.open)
 
-  // Set via navigate(..., { state }) when arriving from a search hit
-  // (SearchPage). Applied once below, after the transcript/comments it
+  // Set via navigate(..., { state }) when arriving from a search hit or a
+  // chat citation. Applied once below, after the transcript/comments it
   // targets have loaded.
   const location = useLocation()
   const pendingSearch = location.state as PendingSearchNav | null
