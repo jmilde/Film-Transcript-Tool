@@ -33,4 +33,14 @@ describe('Breadcrumb', () => {
     )
     expect(screen.getByText('xochi')).toBeInTheDocument()
   })
+
+  it('ignores href on the last item even when one is passed', () => {
+    render(
+      <MemoryRouter>
+        <Breadcrumb items={[{ label: 'xochi', href: '/projects/1' }]} />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('link', { name: 'xochi' })).not.toBeInTheDocument()
+    expect(screen.getByText('xochi')).toBeInTheDocument()
+  })
 })

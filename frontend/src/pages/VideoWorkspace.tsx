@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useVideo } from '../api/hooks/useVideos'
 import { useProject } from '../api/hooks/useProjects'
@@ -10,12 +10,14 @@ import { transcriptAnchor, useComments } from '../api/hooks/useComments'
 import { usePlaybackStore } from '../store/playback'
 import { useSelectionStore } from '../store/selection'
 import { useDocumentPanelStore } from '../store/documentPanel'
+import { useSearchOverlayStore } from '../store/searchOverlay'
 import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 import { CommentsPanel } from '../features/comments/CommentsPanel'
 import { TranslationControl } from '../features/translation/TranslationControl'
 import { ExportControl } from '../features/export/ExportControl'
+import { ReturnToOrigin } from '../features/navigation/ReturnToOrigin'
 import { X as CloseIcon } from 'lucide-react'
 import type { PendingSearchNav } from '../features/search/types'
 
@@ -39,6 +41,8 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const resetPlayback = usePlaybackStore((s) => s.reset)
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const setSelectionRange = useSelectionStore((s) => s.setRange)
+  const navigate = useNavigate()
+  const openSearchOverlay = useSearchOverlayStore((s) => s.open)
 
   // Set via navigate(..., { state }) when arriving from a search hit
   // (SearchPage). Applied once below, after the transcript/comments it
@@ -156,30 +160,21 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const src = media ? proxyUrl(videoId, media.token) : undefined
 
   if (videoError) {
-    return (
-      <div className="space-y-3">
-        <Link to="/" className="text-sm text-slate-500 hover:underline">
-          ← Projects
-        </Link>
-        <p className="text-red-600">Could not load this video.</p>
-      </div>
-    )
+    return <p className="text-red-600">Could not load this video.</p>
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="mb-3 flex items-center gap-3">
-        <Link
-          to={video ? `/projects/${video.project_id}` : '/'}
-          className="text-sm text-slate-500 hover:underline"
-        >
-          ← Projects
-        </Link>
-        {pendingSearch?.returnTo && (
-          <Link to={pendingSearch.returnTo} className="text-sm text-slate-500 hover:underline">
-            ← Back
-          </Link>
-        )}
+        {pendingSearch &&
+          (pendingSearch.origin === 'chat' ? (
+            <ReturnToOrigin
+              label="Back to chat"
+              onClick={() => void navigate(pendingSearch.returnTo)}
+            />
+          ) : (
+            <ReturnToOrigin label="Back to search" onClick={() => openSearchOverlay()} />
+          ))}
         <h2 className="truncate text-lg font-semibold text-slate-800">{video?.name ?? 'Video'}</h2>
         <div className="ml-auto flex items-center gap-2">
           <TranslationControl

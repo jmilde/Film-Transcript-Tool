@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { createMemoryRouter, RouterProvider, useParams } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
@@ -10,26 +10,11 @@ import { ProjectView } from './ProjectView'
 const PROJECT_ID = '00000000-0000-0000-0000-0000000000aa'
 const FOLDER_ID = '00000000-0000-0000-0000-0000000000f1'
 
-function SearchRouteStub() {
-  const { projectId } = useParams<{ projectId: string }>()
-  return <div>search page: {projectId}</div>
-}
-
-function ChatRouteStub() {
-  const { projectId } = useParams<{ projectId: string }>()
-  return <div>chat page: {projectId}</div>
-}
-
 function renderProjectView() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const router = createMemoryRouter(
-    [
-      { path: '/projects/:projectId', element: <ProjectView /> },
-      { path: '/projects/:projectId/search', element: <SearchRouteStub /> },
-      { path: '/projects/:projectId/chat', element: <ChatRouteStub /> },
-    ],
-    { initialEntries: [`/projects/${PROJECT_ID}`] },
-  )
+  const router = createMemoryRouter([{ path: '/projects/:projectId', element: <ProjectView /> }], {
+    initialEntries: [`/projects/${PROJECT_ID}`],
+  })
   return render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
@@ -97,33 +82,6 @@ describe('ProjectView', () => {
     expect(await screen.findByText('Clip One')).toBeInTheDocument()
   })
 
-  it('navigates to the search page with Ctrl/Cmd+F', async () => {
-    baseHandlers()
-    renderProjectView()
-    await screen.findByRole('heading', { name: 'Documentary One' })
-
-    await userEvent.keyboard('{Meta>}f{/Meta}')
-
-    expect(await screen.findByText(`search page: ${PROJECT_ID}`)).toBeInTheDocument()
-  })
-
-  it('navigates to the search page via the Search button', async () => {
-    baseHandlers()
-    renderProjectView()
-    await screen.findByRole('heading', { name: 'Documentary One' })
-
-    await userEvent.click(screen.getByRole('button', { name: /Search/ }))
-
-    expect(await screen.findByText(`search page: ${PROJECT_ID}`)).toBeInTheDocument()
-  })
-
-  it('navigates to the chat page via the Ask button', async () => {
-    baseHandlers()
-    renderProjectView()
-    await screen.findByRole('heading', { name: 'Documentary One' })
-
-    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
-
-    expect(await screen.findByText(`chat page: ${PROJECT_ID}`)).toBeInTheDocument()
-  })
+  // Search (⌘F/button) and Ask now live in AppShell's global header, not this
+  // page — see AppShell.test.tsx.
 })

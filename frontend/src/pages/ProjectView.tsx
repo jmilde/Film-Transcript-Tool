@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { useProject } from '../api/hooks/useProjects'
 import { useCreateFolder } from '../api/hooks/useFolders'
 import { FolderTree } from '../features/folders/FolderTree'
@@ -16,29 +16,14 @@ export function ProjectView() {
 function ProjectViewInner({ projectId }: { projectId: string }) {
   const { data: project, isPending, isError } = useProject(projectId)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
-  const navigate = useNavigate()
 
   const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
   useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-        e.preventDefault()
-        void navigate(`/projects/${projectId}/search`)
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [navigate, projectId])
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <Link to="/" className="text-sm text-slate-500 hover:underline">
-            ← Projects
-          </Link>
           {isPending && <p className="mt-2 text-slate-500">Loading project…</p>}
           {isError && <p className="mt-2 text-red-600">Could not load this project.</p>}
           {project && (
@@ -52,20 +37,6 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {project && <MembersPanel projectId={projectId} myRole={project.my_role} />}
-          <button
-            type="button"
-            onClick={() => void navigate(`/projects/${projectId}/chat`)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
-          >
-            Ask
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate(`/projects/${projectId}/search`)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
-          >
-            Search <span className="text-slate-400">⌘F</span>
-          </button>
         </div>
       </div>
 

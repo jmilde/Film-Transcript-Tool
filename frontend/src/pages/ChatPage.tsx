@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useAskChat, useChatConversation, useChatConversations } from '../api/hooks/useChat'
 import type { ChatCitation } from '../api/hooks/useChat'
 import { ChatHistorySidebar } from '../features/chat/ChatHistorySidebar'
@@ -84,6 +84,7 @@ function ChatPageInner({
       transcriptId: citation.transcript_id,
       startTime: citation.start_time,
       endTokenId: citation.end_token_id,
+      origin: 'chat',
       returnTo: `/projects/${projectId}/chat/${conversationId ?? ''}`,
     }
     void navigate(`/videos/${citation.video_id}`, { state: nav })
@@ -100,9 +101,6 @@ function ChatPageInner({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex items-center gap-3">
-          <Link to={`/projects/${projectId}`} className="text-sm text-slate-500 hover:underline">
-            ← Project
-          </Link>
           <h2 className="text-lg font-semibold text-slate-800">Ask</h2>
         </div>
 
