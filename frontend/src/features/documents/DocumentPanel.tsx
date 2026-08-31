@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router'
 import type { RefObject } from 'react'
 import type { PanelImperativeHandle } from 'react-resizable-panels'
 import {
@@ -13,6 +14,7 @@ import { DocumentEditor } from './DocumentEditor'
 import { ClipPreviewPlayer } from './ClipPreviewPlayer'
 import {
   ChevronDown as OptionsIcon,
+  Expand as ExpandIcon,
   FileText as DocumentIcon,
   Pencil as RenameIcon,
   Plus as PlusIcon,
@@ -209,6 +211,7 @@ function DocumentTab({
   onDelete: () => void
 }) {
   const updateDocument = useUpdateDocument(projectId, doc.id)
+  const navigate = useNavigate()
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(doc.title)
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -286,6 +289,12 @@ function DocumentTab({
             e.preventDefault()
           }}
         >
+          <DropdownMenuItem
+            onSelect={() => void navigate(`/projects/${projectId}/documents/${doc.id}`)}
+          >
+            <ExpandIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            Open fullscreen
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
               suppressCloseFocusRef.current = true

@@ -113,3 +113,40 @@ export function useCreateDocumentComment(documentId: string) {
       void client.invalidateQueries({ queryKey: ['comments', 'document', documentId] }),
   })
 }
+
+function useInvalidateDocumentComments(documentId: string) {
+  const client = useQueryClient()
+  return () => void client.invalidateQueries({ queryKey: ['comments', 'document', documentId] })
+}
+
+/** Reply to a document comment thread — same endpoint as `useReplyToComment`,
+ * just invalidating the document's own comments cache key. */
+export function useReplyToDocumentComment(documentId: string) {
+  const invalidate = useInvalidateDocumentComments(documentId)
+  return useMutation({
+    mutationFn: async (input: { commentId: string; text: string }) =>
+      unwrap(
+        await api.POST('/comments/{comment_id}/replies', {
+          params: { path: { comment_id: input.commentId } },
+          body: { text: input.text },
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}
+
+/** Resolve or reopen a document comment thread — same endpoint as
+ * `useResolveComment`, just invalidating the document's own comments cache key. */
+export function useResolveDocumentComment(documentId: string) {
+  const invalidate = useInvalidateDocumentComments(documentId)
+  return useMutation({
+    mutationFn: async (input: { commentId: string; resolved: boolean }) =>
+      unwrap(
+        await api.PATCH('/comments/{comment_id}', {
+          params: { path: { comment_id: input.commentId } },
+          body: { resolved: input.resolved },
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}

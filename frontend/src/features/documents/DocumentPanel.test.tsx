@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
 import { DocumentPanel } from './DocumentPanel'
 import { AuthProvider } from '../../auth/AuthProvider'
 import { useDocumentPanelStore } from '../../store/documentPanel'
@@ -34,7 +35,9 @@ function renderPanel(panelRef?: RefObject<PanelImperativeHandle | null>) {
   render(
     <QueryClientProvider client={client}>
       <AuthProvider>
-        <DocumentPanel panelRef={panelRef} />
+        <MemoryRouter>
+          <DocumentPanel panelRef={panelRef} />
+        </MemoryRouter>
       </AuthProvider>
     </QueryClientProvider>,
   )

@@ -13,6 +13,7 @@ import { server } from '../test/server'
 
 const PROJECT_ID = 'p-1'
 const VIDEO_ID = 'v-1'
+const DOCUMENT_ID = 'd-1'
 
 function PageA() {
   return <div>Page A</div>
@@ -57,6 +58,20 @@ function videoHandler() {
   )
 }
 
+function documentHandler() {
+  return http.get(`http://localhost:8000/documents/${DOCUMENT_ID}`, () =>
+    HttpResponse.json({
+      id: DOCUMENT_ID,
+      project_id: PROJECT_ID,
+      title: 'Narration',
+      content: { type: 'doc', content: [] },
+      version: 1,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }),
+  )
+}
+
 beforeEach(() => {
   useDocumentPanelStore.setState({
     isOpen: false,
@@ -85,6 +100,7 @@ function renderShell(initialPath = '/a') {
           { path: 'projects/:projectId', element: <PageA /> },
           { path: 'projects/:projectId/chat', element: <PageA /> },
           { path: 'videos/:videoId', element: <PageA /> },
+          { path: 'projects/:projectId/documents/:documentId', element: <PageA /> },
         ],
       },
     ],
@@ -155,6 +171,15 @@ describe('AppShell', () => {
     const projectLink = await screen.findByRole('link', { name: 'Documentary One' })
     expect(projectLink).toHaveAttribute('href', `/projects/${PROJECT_ID}`)
     expect(within(screen.getByRole('navigation')).getByText('Ask')).toBeInTheDocument()
+  })
+
+  it('keeps the project crumb clickable on the fullscreen document route, showing the document title', async () => {
+    server.use(projectHandler(), documentHandler())
+    renderShell(`/projects/${PROJECT_ID}/documents/${DOCUMENT_ID}`)
+
+    const projectLink = await screen.findByRole('link', { name: 'Documentary One' })
+    expect(projectLink).toHaveAttribute('href', `/projects/${PROJECT_ID}`)
+    expect(within(screen.getByRole('navigation')).getByText('Narration')).toBeInTheDocument()
   })
 
   it('opens the search palette from the header Search trigger', async () => {

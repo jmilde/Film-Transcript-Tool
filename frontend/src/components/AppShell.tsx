@@ -5,6 +5,7 @@ import { Moon, Search as SearchIcon, Sun } from 'lucide-react'
 import { DocumentPanel } from '../features/documents/DocumentPanel'
 import { useProject } from '../api/hooks/useProjects'
 import { useVideo } from '../api/hooks/useVideos'
+import { useDocument } from '../api/hooks/useDocuments'
 import { useSearchOverlayStore } from '../store/searchOverlay'
 import { useThemeStore } from '../store/theme'
 import { SearchCommandPalette } from '../features/search/SearchCommandPalette'
@@ -30,11 +31,19 @@ export function AppShell() {
 
   // `useParams` at this layout-route level reports whichever of these the
   // currently matched leaf route carries — no prop-drilling from the page.
-  const { projectId: routeProjectId, videoId } = useParams<{
+  const {
+    projectId: routeProjectId,
+    videoId,
+    documentId,
+  } = useParams<{
     projectId?: string
     videoId?: string
+    documentId?: string
   }>()
   const { data: video } = useVideo(videoId ?? null)
+  // Named to avoid shadowing the global `document` (used below for the
+  // ⌘F keydown listener) within this component's scope.
+  const { data: activeDocument } = useDocument(documentId ?? null)
   // A video's own route has no :projectId param — the video always knows
   // its project once loaded, so the header still resolves one even when a
   // user lands on a video directly from Search/Chat.
@@ -68,6 +77,8 @@ export function AppShell() {
         })
       }
       breadcrumbItems.push({ label: video.name })
+    } else if (documentId && activeDocument) {
+      breadcrumbItems.push({ label: activeDocument.title })
     } else if (isChatPage) {
       breadcrumbItems.push({ label: 'Ask' })
     }

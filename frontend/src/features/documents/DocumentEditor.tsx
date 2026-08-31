@@ -376,6 +376,36 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     return null
   }, [commentIdByNodeId, highlightedCommentId])
 
+  // Scrolls the selected comment's mark/clip into view — driven by
+  // `selectedCommentId` specifically (not the hover-inclusive
+  // `highlightedCommentId` above), so hovering a comment in
+  // `DocumentCommentsPanel` highlights it without yanking the scroll
+  // position, while clicking (which sets `selectedId`) does jump to it —
+  // the same split TranscriptViewer makes between token hover and selection.
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!selectedCommentId) return
+    const container = contentRef.current
+    if (!container) return
+    const escaped = CSS.escape(selectedCommentId)
+    const markEl = container.querySelector(`[data-comment-id="${escaped}"]`)
+    if (markEl) {
+      markEl.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      return
+    }
+    let nodeId: string | null = null
+    for (const [candidateNodeId, commentId] of commentIdByNodeId) {
+      if (commentId === selectedCommentId) {
+        nodeId = candidateNodeId
+        break
+      }
+    }
+    if (!nodeId) return
+    container
+      .querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [selectedCommentId, commentIdByNodeId])
+
   function resolveCommentIdAt(target: HTMLElement): string | null {
     const markEl = target.closest('[data-comment-id]')
     if (markEl) return markEl.getAttribute('data-comment-id')
@@ -682,6 +712,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
             editor just filling the panel edge-to-edge) is what actually
             reads as "a document" instead of plain panel content. */}
         <div
+          ref={contentRef}
           className="relative flex-1 overflow-y-auto bg-page"
           onClick={handleContentClick}
           onMouseOver={handleContentMouseOver}
