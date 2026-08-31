@@ -150,3 +150,34 @@ export function useResolveDocumentComment(documentId: string) {
     onSuccess: invalidate,
   })
 }
+
+/** Delete a transcript comment thread (`DELETE /comments/{id}`) — used when
+ * the text it's anchored to is removed from the transcript. */
+export function useDeleteComment(transcriptId: string) {
+  const invalidate = useInvalidateComments(transcriptId)
+  return useMutation({
+    mutationFn: async (commentId: string) =>
+      unwrap(
+        await api.DELETE('/comments/{comment_id}', {
+          params: { path: { comment_id: commentId } },
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}
+
+/** Delete a document comment thread — same endpoint as `useDeleteComment`,
+ * just invalidating the document's own comments cache key. Used when the
+ * mark/clip it's anchored to is removed from the document's content. */
+export function useDeleteDocumentComment(documentId: string) {
+  const invalidate = useInvalidateDocumentComments(documentId)
+  return useMutation({
+    mutationFn: async (commentId: string) =>
+      unwrap(
+        await api.DELETE('/comments/{comment_id}', {
+          params: { path: { comment_id: commentId } },
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}

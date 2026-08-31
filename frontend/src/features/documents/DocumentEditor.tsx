@@ -16,13 +16,16 @@ import {
 import {
   documentAnchor,
   useCreateDocumentComment,
+  useDeleteDocumentComment,
   useDocumentComments,
 } from '../../api/hooks/useComments'
+import type { Comment } from '../../api/hooks/useComments'
 import { useCommentsStore } from '../../store/comments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { ClipBlock, stripResolvedClipFields } from './clipBlockNode'
 import type { ClipBlockNodeAttrs } from './clipBlockNode'
 import { writeClipToClipboard } from './clipClipboard'
+import { findOrphanedCommentIds } from './orphanedComments'
 import { CommentMark } from './commentMark'
 import { CommentResolvedDecoration, commentResolvedPluginKey } from './commentResolvedDecoration'
 import { CommentHighlightDecoration, commentHighlightPluginKey } from './commentHighlightDecoration'
@@ -103,6 +106,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const resolveClipBlock = useResolveClipBlock(documentId)
   const { data: comments } = useDocumentComments(documentId)
   const createDocumentComment = useCreateDocumentComment(documentId)
+  const deleteDocumentComment = useDeleteDocumentComment(documentId)
   const pendingInsert = useDocumentPanelStore((s) => s.pendingInsert)
   const consumePendingInsert = useDocumentPanelStore((s) => s.consumePendingInsert)
   const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
@@ -134,6 +138,15 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // below — exactly one retry, per the design record.
   const markRetryRef = useRef<PendingCommentMark | null>(null)
 
+  // Mirrors the latest `comments` into a ref for `onUpdate`'s orphan-comment
+  // reconciliation below — that closure is captured once per `documentId`
+  // (see `useEditor`'s deps array), so it would otherwise only ever see
+  // whatever `comments` looked like when the editor was created.
+  const commentsRef = useRef<Comment[]>([])
+  useEffect(() => {
+    commentsRef.current = comments ?? []
+  }, [comments])
+
   const editor = useEditor(
     {
       extensions: [
@@ -158,15 +171,25 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
         const savingMark = pendingMarkSaveRef.current
         saveTimeoutRef.current = setTimeout(() => {
+          const content = stripResolvedClipFields(editor.getJSON()) as Document['content']
           updateDocument.mutate(
-            {
-              content: stripResolvedClipFields(editor.getJSON()) as Document['content'],
-              expectedVersion: versionRef.current,
-            },
+            { content, expectedVersion: versionRef.current },
             {
               onSuccess: (updated) => {
                 versionRef.current = updated.version
                 if (pendingMarkSaveRef.current === savingMark) pendingMarkSaveRef.current = null
+                // Reconcile against exactly what was just persisted, not a
+                // before/after diff — a comment whose mark/clip node isn't
+                // in it anymore lost the text/clip it was attached to.
+                // Anything still mid-flight through the mark-save/retry
+                // dance below is excluded so this can't delete a comment
+                // whose mark simply hasn't reached a saved snapshot yet.
+                const excludeIds = new Set<string>()
+                if (pendingMarkSaveRef.current) excludeIds.add(pendingMarkSaveRef.current.commentId)
+                if (markRetryRef.current) excludeIds.add(markRetryRef.current.commentId)
+                for (const id of findOrphanedCommentIds(content, commentsRef.current, excludeIds)) {
+                  deleteDocumentComment.mutate(id)
+                }
               },
               onError: (error) => {
                 if (pendingMarkSaveRef.current !== savingMark) return
@@ -209,8 +232,9 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
 
   // One-shot retry: re-apply a comment mark that was lost to a conflicting
   // save, now that the document has reloaded fresh content. If the mapped
-  // range no longer makes sense in the reloaded doc, give up quietly — the
-  // comment still exists and lists/functions via its `Comment` row.
+  // range no longer makes sense in the reloaded doc, there's nothing left to
+  // re-mark — delete the comment rather than leaving it orphaned, same as
+  // `findOrphanedCommentIds` would once caught by a later save.
   useEffect(() => {
     if (!editor || !initialized) return
     const pending = markRetryRef.current
@@ -219,13 +243,16 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     const size = editor.state.doc.content.size
     const from = Math.min(pending.from, size)
     const to = Math.min(pending.to, size)
-    if (from >= to) return
+    if (from >= to) {
+      deleteDocumentComment.mutate(pending.commentId)
+      return
+    }
     editor
       .chain()
       .setTextSelection({ from, to })
       .setMark('comment', { commentId: pending.commentId })
       .run()
-  }, [editor, initialized])
+  }, [editor, initialized, deleteDocumentComment])
 
   // Derives what the shared BubbleMenu popup should show from the editor's
   // live selection. `useEditorState` only re-renders this component when the

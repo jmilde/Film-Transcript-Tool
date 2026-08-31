@@ -279,6 +279,52 @@ def test_create_document_comment_viewer_forbidden(
     assert resp.status_code == 403
 
 
+def test_delete_comment_removes_it_and_its_replies(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    transcript = _seed(db_session, user)
+    tokens = _tokens(db_session, transcript, 0)
+    comment = auth_client.post(
+        f"/transcripts/{transcript.id}/comments",
+        json={
+            "start_token_id": str(tokens[0].id),
+            "end_token_id": str(tokens[1].id),
+            "text": "Check this quote",
+        },
+    ).json()
+    auth_client.post(f"/comments/{comment['id']}/replies", json={"text": "Good point"})
+
+    resp = auth_client.delete(f"/comments/{comment['id']}")
+
+    assert resp.status_code == 204
+    listed = auth_client.get(f"/transcripts/{transcript.id}/comments").json()
+    assert listed == []
+
+
+def test_delete_comment_non_member_forbidden(
+    app_client: Callable[[User], TestClient],
+    auth_client: TestClient,
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    transcript = _seed(db_session, user)
+    tokens = _tokens(db_session, transcript, 0)
+    comment = auth_client.post(
+        f"/transcripts/{transcript.id}/comments",
+        json={
+            "start_token_id": str(tokens[0].id),
+            "end_token_id": str(tokens[1].id),
+            "text": "Check this quote",
+        },
+    ).json()
+
+    other = app_client(other_user)
+    resp = other.delete(f"/comments/{comment['id']}")
+
+    assert resp.status_code == 403
+
+
 def test_create_comment_viewer_forbidden(
     app_client: Callable[[User], TestClient],
     db_session: Session,

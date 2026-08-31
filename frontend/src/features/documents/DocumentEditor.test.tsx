@@ -339,6 +339,78 @@ describe('DocumentEditor', () => {
       await waitFor(() => expect(decoratedClassName()).toContain('bg-brand-subtle'))
     })
 
+    it('deletes a comment once the text its mark was on is removed', async () => {
+      const markedDoc: Document = {
+        ...DOCUMENT,
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'Hello ' },
+                {
+                  type: 'text',
+                  text: 'there',
+                  marks: [{ type: 'comment', attrs: { commentId: 'c-1' } }],
+                },
+              ],
+            },
+          ],
+        },
+      }
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(markedDoc)),
+      )
+      server.use(
+        http.patch('http://localhost:8000/documents/d-1', () =>
+          HttpResponse.json({ ...markedDoc, version: 2 }),
+        ),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () =>
+          HttpResponse.json([
+            {
+              id: 'c-1',
+              created_by: 'user-a',
+              text: 'note',
+              resolved: false,
+              anchor: {
+                kind: 'document',
+                document_id: DOCUMENT_ID,
+                clip_node_id: null,
+                excerpt: 'there',
+              },
+              created_at: '2026-01-01T00:00:00Z',
+              replies: [],
+            },
+          ]),
+        ),
+      )
+      let deletedId: string | undefined
+      server.use(
+        http.delete('http://localhost:8000/comments/:commentId', ({ params }) => {
+          deletedId = params.commentId as string
+          return new HttpResponse(null, { status: 204 })
+        }),
+      )
+      const { container } = renderEditor()
+      await waitFor(() => {
+        expect(container.querySelector('[data-comment-id]')).toBeInTheDocument()
+      })
+      await userEvent.click(container.querySelector('p') as HTMLElement)
+      selectWithinText(container, 'there', 0, 5)
+
+      await userEvent.keyboard('{Backspace}')
+
+      await waitFor(
+        () => {
+          expect(deletedId).toBe('c-1')
+        },
+        { timeout: 3000 },
+      )
+    })
+
     it('falls back to the normal conflict banner if the retried mark-set also conflicts, without looping', async () => {
       mockCommentRoutes()
       server.use(
