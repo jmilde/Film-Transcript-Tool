@@ -44,7 +44,7 @@ describe('MembersPanel', () => {
     mockMembers([OWNER, EDITOR])
     renderPanel()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Members' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Project members' }))
 
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument()
     // Editor has no display_name, so its email appears twice (name + email rows).
@@ -67,7 +67,7 @@ describe('MembersPanel', () => {
     )
     renderPanel('owner')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Members' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Project members' }))
     await screen.findByText('owner@example.com')
     await userEvent.type(screen.getByLabelText('Email to invite'), 'new@example.com')
     await userEvent.selectOptions(screen.getByLabelText('Role to invite as'), 'viewer')
@@ -93,7 +93,7 @@ describe('MembersPanel', () => {
     )
     renderPanel('owner')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Members' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Project members' }))
     await screen.findByText('owner@example.com')
     await userEvent.type(screen.getByLabelText('Email to invite'), 'ghost@example.com')
     await userEvent.click(screen.getByRole('button', { name: 'Invite' }))
@@ -119,7 +119,7 @@ describe('MembersPanel', () => {
     )
     renderPanel('owner')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Members' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Project members' }))
     const roleSelect = await screen.findByLabelText(`Role for ${EDITOR.email}`)
     await userEvent.selectOptions(roleSelect, 'viewer')
 
@@ -137,7 +137,7 @@ describe('MembersPanel', () => {
     )
     renderPanel('owner')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Members' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Project members' }))
     const removeButton = await screen.findByRole('button', { name: `Remove ${EDITOR.email}` })
     await userEvent.click(removeButton)
 
@@ -161,7 +161,7 @@ describe('MembersPanel', () => {
     )
     renderPanel('owner')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Members' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Project members' }))
     await screen.findByText('owner@example.com')
     await userEvent.click(screen.getByRole('button', { name: `Remove ${OWNER.email}` }))
 
@@ -174,7 +174,7 @@ describe('MembersPanel', () => {
     mockMembers([OWNER, EDITOR])
     renderPanel('editor')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Members' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Project members' }))
 
     await screen.findByText('owner@example.com')
     expect(screen.queryByLabelText('Email to invite')).not.toBeInTheDocument()

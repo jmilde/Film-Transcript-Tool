@@ -8,6 +8,8 @@ import { MembersPanel } from '../features/members/MembersPanel'
 import { useDocumentPanelStore } from '../store/documentPanel'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { Dialog, DialogContent, DialogTrigger } from '../components/ui/Dialog'
+import { FileText as DocumentIcon, Plus as PlusIcon, Video as VideoIcon } from 'lucide-react'
 
 export function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -24,23 +26,31 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          {isPending && <p className="mt-2 text-text-muted">Loading project…</p>}
-          {isError && <p className="mt-2 text-danger-text">Could not load this project.</p>}
-          {project && (
-            <>
-              <h2 className="mt-1 text-h2 text-text">{project.name}</h2>
-              {project.description && (
-                <p className="text-small text-text-muted">{project.description}</p>
-              )}
-            </>
-          )}
+      {isPending && <p className="text-text-muted">Loading project…</p>}
+      {isError && <p className="text-danger-text">Could not load this project.</p>}
+      {project && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-h2 text-text">{project.name}</h2>
+            {project.description && (
+              <p className="mt-0.5 truncate text-small text-text-muted">{project.description}</p>
+            )}
+            <div className="mt-2 flex items-center gap-4 text-small text-text-muted">
+              <span className="flex items-center gap-1.5">
+                <VideoIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                {project.video_count} videos
+              </span>
+              <span className="flex items-center gap-1.5">
+                <DocumentIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                {project.document_count} documents
+              </span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <MembersPanel projectId={projectId} myRole={project.my_role} />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {project && <MembersPanel projectId={projectId} myRole={project.my_role} />}
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[16rem_1fr]">
         <aside className="rounded-md border border-border bg-surface p-3">
@@ -91,26 +101,32 @@ function NewFolder({
     setOpen(false)
   }
 
-  if (!open) {
-    return (
-      <Button variant="ghost" size="sm" aria-label="New folder" onClick={() => setOpen(true)}>
-        +
-      </Button>
-    )
-  }
-
   return (
-    <form onSubmit={onSubmit} className="flex gap-1">
-      <Input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Name"
-        className="w-24"
-      />
-      <Button type="submit" variant="ghost" size="sm" disabled={createFolder.isPending}>
-        Add
-      </Button>
-    </form>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label="New folder">
+          <PlusIcon className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent title="New folder">
+        <form onSubmit={onSubmit} className="space-y-3">
+          <Input
+            autoFocus
+            aria-label="Folder name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Folder name"
+            className="w-full"
+          />
+          <Button
+            type="submit"
+            disabled={!name.trim() || createFolder.isPending}
+            className="w-full"
+          >
+            {createFolder.isPending ? 'Creating…' : 'Create'}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

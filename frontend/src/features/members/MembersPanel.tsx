@@ -27,19 +27,53 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback
 }
 
+/** First letter of a member's display name (or email, if they haven't set
+ * one) — the only "avatar" a member has, since there's no photo/avatar URL
+ * in the data model. */
+function initial(member: Member): string {
+  return (member.display_name ?? member.email).slice(0, 1).toUpperCase()
+}
+
 /**
- * Project members entry point + panel (docs §700 "Project Members"): a
- * header button opens a popover listing members and their roles. An owner
- * additionally sees an invite form and per-row role-change/remove controls;
- * editors/viewers see a read-only list.
+ * Project members entry point + panel (docs §700 "Project Members"): an
+ * overlapping avatar stack (like a shared-doc collaborator list) opens a
+ * popover listing members and their roles. An owner additionally sees an
+ * invite form and per-row role-change/remove controls; editors/viewers see a
+ * read-only list.
  */
 export function MembersPanel({ projectId, myRole }: MembersPanelProps) {
+  const { data: members } = useMembers(projectId)
+  const visible = (members ?? []).slice(0, 3)
+  const overflow = (members?.length ?? 0) - visible.length
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="secondary" size="sm">
-          Members
-        </Button>
+        <button
+          type="button"
+          aria-label="Project members"
+          className="flex -space-x-2 rounded-full hover:opacity-90"
+        >
+          {visible.map((member) => (
+            <span
+              key={member.user_id}
+              title={member.display_name ?? member.email}
+              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-brand-subtle text-small font-medium text-brand-text"
+            >
+              {initial(member)}
+            </span>
+          ))}
+          {overflow > 0 && (
+            <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-surface-raised text-small text-text-muted">
+              +{overflow}
+            </span>
+          )}
+          {visible.length === 0 && overflow <= 0 && (
+            <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-surface-raised text-small text-text-muted">
+              …
+            </span>
+          )}
+        </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 text-small">
         <MembersPanelContent projectId={projectId} myRole={myRole} />
