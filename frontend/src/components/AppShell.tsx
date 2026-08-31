@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels'
 import { Moon, Search as SearchIcon, Sun } from 'lucide-react'
-import { useAuth } from '../auth/context'
 import { DocumentPanel } from '../features/documents/DocumentPanel'
 import { useProject } from '../api/hooks/useProjects'
 import { useVideo } from '../api/hooks/useVideos'
@@ -12,6 +11,7 @@ import { SearchCommandPalette } from '../features/search/SearchCommandPalette'
 import { Breadcrumb } from './ui/Breadcrumb'
 import type { BreadcrumbItem } from './ui/Breadcrumb'
 import { Button } from './ui/Button'
+import { UserMenu } from './UserMenu'
 
 /**
  * Top-level chrome: uniform header (breadcrumb, global Search/Ask, theme
@@ -22,7 +22,6 @@ import { Button } from './ui/Button'
  * outside the resizable-panel system entirely.
  */
 export function AppShell() {
-  const { session, signOut } = useAuth()
   const navigate = useNavigate()
   // Owned here (not inside `DocumentPanel`) because the `Panel` element
   // itself lives here — `DocumentPanel` bridges its `isOpen` store flag to
@@ -121,10 +120,7 @@ export function AppShell() {
               <Moon className="h-4 w-4" aria-hidden="true" />
             )}
           </Button>
-          <span className="text-small text-text-muted">{session?.user.email}</span>
-          <Button variant="secondary" size="sm" onClick={() => signOut()}>
-            Sign out
-          </Button>
+          <UserMenu />
         </div>
       </header>
       <Group orientation="horizontal" className="flex-1 overflow-hidden">
