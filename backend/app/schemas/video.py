@@ -26,6 +26,11 @@ class VideoJobRead(BaseModel):
     error_message: str | None
 
 
+class FolderBreadcrumbRead(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class VideoRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,7 +45,9 @@ class VideoRead(BaseModel):
     height: int | None
     assets: list[VideoAssetRead]
     jobs: list[VideoJobRead]
-    folder_path: list[str]
+    # id+name (not just name) so each ancestor can be a link in the frontend's
+    # breadcrumb — see `build_folder_breadcrumb_entries`.
+    folder_path: list[FolderBreadcrumbRead]
 
 
 class VideoUploadResponse(BaseModel):

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -43,7 +43,10 @@ function videoHandler() {
       project_id: PROJECT_ID,
       name: 'Clip.mp4',
       original_filename: 'clip.mp4',
-      folder_path: ['Season 1', 'Interviews'],
+      folder_path: [
+        { id: 'f-season1', name: 'Season 1' },
+        { id: 'f-interviews', name: 'Interviews' },
+      ],
       duration: null,
       frame_rate: null,
       width: null,
@@ -80,6 +83,7 @@ function renderShell(initialPath = '/a') {
           { path: 'a', element: <PageA /> },
           { path: 'b', element: <PageB /> },
           { path: 'projects/:projectId', element: <PageA /> },
+          { path: 'projects/:projectId/chat', element: <PageA /> },
           { path: 'videos/:videoId', element: <PageA /> },
         ],
       },
@@ -129,10 +133,28 @@ describe('AppShell', () => {
 
     const projectLink = await screen.findByRole('link', { name: 'Documentary One' })
     expect(projectLink).toHaveAttribute('href', `/projects/${PROJECT_ID}`)
-    expect(screen.getByText('Season 1')).toBeInTheDocument()
-    expect(screen.getByText('Interviews')).toBeInTheDocument()
+    // Each ancestor folder is its own link into ProjectView's folder route,
+    // not just a plain label — this is what makes the crumb navigable into
+    // subfolders instead of a dead end.
+    expect(screen.getByRole('link', { name: 'Season 1' })).toHaveAttribute(
+      'href',
+      `/projects/${PROJECT_ID}/folders/f-season1`,
+    )
+    expect(screen.getByRole('link', { name: 'Interviews' })).toHaveAttribute(
+      'href',
+      `/projects/${PROJECT_ID}/folders/f-interviews`,
+    )
     expect(screen.getByText('Clip.mp4')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Clip.mp4' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the project crumb clickable on the chat route, unlike a plain last-item crumb', async () => {
+    server.use(projectHandler())
+    renderShell(`/projects/${PROJECT_ID}/chat`)
+
+    const projectLink = await screen.findByRole('link', { name: 'Documentary One' })
+    expect(projectLink).toHaveAttribute('href', `/projects/${PROJECT_ID}`)
+    expect(within(screen.getByRole('navigation')).getByText('Ask')).toBeInTheDocument()
   })
 
   it('opens the search palette from the header Search trigger', async () => {

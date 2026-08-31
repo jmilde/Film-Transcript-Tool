@@ -17,6 +17,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Projects /> },
           { path: 'projects/:projectId', element: <ProjectView /> },
+          { path: 'projects/:projectId/folders/:folderId', element: <ProjectView /> },
           { path: 'projects/:projectId/chat', element: <ChatPage /> },
           { path: 'projects/:projectId/chat/new', element: <ChatPage /> },
           { path: 'projects/:projectId/chat/:conversationId', element: <ChatPage /> },

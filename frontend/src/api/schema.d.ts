@@ -1120,6 +1120,16 @@ export interface components {
          * @enum {string}
          */
         ExportType: "markdown" | "srt";
+        /** FolderBreadcrumbRead */
+        FolderBreadcrumbRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** FolderContents */
         FolderContents: {
             folder: components["schemas"]["FolderRead"];
@@ -1632,7 +1642,7 @@ export interface components {
             /** Jobs */
             jobs: components["schemas"]["VideoJobRead"][];
             /** Folder Path */
-            folder_path: string[];
+            folder_path: components["schemas"]["FolderBreadcrumbRead"][];
         };
         /** VideoSummary */
         VideoSummary: {

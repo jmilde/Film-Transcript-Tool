@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet, useNavigate, useParams } from 'react-router'
+import { Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels'
 import { Moon, Search as SearchIcon, Sun } from 'lucide-react'
 import { useAuth } from '../auth/context'
@@ -41,12 +41,20 @@ export function AppShell() {
   // user lands on a video directly from Search/Chat.
   const effectiveProjectId = routeProjectId ?? video?.project_id ?? null
   const { data: project } = useProject(effectiveProjectId ?? undefined)
+  const location = useLocation()
+  // Chat has no :videoId param, so it's otherwise indistinguishable from the
+  // bare ProjectView route below — this is what lets the project crumb know
+  // it isn't the current page there (see the dead-end fix below).
+  const isChatPage = location.pathname.includes('/chat')
 
-  // Folder selection in ProjectView is local component state, not part of
-  // the URL, so a Folder crumb only ever resolves here, via the video's own
-  // folder_path (Phase 5). Project-only routes (Projects/ProjectView/Chat)
-  // render just the one crumb — Breadcrumb renders it as plain text since
-  // it's always the last item there.
+  // `Breadcrumb` always renders its last item as plain "current page" text —
+  // so every route that sits *under* the project (a video, or chat) must add
+  // its own trailing crumb, or the project item would wrongly render as
+  // non-clickable "current" text and strand the user with no way back up
+  // (this happened on `/chat`, which used to push only the project crumb).
+  // Folder ancestors are linkable because `video.folder_path` now carries
+  // each folder's id, not just its name — see `ProjectView`'s
+  // `/projects/:projectId/folders/:folderId` route.
   const breadcrumbItems: BreadcrumbItem[] = []
   if (effectiveProjectId) {
     breadcrumbItems.push({
@@ -54,8 +62,15 @@ export function AppShell() {
       href: `/projects/${effectiveProjectId}`,
     })
     if (videoId && video) {
-      for (const folder of video.folder_path) breadcrumbItems.push({ label: folder })
+      for (const folder of video.folder_path) {
+        breadcrumbItems.push({
+          label: folder.name,
+          href: `/projects/${effectiveProjectId}/folders/${folder.id}`,
+        })
+      }
       breadcrumbItems.push({ label: video.name })
+    } else if (isChatPage) {
+      breadcrumbItems.push({ label: 'Ask' })
     }
   }
 

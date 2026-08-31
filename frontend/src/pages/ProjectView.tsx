@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useProject } from '../api/hooks/useProjects'
 import { useCreateFolder } from '../api/hooks/useFolders'
 import { FolderTree } from '../features/folders/FolderTree'
@@ -19,7 +19,16 @@ export function ProjectView() {
 
 function ProjectViewInner({ projectId }: { projectId: string }) {
   const { data: project, isPending, isError } = useProject(projectId)
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  // The selected folder lives in the URL (not local state) so it's
+  // shareable/bookmarkable and each ancestor in a video's breadcrumb
+  // (AppShell) can link straight back to that folder here.
+  const { folderId: selectedFolderId = null } = useParams<{ folderId?: string }>()
+  const navigate = useNavigate()
+  function selectFolder(folderId: string | null) {
+    void navigate(
+      folderId ? `/projects/${projectId}/folders/${folderId}` : `/projects/${projectId}`,
+    )
+  }
 
   const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
   useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
@@ -63,12 +72,12 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
           <FolderTree
             projectId={projectId}
             selectedFolderId={selectedFolderId}
-            onSelect={setSelectedFolderId}
+            onSelect={selectFolder}
           />
         </aside>
 
         <section>
-          <FolderPanel folderId={selectedFolderId} onSelectFolder={setSelectedFolderId} />
+          <FolderPanel folderId={selectedFolderId} onSelectFolder={selectFolder} />
         </section>
       </div>
     </div>

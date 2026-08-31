@@ -12,9 +12,13 @@ const FOLDER_ID = '00000000-0000-0000-0000-0000000000f1'
 
 function renderProjectView() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const router = createMemoryRouter([{ path: '/projects/:projectId', element: <ProjectView /> }], {
-    initialEntries: [`/projects/${PROJECT_ID}`],
-  })
+  const router = createMemoryRouter(
+    [
+      { path: '/projects/:projectId', element: <ProjectView /> },
+      { path: '/projects/:projectId/folders/:folderId', element: <ProjectView /> },
+    ],
+    { initialEntries: [`/projects/${PROJECT_ID}`] },
+  )
   return render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />

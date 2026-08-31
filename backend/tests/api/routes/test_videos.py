@@ -91,7 +91,8 @@ def test_get_video_returns_assets_and_jobs(auth_client: TestClient, tmp_path: Pa
     assert [a["type"] for a in body["assets"]] == ["original"]
     assert [j["type"] for j in body["jobs"]] == ["extract_metadata"]
     # `_make_folder` creates a single root-level folder named "F".
-    assert body["folder_path"] == ["F"]
+    assert [f["name"] for f in body["folder_path"]] == ["F"]
+    assert uuid.UUID(body["folder_path"][0]["id"])
 
 
 def test_get_video_folder_path_nested(auth_client: TestClient, tmp_path: Path) -> None:
@@ -109,7 +110,9 @@ def test_get_video_folder_path_nested(auth_client: TestClient, tmp_path: Path) -
     resp = auth_client.get(f"/videos/{vid}")
 
     assert resp.status_code == 200
-    assert resp.json()["folder_path"] == ["Interviews", "Day 1"]
+    folder_path = resp.json()["folder_path"]
+    assert [f["name"] for f in folder_path] == ["Interviews", "Day 1"]
+    assert [f["id"] for f in folder_path] == [root, child]
 
 
 def test_delete_video_cascades(
