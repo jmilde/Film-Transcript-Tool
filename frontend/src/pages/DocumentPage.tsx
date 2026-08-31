@@ -1,8 +1,12 @@
-import { useParams } from 'react-router'
+import { useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
-import { useDocument } from '../api/hooks/useDocuments'
+import { ArrowLeft as BackIcon } from 'lucide-react'
+import { useDeleteDocument, useDocument, useDocuments } from '../api/hooks/useDocuments'
 import { useDocumentComments } from '../api/hooks/useComments'
+import { useDocumentPanelStore } from '../store/documentPanel'
 import { DocumentEditor } from '../features/documents/DocumentEditor'
+import { DocumentTabStrip } from '../features/documents/DocumentTabStrip'
 import { DocumentCommentsPanel } from '../features/documents/DocumentCommentsPanel'
 
 export function DocumentPage() {
@@ -15,14 +19,61 @@ export function DocumentPage() {
  * A document's fullscreen, focused view — the document itself gets real
  * width instead of the docked panel's narrow column, with its comments laid
  * out in a side panel the same way `VideoWorkspace` does for a transcript's
- * comments. Reachable via the "expand" entry point on a tab in the docked
+ * comments. Reachable via the "Open fullscreen" header button on the docked
  * `DocumentPanel`; that panel keeps working independently of this page (both
  * can be open on the same document at once, since they just share the same
  * `DocumentEditor`/comments state through TanStack Query + `useCommentsStore`).
+ *
+ * Shares `store/documentPanel.ts`'s tab state with the docked panel (rather
+ * than keeping its own), so the same documents show as open tabs in both
+ * places — the only difference is that activating/opening a tab here
+ * navigates to that document's own URL instead of just flipping local state.
  */
 function DocumentPageInner({ projectId, documentId }: { projectId: string; documentId: string }) {
-  const { data: doc, isError } = useDocument(documentId)
+  const navigate = useNavigate()
+  const { isError } = useDocument(documentId)
   const { data: comments, isLoading: commentsLoading } = useDocumentComments(documentId)
+
+  const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
+  const openTab = useDocumentPanelStore((s) => s.openTab)
+  const closeTab = useDocumentPanelStore((s) => s.closeTab)
+  const openDocumentIds = useDocumentPanelStore((s) => s.openDocumentIds)
+  const activeDocumentId = useDocumentPanelStore((s) => s.activeDocumentId)
+  const { data: documents } = useDocuments(projectId)
+  const deleteDocument = useDeleteDocument(projectId)
+
+  // Binds this page to the same tab state the docked panel uses — leaves
+  // any tabs already open (from the docked panel) alone unless the project
+  // itself differs, then makes sure this URL's document is one of them and
+  // is the active one.
+  useEffect(() => {
+    setActiveProject(projectId)
+    openTab(documentId)
+  }, [projectId, documentId, setActiveProject, openTab])
+
+  function goToDocument(id: string) {
+    navigate(`/projects/${projectId}/documents/${id}`)
+  }
+
+  function goBack() {
+    if (window.history.length > 1) navigate(-1)
+    else navigate(`/projects/${projectId}`)
+  }
+
+  // Closing/deleting the tab this page is currently showing needs somewhere
+  // else to go — the neighbor `closeTab` just activated, or back to the
+  // project if that was the last open tab.
+  function handleCloseTab(id: string) {
+    closeTab(id)
+    if (id !== documentId) return
+    const next = useDocumentPanelStore.getState().activeDocumentId
+    if (next) navigate(`/projects/${projectId}/documents/${next}`, { replace: true })
+    else navigate(`/projects/${projectId}`)
+  }
+
+  function handleDeleteTab(id: string) {
+    deleteDocument.mutate(id, { onSuccess: () => handleCloseTab(id) })
+  }
 
   if (isError) {
     return <p className="text-danger-text">Could not load this document.</p>
@@ -30,8 +81,27 @@ function DocumentPageInner({ projectId, documentId }: { projectId: string; docum
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center gap-3">
-        <h2 className="truncate text-h3 text-text">{doc?.title ?? 'Document'}</h2>
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Back"
+          title="Back"
+          onClick={goBack}
+          className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-surface-raised hover:text-text"
+        >
+          <BackIcon className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div className="min-w-0 flex-1 overflow-hidden rounded-t-md">
+          <DocumentTabStrip
+            projectId={projectId}
+            documents={documents}
+            openDocumentIds={openDocumentIds}
+            activeDocumentId={activeDocumentId}
+            onActivate={goToDocument}
+            onClose={handleCloseTab}
+            onDelete={handleDeleteTab}
+          />
+        </div>
       </div>
 
       <Group

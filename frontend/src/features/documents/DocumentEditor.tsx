@@ -117,8 +117,6 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // updating it must never itself trigger a re-render/editor reset.
   const versionRef = useRef(1)
   const [initialized, setInitialized] = useState(false)
-  const [title, setTitle] = useState('')
-  const titleFocusedRef = useRef(false)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [commentDraft, setCommentDraft] = useState<CommentDraftTarget | null>(null)
   const [commentDraftText, setCommentDraftText] = useState('')
@@ -207,14 +205,6 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // write never triggers a re-render.
   useEffect(() => {
     if (doc) versionRef.current = doc.version
-  }, [doc])
-
-  // Mirrors the title into local state whenever it changes on the server
-  // (initial load, or an external rename from the tab bar) — but only while
-  // this field isn't focused, so it can't yank text out from under someone
-  // mid-edit here.
-  useEffect(() => {
-    if (doc && !titleFocusedRef.current) setTitle(doc.title)
   }, [doc])
 
   // One-shot retry: re-apply a comment mark that was lost to a conflicting
@@ -585,17 +575,6 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     if (commentId) selectComment(commentId)
   }
 
-  // Renames on blur, sharing this same version-tracking with content saves —
-  // splitting title/content into separately-versioned mutations would let one
-  // silently invalidate the other's `expected_version`.
-  function saveTitle() {
-    if (!initialized || title === doc?.title) return
-    updateDocument.mutate(
-      { title, expectedVersion: versionRef.current },
-      { onSuccess: (updated) => (versionRef.current = updated.version) },
-    )
-  }
-
   // Insert a queued clip once there's an initialized editor to receive it —
   // resolve its display fields first so it renders correctly right away,
   // without waiting on a full document refetch. Targets the marked insert
@@ -655,17 +634,6 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onFocus={() => (titleFocusedRef.current = true)}
-        onBlur={() => {
-          titleFocusedRef.current = false
-          saveTitle()
-        }}
-        aria-label="Document title"
-        className="border-b border-border bg-surface px-4 py-3 text-body font-medium text-text focus:outline-none"
-      />
       {/* Fixed above the document (not floating) — formatting applies from
           wherever the cursor is, so it doesn't need a selection to show,
           unlike the contextual BubbleMenu below. */}

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { DocumentPanel } from './DocumentPanel'
 import { AuthProvider } from '../../auth/AuthProvider'
 import { useDocumentPanelStore } from '../../store/documentPanel'
@@ -32,15 +32,18 @@ function documentBody(id: string, title: string, version = 1) {
 
 function renderPanel(panelRef?: RefObject<PanelImperativeHandle | null>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const router = createMemoryRouter([
+    { path: '/', element: <DocumentPanel panelRef={panelRef} /> },
+    { path: '/projects/:projectId/documents/:documentId', element: <div>Fullscreen page</div> },
+  ])
   render(
     <QueryClientProvider client={client}>
       <AuthProvider>
-        <MemoryRouter>
-          <DocumentPanel panelRef={panelRef} />
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </AuthProvider>
     </QueryClientProvider>,
   )
+  return router
 }
 
 function fakePanelRef(): RefObject<PanelImperativeHandle | null> & {
@@ -202,6 +205,30 @@ describe('DocumentPanel', () => {
 
     await waitFor(() => expect(useDocumentPanelStore.getState().activeDocumentId).toBeNull())
     expect(useDocumentPanelStore.getState().openDocumentIds).toEqual([])
+  })
+
+  it('navigates to the fullscreen page for the active document from the header button', async () => {
+    useDocumentPanelStore.setState({ isOpen: true, activeProjectId: PROJECT_ID })
+    const router = renderPanel()
+    await waitFor(() => expect(useDocumentPanelStore.getState().activeDocumentId).toBe('d-1'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open fullscreen' }))
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/documents/d-1`),
+    )
+  })
+
+  it('disables the fullscreen button with no document open', () => {
+    useDocumentPanelStore.setState({ isOpen: true, activeProjectId: PROJECT_ID })
+    server.use(
+      http.get(`http://localhost:8000/projects/${PROJECT_ID}/documents`, () =>
+        HttpResponse.json([]),
+      ),
+    )
+    renderPanel()
+
+    expect(screen.getByRole('button', { name: 'Open fullscreen' })).toBeDisabled()
   })
 
   describe('panel collapse/expand bridging', () => {

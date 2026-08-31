@@ -3,14 +3,25 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { server } from '../test/server'
 import { AuthProvider } from '../auth/AuthProvider'
 import { useCommentsStore } from '../store/comments'
+import { useDocumentPanelStore } from '../store/documentPanel'
 import { DocumentPage } from './DocumentPage'
 
 const PROJECT_ID = 'p-1'
 const DOCUMENT_ID = 'd-1'
+
+beforeEach(() => {
+  useDocumentPanelStore.setState({
+    isOpen: false,
+    activeProjectId: null,
+    openDocumentIds: [],
+    activeDocumentId: null,
+    pendingInsert: null,
+  })
+})
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -29,6 +40,11 @@ function renderPage() {
 
 function baseHandlers() {
   server.use(
+    http.get(`http://localhost:8000/projects/${PROJECT_ID}/documents`, () =>
+      HttpResponse.json([
+        { id: DOCUMENT_ID, title: 'Narration', version: 1, updated_at: '2026-01-01T00:00:00Z' },
+      ]),
+    ),
     http.get(`http://localhost:8000/documents/${DOCUMENT_ID}`, () =>
       HttpResponse.json({
         id: DOCUMENT_ID,
@@ -65,13 +81,21 @@ function baseHandlers() {
 }
 
 describe('DocumentPage', () => {
-  it('shows the document title and content next to its comments', async () => {
+  it('shows the document as an open tab, its content, and its comments', async () => {
     baseHandlers()
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Narration' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Narration' })).toBeInTheDocument()
     expect(await screen.findByText('Hello there')).toBeInTheDocument()
     expect(await screen.findByText('note about this line')).toBeInTheDocument()
+  })
+
+  it('has a back button', async () => {
+    baseHandlers()
+    renderPage()
+    await screen.findByText('Hello there')
+
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
   })
 
   it('selects a comment in the shared store when clicked in the side panel', async () => {
