@@ -7,6 +7,7 @@ import { TranscriptViewer } from './TranscriptViewer'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
 import { useDocumentPanelStore } from '../../store/documentPanel'
+import { useCommentsStore } from '../../store/comments'
 import { server } from '../../test/server'
 import type { Speaker } from '../../api/hooks/useSpeakers'
 import type { Transcript } from '../../api/hooks/useTranscripts'
@@ -70,6 +71,7 @@ beforeEach(() => {
   usePlaybackStore.setState({ autoFollow: true })
   useSelectionStore.getState().clear()
   useDocumentPanelStore.setState({ isOpen: false, pendingInsert: null })
+  useCommentsStore.setState({ selectedId: null, hoveredId: null })
 })
 
 afterEach(() => {
@@ -633,6 +635,49 @@ describe('TranscriptViewer', () => {
     expect(screen.getByText('Hello')).toHaveClass('decoration-warning')
     expect(screen.getByText('again')).toHaveClass('decoration-success')
     expect(screen.getByText('world')).not.toHaveClass('decoration-warning')
+  })
+
+  it('selects the comment covering a clicked token, and clears it for a plain token', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={TRANSCRIPT}
+          speakers={[SPEAKER]}
+          comments={[
+            {
+              id: 'c-1',
+              created_by: 'user-a',
+              text: 'note',
+              resolved: false,
+              anchor: {
+                kind: 'transcript',
+                transcript_id: 't-1',
+                start_token_id: 'tok-a',
+                end_token_id: 'tok-a',
+                in_time: 0,
+                out_time: 1,
+              },
+              created_at: '2026-01-01T00:00:00Z',
+              replies: [],
+            },
+          ]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+          canEdit={true}
+          videoId="vid-1"
+        />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseUp(document)
+    expect(useCommentsStore.getState().selectedId).toBe('c-1')
+
+    fireEvent.mouseDown(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+    expect(useCommentsStore.getState().selectedId).toBeNull()
   })
 
   it('groups consecutive same-speaker segments under a single header', () => {

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
+import { useCommentsStore } from '../../store/comments'
 import {
   isTokenConflict,
   useDeleteTokens,
@@ -90,6 +91,7 @@ export function TranscriptViewer({
   const finishSelection = useSelectionStore((s) => s.finish)
   const clearSelection = useSelectionStore((s) => s.clear)
   const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
+  const selectComment = useCommentsStore((s) => s.select)
 
   const transcriptId = transcript?.id ?? ''
   const editToken = useEditToken(transcriptId)
@@ -210,6 +212,24 @@ export function TranscriptViewer({
     return map
   }, [comments, tokenIndex, flatTokens])
 
+  // Reverse lookup from a token to whichever comment's range covers it —
+  // needed to select/highlight that comment (in `CommentsPanel`) when the
+  // token itself is clicked, the same "click a commented span to highlight
+  // its comment" behavior `DocumentEditor` has for document comments.
+  const commentIdByTokenId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const comment of comments ?? []) {
+      const anchor = transcriptAnchor(comment)
+      if (!anchor) continue
+      const a = tokenIndex.get(anchor.start_token_id)
+      const b = tokenIndex.get(anchor.end_token_id)
+      if (a === undefined || b === undefined) continue
+      const [lo, hi] = a <= b ? [a, b] : [b, a]
+      for (let i = lo; i <= hi; i++) map.set(flatTokens[i].id, comment.id)
+    }
+    return map
+  }, [comments, tokenIndex, flatTokens])
+
   // Tokens matching the in-transcript search query, in transcript order.
   const searchMatches = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -316,13 +336,14 @@ export function TranscriptViewer({
       } else if (dragAnchorRef.current) {
         onSeekToken(dragAnchorRef.current.start_time)
         clearSelection()
+        selectComment(commentIdByTokenId.get(dragAnchorRef.current.id) ?? null)
       }
       dragAnchorRef.current = null
       draggingRef.current = false
     }
     document.addEventListener('mouseup', handleMouseUp)
     return () => document.removeEventListener('mouseup', handleMouseUp)
-  }, [onSeekToken, finishSelection, clearSelection])
+  }, [onSeekToken, finishSelection, clearSelection, selectComment, commentIdByTokenId])
 
   function commitEdit() {
     if (!editingTokenId) return
