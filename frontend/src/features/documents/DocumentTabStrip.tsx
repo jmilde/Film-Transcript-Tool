@@ -67,8 +67,8 @@ export function DocumentTabStrip({
           onDelete={() => onDelete(doc.id)}
         />
       ))}
+      <ExistingDocumentPicker docs={otherDocs} onPick={onActivate} />
       <div className="mb-1.5 ml-auto flex shrink-0 items-center gap-1">
-        <ExistingDocumentPicker docs={otherDocs} onPick={onActivate} />
         <NewDocumentDialog projectId={projectId} onCreated={onActivate} />
       </div>
     </div>
@@ -202,8 +202,10 @@ function DocumentTab({
   )
 }
 
-/** The tab strip's "+" — opens one of the project's other documents (not
- * already open) as a new tab. */
+/** The tab strip's "+" — styled as its own tab-shaped header slot right
+ * after the open tabs (like a browser's "new tab" button), rather than a
+ * plain icon button off to the side. Opens one of the project's other
+ * documents (not already open) as a new tab. */
 function ExistingDocumentPicker({
   docs,
   onPick,
@@ -220,7 +222,7 @@ function ExistingDocumentPicker({
           type="button"
           aria-label="Open existing document"
           title="Open existing document"
-          className="flex shrink-0 items-center justify-center rounded-md p-1.5 text-text-muted hover:bg-surface-raised hover:text-text"
+          className="-mb-px flex shrink-0 items-center justify-center rounded-t-md border border-transparent px-2 py-1.5 text-text-muted hover:bg-surface hover:text-text"
         >
           <PlusIcon className="h-4 w-4" aria-hidden="true" />
         </button>
