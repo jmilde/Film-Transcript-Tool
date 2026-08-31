@@ -1051,6 +1051,10 @@ export interface components {
         /**
          * DocumentSummary
          * @description List-view shape — no ``content``, keeping the panel's document switcher cheap.
+         *
+         *     ``version`` lets the frontend rename a document (a title-only PATCH, which
+         *     still requires ``expected_version``) straight from a tab-bar list entry,
+         *     without first loading that document's full content.
          */
         DocumentSummary: {
             /**
@@ -1060,6 +1064,8 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /** Version */
+            version: number;
             /**
              * Updated At
              * Format: date-time

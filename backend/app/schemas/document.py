@@ -16,10 +16,15 @@ class DocumentUpdate(BaseModel):
 
 
 class DocumentSummary(BaseModel):
-    """List-view shape — no ``content``, keeping the panel's document switcher cheap."""
+    """List-view shape — no ``content``, keeping the panel's document switcher cheap.
+
+    ``version`` lets the frontend rename a document (a title-only PATCH, which
+    still requires ``expected_version``) straight from a tab-bar list entry,
+    without first loading that document's full content."""
 
     id: uuid.UUID
     title: str
+    version: int
     updated_at: datetime
 
 

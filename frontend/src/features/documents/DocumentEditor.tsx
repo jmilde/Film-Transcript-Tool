@@ -113,6 +113,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const versionRef = useRef(1)
   const [initialized, setInitialized] = useState(false)
   const [title, setTitle] = useState('')
+  const titleFocusedRef = useRef(false)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [commentDraft, setCommentDraft] = useState<CommentDraftTarget | null>(null)
   const [commentDraftText, setCommentDraftText] = useState('')
@@ -183,10 +184,27 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   useEffect(() => {
     if (!editor || !doc || initialized) return
     editor.commands.setContent(doc.content, { emitUpdate: false })
-    versionRef.current = doc.version
-    setTitle(doc.title)
     setInitialized(true)
   }, [editor, doc, initialized])
+
+  // Keeps `versionRef` current with the latest version this client has seen
+  // for *any* field — not just this component's own saves. The document
+  // panel's tab bar can rename this same document (a title-only PATCH) while
+  // its editor is open; without this, a subsequent content autosave here
+  // would still be carrying the pre-rename version and get rejected as a
+  // stale-version conflict. Safe to run on every `doc` change since a ref
+  // write never triggers a re-render.
+  useEffect(() => {
+    if (doc) versionRef.current = doc.version
+  }, [doc])
+
+  // Mirrors the title into local state whenever it changes on the server
+  // (initial load, or an external rename from the tab bar) — but only while
+  // this field isn't focused, so it can't yank text out from under someone
+  // mid-edit here.
+  useEffect(() => {
+    if (doc && !titleFocusedRef.current) setTitle(doc.title)
+  }, [doc])
 
   // One-shot retry: re-apply a comment mark that was lost to a conflicting
   // save, now that the document has reloaded fresh content. If the mapped
@@ -543,7 +561,11 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        onBlur={saveTitle}
+        onFocus={() => (titleFocusedRef.current = true)}
+        onBlur={() => {
+          titleFocusedRef.current = false
+          saveTitle()
+        }}
         aria-label="Document title"
         className="border-b border-border bg-surface px-4 py-3 text-body font-medium text-text focus:outline-none"
       />

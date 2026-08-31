@@ -12,6 +12,12 @@ export interface DropdownMenuContentProps {
   className?: string
   align?: DropdownMenuPrimitive.DropdownMenuContentProps['align']
   sideOffset?: number
+  /** Escape hatch for a menu item whose `onSelect` hands focus to something
+   * else (e.g. an inline rename input) — without `preventDefault()` here,
+   * Radix's default "return focus to the trigger" on close steals it right
+   * back, which (with `autoFocus`) fires that input's `onBlur` before the
+   * user can type anything. */
+  onCloseAutoFocus?: DropdownMenuPrimitive.DropdownMenuContentProps['onCloseAutoFocus']
 }
 
 export function DropdownMenuContent({
@@ -19,12 +25,14 @@ export function DropdownMenuContent({
   className = '',
   align = 'start',
   sideOffset = 6,
+  onCloseAutoFocus,
 }: DropdownMenuContentProps) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         align={align}
         sideOffset={sideOffset}
+        onCloseAutoFocus={onCloseAutoFocus}
         className={`z-40 min-w-40 rounded-lg border border-border bg-surface-raised p-1 shadow-lg outline-none data-[state=closed]:animate-fade-out data-[state=open]:animate-scale-in ${className}`}
       >
         {children}
