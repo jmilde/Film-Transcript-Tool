@@ -1,4 +1,8 @@
-import { Folder as FolderIcon, Video as VideoIcon } from 'lucide-react'
+import {
+  ChevronRight as ChevronRightIcon,
+  Folder as FolderIcon,
+  Video as VideoIcon,
+} from 'lucide-react'
 import { thumbnailUrl } from '../../api/hooks/useMedia'
 import { formatTime } from '../player/format'
 import { Card } from '../../components/ui/Card'
@@ -53,15 +57,19 @@ export function SearchVideoGroupCard({ group, onSelectHit }: SearchVideoGroupCar
             key={`${hit.kind}-${hit.id}`}
             type="button"
             onClick={() => onSelectHit(hit)}
-            className="flex w-full min-w-0 items-center gap-3 border-b border-border px-4 py-2 text-left text-body last:border-b-0 hover:bg-surface-raised"
+            className="group flex w-full min-w-0 items-center gap-3 border-b border-border px-4 py-2 text-left text-body last:border-b-0 hover:bg-surface-raised"
           >
             <Badge variant="neutral">{KIND_LABEL[hit.kind] ?? hit.kind}</Badge>
-            <span className="flex-1 truncate text-text">{hit.text}</span>
+            <span className="flex-1 truncate text-text group-hover:underline">{hit.text}</span>
             {hit.start_time !== null && (
               <span className="shrink-0 font-mono text-small text-text-muted">
                 {formatTime(hit.start_time)}
               </span>
             )}
+            <ChevronRightIcon
+              className="h-3.5 w-3.5 shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+              aria-hidden="true"
+            />
           </button>
         ))}
         {group.hit_count > group.hits.length && (
