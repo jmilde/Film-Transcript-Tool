@@ -16,7 +16,7 @@ import type { ClipBlockNodeAttrs } from './clipBlockNode'
  */
 export function ClipBlockView({ node, selected }: ReactNodeViewProps) {
   const attrs = node.attrs as ClipBlockNodeAttrs
-  const { clipCommentStatus } = useDocumentCommentsContext()
+  const { clipCommentStatus, highlightedNodeId } = useDocumentCommentsContext()
 
   const commentStatus = attrs.nodeId ? clipCommentStatus.get(attrs.nodeId) : undefined
   const decorationClass = commentStatus
@@ -24,14 +24,16 @@ export function ClipBlockView({ node, selected }: ReactNodeViewProps) {
       ? 'underline decoration-success decoration-2 underline-offset-2'
       : 'underline decoration-warning decoration-2 underline-offset-2'
     : ''
+  const isHighlighted = attrs.nodeId !== undefined && attrs.nodeId === highlightedNodeId
 
   return (
     <NodeViewWrapper
       as="span"
       data-clip-block=""
+      data-node-id={attrs.nodeId}
       className={`border-l-2 border-info bg-info-subtle px-1 py-0.5 ${decorationClass} ${
-        selected ? 'ring-1 ring-brand' : ''
-      }`}
+        selected || isHighlighted ? 'ring-1 ring-brand' : ''
+      } ${isHighlighted ? 'bg-brand-subtle' : ''}`}
     >
       {attrs.excerpt ?? 'Clip'}
     </NodeViewWrapper>

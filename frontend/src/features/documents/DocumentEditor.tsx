@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -24,6 +25,7 @@ import type { ClipBlockNodeAttrs } from './clipBlockNode'
 import { writeClipToClipboard } from './clipClipboard'
 import { CommentMark } from './commentMark'
 import { CommentResolvedDecoration, commentResolvedPluginKey } from './commentResolvedDecoration'
+import { CommentHighlightDecoration, commentHighlightPluginKey } from './commentHighlightDecoration'
 import { InsertMarker, insertMarkerPluginKey } from './insertMarker'
 import { DocumentCommentsContext } from './documentCommentsContext'
 import type { ClipCommentStatus } from './documentCommentsContext'
@@ -106,6 +108,9 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
   const setInsertMarkerDocumentId = useDocumentPanelStore((s) => s.setInsertMarkerDocumentId)
   const selectComment = useCommentsStore((s) => s.select)
+  const hoverComment = useCommentsStore((s) => s.hover)
+  const selectedCommentId = useCommentsStore((s) => s.selectedId)
+  const hoveredCommentId = useCommentsStore((s) => s.hoveredId)
   const client = useQueryClient()
 
   // The version to send with the next save; kept outside React state since
@@ -117,6 +122,11 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [commentDraft, setCommentDraft] = useState<CommentDraftTarget | null>(null)
   const [commentDraftText, setCommentDraftText] = useState('')
+  // The comment currently under the pointer, plus where to float its preview
+  // — `null` whenever the pointer isn't over a commented span/clip.
+  const [hoverPreview, setHoverPreview] = useState<{ commentId: string; rect: DOMRect } | null>(
+    null,
+  )
 
   // Set right after applying a comment mark; cleared once that specific save
   // resolves. Scopes the 409-retry below to "the very next autosave" caused
@@ -142,6 +152,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         ClipBlock,
         CommentMark,
         CommentResolvedDecoration,
+        CommentHighlightDecoration,
         InsertMarker,
       ],
       content: { type: 'doc', content: [] },
@@ -333,6 +344,63 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     return map
   }, [comments])
 
+  // Reverse of the above — which comment (if any) anchors to a given clip
+  // node, needed to resolve a click/hover on a clip block back to a comment
+  // id for selecting/highlighting it (text marks carry their commentId
+  // directly via `data-comment-id`; clip nodes don't, so this is the lookup
+  // path for those).
+  const commentIdByNodeId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const comment of comments ?? []) {
+      const nodeId = documentAnchor(comment)?.clip_node_id
+      if (nodeId) map.set(nodeId, comment.id)
+    }
+    return map
+  }, [comments])
+
+  // What "hovering or clicking a commented section" should highlight right
+  // now — hover takes precedence while active, falling back to whatever's
+  // selected (e.g. from `DocumentCommentsPanel` on the fullscreen page).
+  const highlightedCommentId = hoveredCommentId ?? selectedCommentId
+
+  useEffect(() => {
+    if (!editor) return
+    editor.view.dispatch(editor.state.tr.setMeta(commentHighlightPluginKey, highlightedCommentId))
+  }, [editor, highlightedCommentId])
+
+  const highlightedNodeId = useMemo(() => {
+    if (!highlightedCommentId) return null
+    for (const [nodeId, commentId] of commentIdByNodeId) {
+      if (commentId === highlightedCommentId) return nodeId
+    }
+    return null
+  }, [commentIdByNodeId, highlightedCommentId])
+
+  function resolveCommentIdAt(target: HTMLElement): string | null {
+    const markEl = target.closest('[data-comment-id]')
+    if (markEl) return markEl.getAttribute('data-comment-id')
+    const clipEl = target.closest('[data-node-id]')
+    const nodeId = clipEl?.getAttribute('data-node-id')
+    return nodeId ? (commentIdByNodeId.get(nodeId) ?? null) : null
+  }
+
+  function handleContentMouseOver(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement
+    const commentId = resolveCommentIdAt(target)
+    hoverComment(commentId)
+    if (!commentId) {
+      setHoverPreview(null)
+      return
+    }
+    const el = target.closest('[data-comment-id],[data-node-id]')
+    if (el) setHoverPreview({ commentId, rect: el.getBoundingClientRect() })
+  }
+
+  function handleContentMouseLeave() {
+    hoverComment(null)
+    setHoverPreview(null)
+  }
+
   async function submitCommentDraft() {
     if (!editor || !commentDraft) return
     const text = commentDraftText.trim()
@@ -483,8 +551,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // `CommentsPanel` already renders for transcript comments (decision: one
   // shared comments UI for both contexts).
   function handleContentClick(event: React.MouseEvent<HTMLDivElement>) {
-    const target = (event.target as HTMLElement).closest('[data-comment-id]')
-    const commentId = target?.getAttribute('data-comment-id')
+    const commentId = resolveCommentIdAt(event.target as HTMLElement)
     if (commentId) selectComment(commentId)
   }
 
@@ -610,11 +677,36 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
           again.
         </div>
       )}
-      <DocumentCommentsContext.Provider value={{ clipCommentStatus }}>
+      <DocumentCommentsContext.Provider value={{ clipCommentStatus, highlightedNodeId }}>
         {/* A recessed backdrop behind a bounded "page" (rather than the
             editor just filling the panel edge-to-edge) is what actually
             reads as "a document" instead of plain panel content. */}
-        <div className="relative flex-1 overflow-y-auto bg-page" onClick={handleContentClick}>
+        <div
+          className="relative flex-1 overflow-y-auto bg-page"
+          onClick={handleContentClick}
+          onMouseOver={handleContentMouseOver}
+          onMouseLeave={handleContentMouseLeave}
+        >
+          {hoverPreview &&
+            (() => {
+              const comment = (comments ?? []).find((c) => c.id === hoverPreview.commentId)
+              if (!comment) return null
+              const enoughRoomAbove = hoverPreview.rect.top > 56
+              return createPortal(
+                <div
+                  role="tooltip"
+                  className="fixed z-50 max-w-xs rounded-md border border-border bg-surface px-3 py-2 text-small text-text shadow-lg"
+                  style={{
+                    left: Math.max(8, hoverPreview.rect.left),
+                    top: enoughRoomAbove ? hoverPreview.rect.top - 8 : hoverPreview.rect.bottom + 8,
+                    transform: enoughRoomAbove ? 'translateY(-100%)' : undefined,
+                  }}
+                >
+                  {comment.text}
+                </div>,
+                document.body,
+              )
+            })()}
           <BubbleMenu
             editor={editor}
             shouldShow={shouldShowBubble}
