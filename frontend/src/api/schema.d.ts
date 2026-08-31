@@ -1284,6 +1284,12 @@ export interface components {
              */
             updated_at: string;
             my_role: components["schemas"]["MembershipRole"];
+            /** Video Count */
+            video_count: number;
+            /** Member Count */
+            member_count: number;
+            /** Document Count */
+            document_count: number;
         };
         /** ProjectUpdate */
         ProjectUpdate: {

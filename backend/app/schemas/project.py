@@ -27,3 +27,6 @@ class ProjectRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     my_role: MembershipRole
+    video_count: int
+    member_count: int
+    document_count: int
