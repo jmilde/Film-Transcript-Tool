@@ -16,7 +16,12 @@ export interface DialogContentProps {
 /** Radix supplies focus trapping, Escape-to-close, and click-outside-to-close
  * (ADR 0002) — this wrapper only adds the visual shell and Phase 1's theme
  * variables/animations. */
-export function DialogContent({ children, title, description, className = '' }: DialogContentProps) {
+export function DialogContent({
+  children,
+  title,
+  description,
+  className = '',
+}: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay

@@ -92,9 +92,7 @@ describe('DocumentPanel', () => {
     renderPanel()
 
     await waitFor(() => expect(useDocumentPanelStore.getState().activeDocumentId).toBe('d-1'))
-    expect(screen.getByRole('combobox', { name: 'Active document' })).toHaveTextContent(
-      'Narration',
-    )
+    expect(screen.getByRole('combobox', { name: 'Active document' })).toHaveTextContent('Narration')
   })
 
   it('creates a document and makes it active', async () => {

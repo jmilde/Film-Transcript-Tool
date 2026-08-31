@@ -116,7 +116,9 @@ function ChatPageInner({
               statusMessage={ask.statusMessage}
             />
           ) : (
-            <p className="text-small text-text-muted">Ask a question about this project's videos.</p>
+            <p className="text-small text-text-muted">
+              Ask a question about this project's videos.
+            </p>
           )}
           {ask.isError && (
             <p className="text-small text-danger-text">Something went wrong. Try again.</p>

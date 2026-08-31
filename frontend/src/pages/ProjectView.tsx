@@ -93,12 +93,7 @@ function NewFolder({
 
   if (!open) {
     return (
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="New folder"
-        onClick={() => setOpen(true)}
-      >
+      <Button variant="ghost" size="sm" aria-label="New folder" onClick={() => setOpen(true)}>
         +
       </Button>
     )

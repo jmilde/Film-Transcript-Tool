@@ -172,9 +172,7 @@ describe('AppShell', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/chat`),
-    )
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/chat`))
   })
 
   it('toggles the dark class and persists it across a remount', async () => {

@@ -78,7 +78,8 @@ export function ExportControl({ videoName, transcripts, defaultTranscriptId }: E
             }}
             options={options.map((t) => ({
               value: t.id,
-              label: t.type === 'original' ? `Original (${t.language ?? t.id})` : (t.language ?? t.id),
+              label:
+                t.type === 'original' ? `Original (${t.language ?? t.id})` : (t.language ?? t.id),
             }))}
             className="w-full"
           />

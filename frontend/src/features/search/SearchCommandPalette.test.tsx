@@ -27,8 +27,7 @@ function VideoRouteStub() {
       <span>video:{videoId}</span>
       {state && (
         <span>
-          via search: {state.kind}/{state.id}/{state.transcriptId}/{state.startTime}/
-          {state.origin}
+          via search: {state.kind}/{state.id}/{state.transcriptId}/{state.startTime}/{state.origin}
         </span>
       )}
     </div>

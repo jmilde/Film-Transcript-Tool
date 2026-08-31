@@ -73,9 +73,7 @@ export function FolderTree({ projectId, selectedFolderId, onSelect }: TreeProps)
     >
       {isPending && <p className="px-2 py-1 text-text-muted">Loading folders…</p>}
       {isError && <p className="px-2 py-1 text-danger-text">Could not load folders.</p>}
-      {roots && roots.length === 0 && (
-        <p className="px-2 py-1 text-text-muted">No folders yet.</p>
-      )}
+      {roots && roots.length === 0 && <p className="px-2 py-1 text-text-muted">No folders yet.</p>}
       {roots && roots.length > 0 && (
         <ul>
           {roots.map((folder) => (

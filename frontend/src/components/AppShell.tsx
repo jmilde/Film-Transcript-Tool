@@ -93,16 +93,13 @@ export function AppShell() {
             variant="ghost"
             size="sm"
             disabled={!effectiveProjectId}
-            onClick={() => effectiveProjectId && void navigate(`/projects/${effectiveProjectId}/chat`)}
+            onClick={() =>
+              effectiveProjectId && void navigate(`/projects/${effectiveProjectId}/chat`)
+            }
           >
             Ask
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Toggle theme"
-            onClick={() => toggleTheme()}
-          >
+          <Button variant="ghost" size="sm" aria-label="Toggle theme" onClick={() => toggleTheme()}>
             {isDark ? (
               <Sun className="h-4 w-4" aria-hidden="true" />
             ) : (

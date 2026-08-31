@@ -61,9 +61,7 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
 
   return (
     <div className="space-y-2">
-      <h3 className="text-small font-semibold tracking-wide text-text-muted uppercase">
-        Comments
-      </h3>
+      <h3 className="text-small font-semibold tracking-wide text-text-muted uppercase">Comments</h3>
 
       {isLoading && <div className="text-body text-text-muted">Loading comments…</div>}
 
