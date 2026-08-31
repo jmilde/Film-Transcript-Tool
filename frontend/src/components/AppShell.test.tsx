@@ -98,6 +98,8 @@ function renderShell(initialPath = '/a') {
           { path: 'a', element: <PageA /> },
           { path: 'b', element: <PageB /> },
           { path: 'projects/:projectId', element: <PageA /> },
+          { path: 'projects/:projectId/x', element: <PageA /> },
+          { path: 'projects/:projectId/y', element: <PageB /> },
           { path: 'projects/:projectId/chat', element: <PageA /> },
           { path: 'videos/:videoId', element: <PageA /> },
           { path: 'projects/:projectId/documents/:documentId', element: <PageA /> },
@@ -119,19 +121,43 @@ function renderShell(initialPath = '/a') {
 }
 
 describe('AppShell', () => {
+  it('links the app title back to the projects list', async () => {
+    server.use(projectHandler())
+    renderShell(`/projects/${PROJECT_ID}`)
+    await screen.findByText('Documentary One')
+
+    expect(screen.getByRole('link', { name: 'Film Transcript Tool' })).toHaveAttribute('href', '/')
+  })
+
+
   it('keeps the document panel open across a route change', async () => {
+    server.use(projectHandler())
     useDocumentPanelStore.setState({ activeProjectId: PROJECT_ID })
-    const { router } = renderShell()
+    const { router } = renderShell(`/projects/${PROJECT_ID}/x`)
 
     await userEvent.click(screen.getByRole('button', { name: 'Open document panel' }))
     expect(useDocumentPanelStore.getState().isOpen).toBe(true)
     expect(screen.getByText('Page A')).toBeInTheDocument()
 
-    await router.navigate('/b')
+    await router.navigate(`/projects/${PROJECT_ID}/y`)
 
     expect(await screen.findByText('Page B')).toBeInTheDocument()
     expect(useDocumentPanelStore.getState().isOpen).toBe(true)
     expect(screen.getByRole('button', { name: 'Close document panel' })).toBeInTheDocument()
+  })
+
+  it('hides the document panel entirely when no project is in scope', () => {
+    renderShell('/a')
+
+    expect(screen.queryByRole('button', { name: 'Open document panel' })).not.toBeInTheDocument()
+  })
+
+  it('hides the document panel on the fullscreen document route', async () => {
+    server.use(projectHandler(), documentHandler())
+    renderShell(`/projects/${PROJECT_ID}/documents/${DOCUMENT_ID}`)
+
+    await screen.findByText('Documentary One')
+    expect(screen.queryByRole('button', { name: 'Open document panel' })).not.toBeInTheDocument()
   })
 
   it('renders just the project crumb on a project-only route', async () => {

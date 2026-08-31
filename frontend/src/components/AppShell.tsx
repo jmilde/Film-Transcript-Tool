@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet, useLocation, useNavigate, useParams } from 'react-router'
+import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels'
 import { Moon, Search as SearchIcon, Sun } from 'lucide-react'
 import { DocumentPanel } from '../features/documents/DocumentPanel'
@@ -54,6 +54,11 @@ export function AppShell() {
   // bare ProjectView route below — this is what lets the project crumb know
   // it isn't the current page there (see the dead-end fix below).
   const isChatPage = location.pathname.includes('/chat')
+  // No project in scope (the Projects list) has nothing for the panel to
+  // operate on; the fullscreen document route (:documentId) is that same
+  // document's own dedicated layout, so docking it alongside would just be
+  // a redundant second copy of the same editor.
+  const showDocumentPanel = Boolean(effectiveProjectId) && !documentId
 
   // `Breadcrumb` always renders its last item as plain "current page" text —
   // so every route that sits *under* the project (a video, or chat) must add
@@ -102,7 +107,9 @@ export function AppShell() {
   return (
     <div className="flex h-screen flex-col bg-page text-text">
       <header className="flex items-center gap-4 border-b border-border bg-surface px-6 py-3">
-        <span className="text-h3 whitespace-nowrap">Film Transcript Tool</span>
+        <Link to="/" className="text-h3 whitespace-nowrap hover:opacity-80">
+          Film Transcript Tool
+        </Link>
         {breadcrumbItems.length > 0 && <Breadcrumb items={breadcrumbItems} />}
         <div className="ml-auto flex items-center gap-2">
           <Button
@@ -134,30 +141,43 @@ export function AppShell() {
           <UserMenu />
         </div>
       </header>
-      <Group orientation="horizontal" className="flex-1 overflow-hidden">
-        <Panel defaultSize="75" minSize="40">
-          <main className="h-full overflow-auto px-6 py-8">
-            <Outlet />
-          </main>
-        </Panel>
-        <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
-        {/* `collapsedSize` (40px) matches the rail-button width `DocumentPanel`
-            renders in its collapsed state, so the panel is never a sliver
-            narrower than its own toggle button. */}
-        {/* A percentage minSize can still resolve to an unusably narrow panel
-            on a smaller/split browser window (the toolbar buttons and
-            document switcher row need real horizontal room) — a fixed pixel
-            floor guarantees a working width regardless of window size. */}
-        <Panel
-          panelRef={documentPanelRef}
-          collapsible
-          collapsedSize={40}
-          defaultSize="25"
-          minSize={320}
-        >
-          <DocumentPanel panelRef={documentPanelRef} />
-        </Panel>
-      </Group>
+      {/* The docked document panel is its own "sidebar" — it has nothing to
+          operate on outside a project (the Projects list) and would only
+          duplicate the fullscreen document page's own layout while looking
+          at a document there, so it's not just disabled but not rendered at
+          all in either place. `key`ing the `Group` on this forces
+          react-resizable-panels to re-mount with the right panel count
+          instead of trying to reconcile a changed child list in place. */}
+      {showDocumentPanel ? (
+        <Group key="with-document-panel" orientation="horizontal" className="flex-1 overflow-hidden">
+          <Panel defaultSize="75" minSize="40">
+            <main className="h-full overflow-auto px-6 py-8">
+              <Outlet />
+            </main>
+          </Panel>
+          <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
+          {/* `collapsedSize` (40px) matches the rail-button width `DocumentPanel`
+              renders in its collapsed state, so the panel is never a sliver
+              narrower than its own toggle button. */}
+          {/* A percentage minSize can still resolve to an unusably narrow panel
+              on a smaller/split browser window (the toolbar buttons and
+              document switcher row need real horizontal room) — a fixed pixel
+              floor guarantees a working width regardless of window size. */}
+          <Panel
+            panelRef={documentPanelRef}
+            collapsible
+            collapsedSize={40}
+            defaultSize="25"
+            minSize={320}
+          >
+            <DocumentPanel panelRef={documentPanelRef} />
+          </Panel>
+        </Group>
+      ) : (
+        <main className="h-full flex-1 overflow-auto px-6 py-8">
+          <Outlet />
+        </main>
+      )}
       <SearchCommandPalette projectId={effectiveProjectId} />
     </div>
   )
