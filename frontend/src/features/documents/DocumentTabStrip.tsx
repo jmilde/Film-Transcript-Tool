@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   useCreateDocument,
   useUpdateDocument,
@@ -30,6 +30,10 @@ interface DocumentTabStripProps {
   onActivate: (documentId: string) => void
   onClose: (documentId: string) => void
   onDelete: (documentId: string) => void
+  /** Rendered before the tabs, inside the same bordered/bg header row — e.g.
+   * `DocumentPage`'s back button — so it reads as part of one unified header
+   * rather than a separate element that offsets the tabs from the box below. */
+  leading?: ReactNode
 }
 
 /**
@@ -48,6 +52,7 @@ export function DocumentTabStrip({
   onActivate,
   onClose,
   onDelete,
+  leading,
 }: DocumentTabStripProps) {
   const openDocs = openDocumentIds
     .map((id) => documents?.find((doc) => doc.id === id))
@@ -56,6 +61,7 @@ export function DocumentTabStrip({
 
   return (
     <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-surface-raised px-2 pt-1.5">
+      {leading && <div className="mb-1.5 flex shrink-0 items-center">{leading}</div>}
       {openDocs.map((doc) => (
         <DocumentTab
           key={doc.id}
@@ -222,7 +228,7 @@ function ExistingDocumentPicker({
           type="button"
           aria-label="Open existing document"
           title="Open existing document"
-          className="-mb-px flex shrink-0 items-center justify-center rounded-t-md border border-transparent px-2 py-1.5 text-text-muted hover:bg-surface hover:text-text"
+          className="-mb-px flex shrink-0 items-center justify-center rounded-t-md border border-border border-b-transparent bg-surface px-2 py-1.5 text-text-muted hover:text-text"
         >
           <PlusIcon className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -280,7 +286,7 @@ function NewDocumentDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
+          variant="primary"
           size="sm"
           aria-label="New document"
           title="New document"

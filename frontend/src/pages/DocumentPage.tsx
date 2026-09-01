@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
-import { ArrowLeft as BackIcon } from 'lucide-react'
+import { ArrowLeft as BackIcon, X as CloseIcon } from 'lucide-react'
 import { useDeleteDocument, useDocument, useDocuments } from '../api/hooks/useDocuments'
 import { useDocumentComments } from '../api/hooks/useComments'
 import { useDocumentPanelStore } from '../store/documentPanel'
 import { DocumentEditor } from '../features/documents/DocumentEditor'
 import { DocumentTabStrip } from '../features/documents/DocumentTabStrip'
 import { DocumentCommentsPanel } from '../features/documents/DocumentCommentsPanel'
+import { ClipPreviewPlayer } from '../features/documents/ClipPreviewPlayer'
 
 export function DocumentPage() {
   const { projectId, documentId } = useParams<{ projectId: string; documentId: string }>()
@@ -39,6 +40,8 @@ function DocumentPageInner({ projectId, documentId }: { projectId: string; docum
   const closeTab = useDocumentPanelStore((s) => s.closeTab)
   const openDocumentIds = useDocumentPanelStore((s) => s.openDocumentIds)
   const activeDocumentId = useDocumentPanelStore((s) => s.activeDocumentId)
+  const previewClip = useDocumentPanelStore((s) => s.previewClip)
+  const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
   const { data: documents } = useDocuments(projectId)
   const deleteDocument = useDeleteDocument(projectId)
 
@@ -80,45 +83,66 @@ function DocumentPageInner({ projectId, documentId }: { projectId: string; docum
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="Back"
-          title="Back"
-          onClick={goBack}
-          className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-surface-raised hover:text-text"
-        >
-          <BackIcon className="h-4 w-4" aria-hidden="true" />
-        </button>
-        <div className="min-w-0 flex-1 overflow-hidden rounded-t-md">
-          <DocumentTabStrip
-            projectId={projectId}
-            documents={documents}
-            openDocumentIds={openDocumentIds}
-            activeDocumentId={activeDocumentId}
-            onActivate={goToDocument}
-            onClose={handleCloseTab}
-            onDelete={handleDeleteTab}
-          />
-        </div>
-      </div>
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border">
+      <DocumentTabStrip
+        projectId={projectId}
+        documents={documents}
+        openDocumentIds={openDocumentIds}
+        activeDocumentId={activeDocumentId}
+        onActivate={goToDocument}
+        onClose={handleCloseTab}
+        onDelete={handleDeleteTab}
+        leading={
+          <button
+            type="button"
+            aria-label="Back"
+            title="Back"
+            onClick={goBack}
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-raised hover:text-text"
+          >
+            <BackIcon className="h-4 w-4" aria-hidden="true" />
+          </button>
+        }
+      />
 
-      <Group
-        orientation="horizontal"
-        className="flex-1 overflow-hidden rounded-lg border border-border"
-      >
+      <Group orientation="horizontal" className="flex-1 overflow-hidden">
         <Panel defaultSize="65" minSize="40" className="bg-surface">
-          <DocumentEditor projectId={projectId} documentId={documentId} />
+          <DocumentEditor projectId={projectId} documentId={documentId} variant="fullscreen" />
         </Panel>
         <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
         <Panel defaultSize="35" minSize="25">
-          <div className="h-full overflow-y-auto p-4">
-            <DocumentCommentsPanel
-              documentId={documentId}
-              comments={comments}
-              isLoading={commentsLoading}
-            />
+          <div className="flex h-full flex-col overflow-y-auto">
+            <div className="relative shrink-0 border-b border-border bg-surface">
+              {previewClip ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close preview"
+                    title="Close preview"
+                    onClick={() => setPreviewClip(null)}
+                    className="absolute top-1 right-1 z-10 rounded-md bg-black/50 p-1 text-white hover:bg-black/70"
+                  >
+                    <CloseIcon className="h-3.5 w-3.5" />
+                  </button>
+                  <ClipPreviewPlayer
+                    videoId={previewClip.videoId}
+                    startTime={previewClip.startTime}
+                    endTime={previewClip.endTime}
+                  />
+                </>
+              ) : (
+                <div className="flex aspect-video items-center justify-center p-4 text-center text-small text-text-muted">
+                  Play a clip from the document to preview it here.
+                </div>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <DocumentCommentsPanel
+                documentId={documentId}
+                comments={comments}
+                isLoading={commentsLoading}
+              />
+            </div>
           </div>
         </Panel>
       </Group>

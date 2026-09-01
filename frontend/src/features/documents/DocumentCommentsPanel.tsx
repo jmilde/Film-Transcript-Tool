@@ -40,6 +40,7 @@ export function DocumentCommentsPanel({
   const openIds = useCommentsStore((s) => s.openIds)
   const toggleOpen = useCommentsStore((s) => s.toggleOpen)
   const selectedId = useCommentsStore((s) => s.selectedId)
+  const hoveredId = useCommentsStore((s) => s.hoveredId)
   const select = useCommentsStore((s) => s.select)
   const hover = useCommentsStore((s) => s.hover)
 
@@ -75,7 +76,7 @@ export function DocumentCommentsPanel({
             onMouseEnter={() => hover(comment.id)}
             onMouseLeave={() => hover(null)}
             className={`rounded-md border px-3 py-2 text-body ${
-              comment.id === selectedId
+              comment.id === selectedId || comment.id === hoveredId
                 ? 'border-brand bg-brand-subtle'
                 : 'border-border bg-surface'
             } ${comment.resolved ? 'opacity-60' : ''}`}

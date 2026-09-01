@@ -6,6 +6,7 @@ import { BubbleMenu } from '@tiptap/react/menus'
 import { isNodeSelection } from '@tiptap/core'
 import { DOMSerializer } from '@tiptap/pm/model'
 import StarterKit from '@tiptap/starter-kit'
+import Underline from '@tiptap/extension-underline'
 import { shouldShowBubble } from './shouldShowBubble'
 import {
   isDocumentConflict,
@@ -41,9 +42,12 @@ import {
   Copy as CopyIcon,
   Heading1 as Heading1Icon,
   Heading2 as Heading2Icon,
+  Heading3 as Heading3Icon,
   Italic as ItalicIcon,
   Play as PlayIcon,
+  Strikethrough as StrikeIcon,
   Trash2 as TrashIcon,
+  Underline as UnderlineIcon,
 } from 'lucide-react'
 import { formatTime } from '../player/format'
 import type { Document } from '../../api/hooks/useDocuments'
@@ -70,8 +74,11 @@ type BubbleSelection =
 interface FormattingState {
   bold: boolean
   italic: boolean
+  underline: boolean
+  strike: boolean
   h1: boolean
   h2: boolean
+  h3: boolean
   bulletList: boolean
 }
 
@@ -83,6 +90,11 @@ type CommentDraftTarget = { kind: 'text' } | { kind: 'clip'; nodeId: string }
 interface DocumentEditorProps {
   projectId: string
   documentId: string
+  /** `'panel'` (default) is the narrow docked `DocumentPanel` column;
+   * `'fullscreen'` is `DocumentPage`, which has its own `DocumentCommentsPanel`
+   * sidebar to hover-highlight into, so it skips the floating hover-preview
+   * popup (redundant there) and renders the page wider/taller. */
+  variant?: 'panel' | 'fullscreen'
 }
 
 interface PendingCommentMark {
@@ -100,7 +112,8 @@ interface PendingCommentMark {
  * (rather than `DocumentPanel`, which doesn't have an editor instance to call
  * `insertClipBlockAt` on) once this document's editor has finished loading.
  */
-export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
+export function DocumentEditor({ projectId, documentId, variant = 'panel' }: DocumentEditorProps) {
+  const showHoverPreview = variant !== 'fullscreen'
   const { data: doc, isLoading } = useDocument(documentId)
   const updateDocument = useUpdateDocument(projectId, documentId)
   const resolveClipBlock = useResolveClipBlock(documentId)
@@ -151,15 +164,15 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     {
       extensions: [
         StarterKit.configure({
-          heading: { levels: [1, 2] },
+          heading: { levels: [1, 2, 3] },
           blockquote: false,
           code: false,
           codeBlock: false,
           horizontalRule: false,
-          strike: false,
           link: false,
           underline: false,
         }),
+        Underline,
         ClipBlock,
         CommentMark,
         CommentResolvedDecoration,
@@ -286,8 +299,11 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     selector: ({ editor }) => ({
       bold: editor?.isActive('bold') ?? false,
       italic: editor?.isActive('italic') ?? false,
+      underline: editor?.isActive('underline') ?? false,
+      strike: editor?.isActive('strike') ?? false,
       h1: editor?.isActive('heading', { level: 1 }) ?? false,
       h2: editor?.isActive('heading', { level: 2 }) ?? false,
+      h3: editor?.isActive('heading', { level: 3 }) ?? false,
       bulletList: editor?.isActive('bulletList') ?? false,
     }),
   })
@@ -571,6 +587,20 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
       onClick: () => editor?.chain().focus().toggleItalic().run(),
     },
     {
+      id: 'underline',
+      icon: UnderlineIcon,
+      label: 'Underline',
+      active: formattingState.underline,
+      onClick: () => editor?.chain().focus().toggleUnderline().run(),
+    },
+    {
+      id: 'strike',
+      icon: StrikeIcon,
+      label: 'Strikethrough',
+      active: formattingState.strike,
+      onClick: () => editor?.chain().focus().toggleStrike().run(),
+    },
+    {
       id: 'h1',
       icon: Heading1Icon,
       label: 'Heading 1',
@@ -585,6 +615,13 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
       onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
     },
     {
+      id: 'h3',
+      icon: Heading3Icon,
+      label: 'Heading 3',
+      active: formattingState.h3,
+      onClick: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(),
+    },
+    {
       id: 'bulletList',
       icon: BulletListIcon,
       label: 'Bullet list',
@@ -597,7 +634,15 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // E6's shared popup, reusing the same `useCommentsStore` selection state
   // `CommentsPanel` already renders for transcript comments (decision: one
   // shared comments UI for both contexts).
-  function handleContentClick(event: React.MouseEvent<HTMLDivElement>) {
+  //
+  // Bound to `mousedown`, not `click`: the insert-marker's `selectionUpdate`
+  // listener above reacts to ProseMirror's own selection change — which PM
+  // applies on mousedown, before mouseup — by redrawing decorations, which
+  // splits the very mark span the pointer is down on into multiple DOM
+  // nodes. That mid-gesture DOM swap makes the browser's native `click`
+  // synthesis unreliable (it can require a second click to "take"), so this
+  // reads `event.target` on mousedown instead, before any of that happens.
+  function handleContentMouseDown(event: React.MouseEvent<HTMLDivElement>) {
     const commentId = resolveCommentIdAt(event.target as HTMLElement)
     if (commentId) selectComment(commentId)
   }
@@ -709,19 +754,26 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         <div
           ref={contentRef}
           className="relative flex-1 overflow-y-auto bg-page"
-          onClick={handleContentClick}
+          onMouseDown={handleContentMouseDown}
           onMouseOver={handleContentMouseOver}
           onMouseLeave={handleContentMouseLeave}
         >
-          {hoverPreview &&
+          {showHoverPreview &&
+            hoverPreview &&
             (() => {
               const comment = (comments ?? []).find((c) => c.id === hoverPreview.commentId)
               if (!comment) return null
               const enoughRoomAbove = hoverPreview.rect.top > 56
+              // Same success/warning split as the underline itself
+              // (`commentResolvedDecoration`) — the hover box should read as
+              // "the same thing, zoomed in", not an unrelated neutral popup.
+              const accentClass = comment.resolved
+                ? 'border-success bg-success-subtle text-success-text'
+                : 'border-warning bg-warning-subtle text-warning-text'
               return createPortal(
                 <div
                   role="tooltip"
-                  className="fixed z-50 max-w-xs rounded-md border border-border bg-surface px-3 py-2 text-small text-text shadow-lg"
+                  className={`fixed z-50 max-w-xs rounded-md border px-3 py-2 text-small shadow-lg ${accentClass}`}
                   style={{
                     left: Math.max(8, hoverPreview.rect.left),
                     top: enoughRoomAbove ? hoverPreview.rect.top - 8 : hoverPreview.rect.bottom + 8,
@@ -780,9 +832,24 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
               )
             )}
           </BubbleMenu>
-          <div className="mx-auto max-w-2xl px-4 py-6">
-            <div className="rounded-md border border-border bg-surface px-8 py-8 shadow-sm">
-              <EditorContent editor={editor} className="prose prose-sm max-w-none" />
+          <div
+            className={
+              variant === 'fullscreen'
+                ? 'mx-auto flex min-h-full max-w-[840px] flex-col px-6 py-10'
+                : 'mx-auto max-w-2xl px-4 py-6'
+            }
+          >
+            <div
+              className={
+                variant === 'fullscreen'
+                  ? 'flex-1 rounded-md border border-border bg-surface px-16 py-16 shadow-sm'
+                  : 'rounded-md border border-border bg-surface px-8 py-8 shadow-sm'
+              }
+            >
+              <EditorContent
+                editor={editor}
+                className={variant === 'fullscreen' ? 'prose max-w-none' : 'prose prose-sm max-w-none'}
+              />
             </div>
           </div>
         </div>
