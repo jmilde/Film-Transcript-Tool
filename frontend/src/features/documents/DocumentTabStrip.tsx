@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   useCreateDocument,
   useUpdateDocument,
@@ -30,10 +30,6 @@ interface DocumentTabStripProps {
   onActivate: (documentId: string) => void
   onClose: (documentId: string) => void
   onDelete: (documentId: string) => void
-  /** Rendered before the tabs, inside the same bordered/bg header row — e.g.
-   * `DocumentPage`'s back button — so it reads as part of one unified header
-   * rather than a separate element that offsets the tabs from the box below. */
-  leading?: ReactNode
 }
 
 /**
@@ -52,7 +48,6 @@ export function DocumentTabStrip({
   onActivate,
   onClose,
   onDelete,
-  leading,
 }: DocumentTabStripProps) {
   const openDocs = openDocumentIds
     .map((id) => documents?.find((doc) => doc.id === id))
@@ -61,7 +56,6 @@ export function DocumentTabStrip({
 
   return (
     <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-surface-raised px-2 pt-1.5">
-      {leading && <div className="mb-1.5 flex shrink-0 items-center">{leading}</div>}
       {openDocs.map((doc) => (
         <DocumentTab
           key={doc.id}

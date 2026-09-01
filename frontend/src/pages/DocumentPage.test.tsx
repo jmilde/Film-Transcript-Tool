@@ -90,12 +90,12 @@ describe('DocumentPage', () => {
     expect(await screen.findByText('note about this line')).toBeInTheDocument()
   })
 
-  it('has a back button', async () => {
+  it('has a back button naming its destination', async () => {
     baseHandlers()
     renderPage()
     await screen.findByText('Hello there')
 
-    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Back to /i })).toBeInTheDocument()
   })
 
   it('selects a comment in the shared store when clicked in the side panel', async () => {
