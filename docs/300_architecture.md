@@ -395,6 +395,12 @@ Deepgram
 
 may be configured separately.
 
+**Current state:** only the `database` service is containerized so far (via
+the repo-root `docker-compose.yml` — a `db-dev`/`db-test` pair, see
+`TODO_LOCAL_POSTGRES.md`). `frontend`/`backend`/`worker` still run on the host
+via the `Makefile` (`make run-backend`, `make run-worker`, `make run-frontend`), not
+as Compose services yet.
+
 ---
 
 # 16. Future Deployment

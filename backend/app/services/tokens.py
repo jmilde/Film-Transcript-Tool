@@ -48,9 +48,20 @@ def _snapshot(token: TranscriptToken) -> dict[str, object]:
 
 
 def _lock(session: Session, token_id: uuid.UUID) -> TranscriptToken:
-    """Re-read a token with ``FOR UPDATE``, serializing concurrent writers."""
+    """Re-read a token with ``FOR UPDATE``, serializing concurrent writers.
+
+    ``populate_existing`` is required here: the caller (e.g. the token-edit
+    route) typically already loaded this token earlier in the same session,
+    so without it SQLAlchemy's identity map would return that stale, already
+    in-memory object instead of refreshing it from the row this query just
+    locked — silently defeating the ``expected_version`` conflict check for
+    a concurrent writer that committed in between.
+    """
     return session.execute(
-        select(TranscriptToken).where(TranscriptToken.id == token_id).with_for_update()
+        select(TranscriptToken)
+        .where(TranscriptToken.id == token_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one()
 
 

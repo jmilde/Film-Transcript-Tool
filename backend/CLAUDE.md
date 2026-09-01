@@ -22,7 +22,7 @@ Guidance specific to the `backend/` package. The repo-root `CLAUDE.md` and `docs
 ## Tests
 
 - **The test tree mirrors the source tree.** A test for `app/<pkg>/<mod>.py` lives at `tests/<pkg>/test_<mod>.py` (e.g. `app/storage/local.py` → `tests/storage/test_local.py`, `app/api/routes/projects.py` → `tests/api/routes/test_projects.py`). There is no `unit/`/`integration/` split — the module path already says what each test covers.
-- Tests run against the real Supabase Postgres. The `db_session` fixture wraps each test in a transaction that is always rolled back; prefer it. The one place that needs real committed data across connections (the `FOR UPDATE SKIP LOCKED` claim race) uses its own engine and cleans up explicitly.
+- Tests run against a local Dockerized Postgres (`pgvector/pgvector:pg16`, port 5443, container `db-test` in the repo-root `docker-compose.yml`), never the hosted Supabase Postgres. `make test`/`test-all`/`test-integration` bring the container up (`db-test-up`), migrate it to head, and only then run pytest with `DATABASE_URL_WORKER` pointed at it — see the repo-root `Makefile`. The `db_session` fixture wraps each test in a transaction that is always rolled back; prefer it. The one place that needs real committed data across connections (the `FOR UPDATE SKIP LOCKED` claim race) uses its own engine and cleans up explicitly.
 
 ## Typing, lint, format
 
