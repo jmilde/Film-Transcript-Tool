@@ -848,7 +848,17 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
             >
               <EditorContent
                 editor={editor}
-                className={variant === 'fullscreen' ? 'prose max-w-none' : 'prose prose-sm max-w-none'}
+                // `@tailwindcss/typography`'s default prose line-height (1.75
+                // base / ~1.71 for `prose-sm`) reads fine for long-form
+                // marketing copy but is noticeably loose for an editable
+                // document — `leading-normal` tightens it back to a more
+                // typical editor line spacing without touching `.prose`
+                // globally (which `ChatMessageList` also renders through).
+                className={
+                  variant === 'fullscreen'
+                    ? 'prose max-w-none leading-normal'
+                    : 'prose prose-sm max-w-none leading-normal'
+                }
               />
             </div>
           </div>
