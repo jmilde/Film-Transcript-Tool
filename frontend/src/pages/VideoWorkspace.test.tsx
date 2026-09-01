@@ -1,14 +1,20 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/server'
 import { AuthProvider } from '../auth/AuthProvider'
 import { useSelectionStore } from '../store/selection'
+import { useSearchOverlayStore } from '../store/searchOverlay'
 import { VideoWorkspace } from './VideoWorkspace'
 import type { PendingSearchNav } from '../features/search/types'
+
+function ChatRouteStub() {
+  const location = useLocation()
+  return <div>chat page: {location.pathname}</div>
+}
 
 const VIDEO_ID = '00000000-0000-0000-0000-0000000000v1'
 const PROJECT_ID = '00000000-0000-0000-0000-0000000000p1'
@@ -18,13 +24,20 @@ const SPEAKER_ID = '00000000-0000-0000-0000-0000000000s1'
 
 beforeEach(() => {
   useSelectionStore.getState().clear()
+  useSearchOverlayStore.setState({ isOpen: false, query: '' })
 })
 
 function renderWorkspace(pendingSearch?: PendingSearchNav) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const router = createMemoryRouter([{ path: '/videos/:videoId', element: <VideoWorkspace /> }], {
-    initialEntries: [{ pathname: `/videos/${VIDEO_ID}`, state: pendingSearch ?? null }],
-  })
+  const router = createMemoryRouter(
+    [
+      { path: '/videos/:videoId', element: <VideoWorkspace /> },
+      { path: '/projects/:projectId/chat/:conversationId', element: <ChatRouteStub /> },
+    ],
+    {
+      initialEntries: [{ pathname: `/videos/${VIDEO_ID}`, state: pendingSearch ?? null }],
+    },
+  )
   return render(
     <QueryClientProvider client={client}>
       <AuthProvider>
@@ -42,6 +55,7 @@ function handlers(myRole: 'owner' | 'editor' | 'viewer' = 'editor') {
         folder_id: '00000000-0000-0000-0000-0000000000f1',
         project_id: PROJECT_ID,
         name: 'Interview A',
+        folder_path: ['Season 1'],
         original_filename: 'a.mp4',
         duration: 12.5,
         frame_rate: 25,
@@ -225,7 +239,7 @@ describe('VideoWorkspace', () => {
       id: tokenId,
       transcriptId: TRANSCRIPT_ID,
       startTime: 1,
-      returnTo: `/projects/${PROJECT_ID}/search?q=world`,
+      origin: 'search',
     })
 
     await screen.findByText('Hello', { exact: false })
@@ -249,6 +263,7 @@ describe('VideoWorkspace', () => {
       transcriptId: TRANSCRIPT_ID,
       startTime: 0,
       endTokenId,
+      origin: 'chat',
       returnTo: `/projects/${PROJECT_ID}/chat`,
     })
 
@@ -292,7 +307,7 @@ describe('VideoWorkspace', () => {
       id: 'comment-1',
       transcriptId: TRANSCRIPT_ID,
       startTime: 0,
-      returnTo: `/projects/${PROJECT_ID}/search?q=check`,
+      origin: 'search',
     })
 
     await screen.findByText('Hello')
@@ -306,35 +321,45 @@ describe('VideoWorkspace', () => {
     })
   })
 
-  it('shows a back link pointing at the origin page when arriving via pending-nav', async () => {
+  it('shows "Back to search" and reopens the search overlay when arriving via a search hit', async () => {
     handlers()
-    const returnTo = `/projects/${PROJECT_ID}/search?q=world`
     renderWorkspace({
       kind: 'transcript',
       id: '00000000-0000-0000-0000-0000000000k2',
       transcriptId: TRANSCRIPT_ID,
       startTime: 1,
+      origin: 'search',
+    })
+
+    const button = await screen.findByRole('button', { name: 'Back to search' })
+    await userEvent.click(button)
+    expect(useSearchOverlayStore.getState().isOpen).toBe(true)
+  })
+
+  it('shows "Back to chat" and navigates to the conversation when arriving via a citation', async () => {
+    handlers()
+    const returnTo = `/projects/${PROJECT_ID}/chat/c-1`
+    renderWorkspace({
+      kind: 'transcript',
+      id: '00000000-0000-0000-0000-0000000000k2',
+      transcriptId: TRANSCRIPT_ID,
+      startTime: 1,
+      origin: 'chat',
       returnTo,
     })
 
-    const link = await screen.findByRole('link', { name: '← Back' })
-    expect(link).toHaveAttribute('href', returnTo)
+    const button = await screen.findByRole('button', { name: 'Back to chat' })
+    await userEvent.click(button)
+    await waitFor(() => expect(screen.getByText(`chat page: ${returnTo}`)).toBeInTheDocument())
   })
 
-  it('does not show a back link on a normal visit', async () => {
+  it('does not show a return-to-origin affordance on a normal visit', async () => {
     handlers()
     renderWorkspace()
 
     await screen.findByRole('heading', { name: 'Interview A' })
-    expect(screen.queryByRole('link', { name: '← Back' })).not.toBeInTheDocument()
-  })
-
-  it('links "← Projects" to the video\'s project once loaded', async () => {
-    handlers()
-    renderWorkspace()
-
-    const link = await screen.findByRole('link', { name: '← Projects' })
-    await waitFor(() => expect(link).toHaveAttribute('href', `/projects/${PROJECT_ID}`))
+    expect(screen.queryByRole('button', { name: 'Back to search' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back to chat' })).not.toBeInTheDocument()
   })
 
   it('shows a dual-pane original/translation view once a translation is selected', async () => {

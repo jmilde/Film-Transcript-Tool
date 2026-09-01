@@ -62,6 +62,7 @@ function renderEditor(documentId: string = DOCUMENT_ID) {
 afterEach(() => {
   vi.unstubAllGlobals()
   delete (navigator.clipboard as { write?: unknown }).write
+  useCommentsStore.setState({ selectedId: null, hoveredId: null })
 })
 
 describe('DocumentEditor', () => {
@@ -252,6 +253,162 @@ describe('DocumentEditor', () => {
       await userEvent.click(container.querySelector('[data-comment-id]') as HTMLElement)
 
       expect(useCommentsStore.getState().selectedId).toBe('c-1')
+    })
+
+    it('shows a hover preview of the comment text, and clears it on mouse-leave', async () => {
+      mockCommentRoutes()
+      const comment = {
+        id: 'c-1',
+        created_by: 'user-a',
+        text: 'a note about this',
+        resolved: false,
+        anchor: {
+          kind: 'document' as const,
+          document_id: DOCUMENT_ID,
+          clip_node_id: null,
+          excerpt: 'there',
+        },
+        created_at: '2026-01-01T00:00:00Z',
+        replies: [],
+      }
+      server.use(
+        http.post('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json(comment)),
+        // The hover preview reads comment text from `useDocumentComments`'
+        // list, not just the mark itself — unlike the other comment tests
+        // here, which only assert on `[data-comment-id]` in the DOM.
+        http.get('http://localhost:8000/documents/d-1/comments', () =>
+          HttpResponse.json([comment]),
+        ),
+      )
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 6, 11) // "there"
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Comment' })).toBeEnabled())
+      await addCommentToSelection(container, 'a note about this')
+
+      const markEl = container.querySelector('[data-comment-id]') as HTMLElement
+      await userEvent.hover(markEl)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('a note about this')
+
+      await userEvent.unhover(markEl)
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    })
+
+    it('highlights the commented span while its comment is hovered or selected', async () => {
+      mockCommentRoutes()
+      server.use(
+        http.post('http://localhost:8000/documents/d-1/comments', () =>
+          HttpResponse.json({
+            id: 'c-1',
+            created_by: 'user-a',
+            text: 'note',
+            resolved: false,
+            anchor: {
+              kind: 'document',
+              document_id: DOCUMENT_ID,
+              clip_node_id: null,
+              excerpt: 'there',
+            },
+            created_at: '2026-01-01T00:00:00Z',
+            replies: [],
+          }),
+        ),
+      )
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 6, 11) // "there"
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Comment' })).toBeEnabled())
+      await addCommentToSelection(container, 'note')
+
+      // The decoration lands on ProseMirror's own inline-decoration wrapper
+      // span, nested inside the mark's `[data-comment-id]` span — not that
+      // span itself.
+      const markEl = () => container.querySelector('[data-comment-id]') as HTMLElement
+      const decoratedClassName = () => markEl().firstElementChild?.className ?? ''
+      expect(decoratedClassName()).not.toContain('bg-brand-subtle')
+
+      await userEvent.hover(markEl())
+      await waitFor(() => expect(decoratedClassName()).toContain('bg-brand-subtle'))
+
+      await userEvent.unhover(markEl())
+      await waitFor(() => expect(decoratedClassName()).not.toContain('bg-brand-subtle'))
+
+      useCommentsStore.getState().select('c-1')
+      await waitFor(() => expect(decoratedClassName()).toContain('bg-brand-subtle'))
+    })
+
+    it('deletes a comment once the text its mark was on is removed', async () => {
+      const markedDoc: Document = {
+        ...DOCUMENT,
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'Hello ' },
+                {
+                  type: 'text',
+                  text: 'there',
+                  marks: [{ type: 'comment', attrs: { commentId: 'c-1' } }],
+                },
+              ],
+            },
+          ],
+        },
+      }
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(markedDoc)),
+      )
+      server.use(
+        http.patch('http://localhost:8000/documents/d-1', () =>
+          HttpResponse.json({ ...markedDoc, version: 2 }),
+        ),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () =>
+          HttpResponse.json([
+            {
+              id: 'c-1',
+              created_by: 'user-a',
+              text: 'note',
+              resolved: false,
+              anchor: {
+                kind: 'document',
+                document_id: DOCUMENT_ID,
+                clip_node_id: null,
+                excerpt: 'there',
+              },
+              created_at: '2026-01-01T00:00:00Z',
+              replies: [],
+            },
+          ]),
+        ),
+      )
+      let deletedId: string | undefined
+      server.use(
+        http.delete('http://localhost:8000/comments/:commentId', ({ params }) => {
+          deletedId = params.commentId as string
+          return new HttpResponse(null, { status: 204 })
+        }),
+      )
+      const { container } = renderEditor()
+      await waitFor(() => {
+        expect(container.querySelector('[data-comment-id]')).toBeInTheDocument()
+      })
+      await userEvent.click(container.querySelector('p') as HTMLElement)
+      selectWithinText(container, 'there', 0, 5)
+
+      await userEvent.keyboard('{Backspace}')
+
+      await waitFor(
+        () => {
+          expect(deletedId).toBe('c-1')
+        },
+        { timeout: 3000 },
+      )
     })
 
     it('falls back to the normal conflict banner if the retried mark-set also conflicts, without looping', async () => {
@@ -608,6 +765,6 @@ describe('DocumentEditor', () => {
       expect(container.querySelector('[data-clip-block]')?.className).toContain('underline')
     })
     // The clip's own border+tint channel is unaffected by the comment.
-    expect(container.querySelector('[data-clip-block]')?.className).toContain('border-teal-300')
+    expect(container.querySelector('[data-clip-block]')?.className).toContain('border-info')
   })
 })

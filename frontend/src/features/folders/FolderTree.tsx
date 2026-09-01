@@ -6,7 +6,7 @@ import {
   type Folder,
 } from '../../api/hooks/useFolders'
 import { useMoveVideo } from '../../api/hooks/useVideos'
-import { FolderIcon } from '../../components/icons'
+import { Folder as FolderIcon } from 'lucide-react'
 
 // Custom MIME types used to identify what's being dragged, since native HTML5
 // drag-and-drop only exposes payloads (not types) on drop, not dragover.
@@ -65,15 +65,15 @@ export function FolderTree({ projectId, selectedFolderId, onSelect }: TreeProps)
 
   return (
     <div
-      className={`min-h-16 rounded text-sm ${rootDragOver ? 'bg-slate-100 ring-1 ring-inset ring-slate-400' : ''}`}
+      className={`min-h-16 rounded-md text-body ${rootDragOver ? 'bg-brand-subtle ring-1 ring-inset ring-brand' : ''}`}
       onClick={() => onSelect(null)}
       onDragOver={handleRootDragOver}
       onDragLeave={() => setRootDragOver(false)}
       onDrop={handleRootDrop}
     >
-      {isPending && <p className="px-2 py-1 text-slate-500">Loading folders…</p>}
-      {isError && <p className="px-2 py-1 text-red-600">Could not load folders.</p>}
-      {roots && roots.length === 0 && <p className="px-2 py-1 text-slate-500">No folders yet.</p>}
+      {isPending && <p className="px-2 py-1 text-text-muted">Loading folders…</p>}
+      {isError && <p className="px-2 py-1 text-danger-text">Could not load folders.</p>}
+      {roots && roots.length === 0 && <p className="px-2 py-1 text-text-muted">No folders yet.</p>}
       {roots && roots.length > 0 && (
         <ul>
           {roots.map((folder) => (
@@ -179,12 +179,12 @@ function FolderTreeNode({
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         onClick={(e) => e.stopPropagation()}
-        className={`flex items-center rounded ${
+        className={`flex items-center rounded-md ${
           isSelected
-            ? 'bg-slate-200'
+            ? 'bg-brand-subtle'
             : dragOver
-              ? 'bg-slate-100 ring-1 ring-inset ring-slate-400'
-              : 'hover:bg-slate-100'
+              ? 'bg-surface-raised ring-1 ring-inset ring-brand'
+              : 'hover:bg-surface-raised'
         }`}
         style={{ paddingLeft: depth * 14 }}
       >
@@ -193,18 +193,18 @@ function FolderTreeNode({
             type="button"
             aria-label={expanded ? 'Collapse' : 'Expand'}
             onClick={() => setExpanded((e) => !e)}
-            className="w-5 shrink-0 text-slate-400"
+            className="w-5 shrink-0 text-text-muted"
           >
             {expanded ? '▾' : '▸'}
           </button>
         ) : (
           <span className="w-5 shrink-0" />
         )}
-        <FolderIcon className="mr-1 h-4 w-4 shrink-0 text-slate-400" />
+        <FolderIcon className="mr-1 h-4 w-4 shrink-0 text-text-muted" />
         <button
           type="button"
           onClick={() => onSelect(folder.id)}
-          className="flex-1 truncate py-1 pr-2 text-left text-slate-700"
+          className="flex-1 truncate py-1 pr-2 text-left text-text"
         >
           {folder.name}
         </button>

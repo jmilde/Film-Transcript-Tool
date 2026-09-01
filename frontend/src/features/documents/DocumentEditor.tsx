@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { isNodeSelection } from '@tiptap/core'
 import { DOMSerializer } from '@tiptap/pm/model'
 import StarterKit from '@tiptap/starter-kit'
+import Underline from '@tiptap/extension-underline'
 import { shouldShowBubble } from './shouldShowBubble'
 import {
   isDocumentConflict,
@@ -15,31 +17,38 @@ import {
 import {
   documentAnchor,
   useCreateDocumentComment,
+  useDeleteDocumentComment,
   useDocumentComments,
 } from '../../api/hooks/useComments'
+import type { Comment } from '../../api/hooks/useComments'
 import { useCommentsStore } from '../../store/comments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { ClipBlock, stripResolvedClipFields } from './clipBlockNode'
 import type { ClipBlockNodeAttrs } from './clipBlockNode'
 import { writeClipToClipboard } from './clipClipboard'
+import { findOrphanedCommentIds } from './orphanedComments'
 import { CommentMark } from './commentMark'
 import { CommentResolvedDecoration, commentResolvedPluginKey } from './commentResolvedDecoration'
+import { CommentHighlightDecoration, commentHighlightPluginKey } from './commentHighlightDecoration'
 import { InsertMarker, insertMarkerPluginKey } from './insertMarker'
 import { DocumentCommentsContext } from './documentCommentsContext'
 import type { ClipCommentStatus } from './documentCommentsContext'
 import { SelectionToolbar } from '../toolbar/SelectionToolbar'
 import type { ToolbarAction } from '../toolbar/SelectionToolbar'
 import {
-  BoldIcon,
-  BulletListIcon,
-  CommentIcon,
-  CopyIcon,
-  Heading1Icon,
-  Heading2Icon,
-  ItalicIcon,
-  PlayIcon,
-  TrashIcon,
-} from '../../components/icons'
+  Bold as BoldIcon,
+  List as BulletListIcon,
+  MessageSquare as CommentIcon,
+  Copy as CopyIcon,
+  Heading1 as Heading1Icon,
+  Heading2 as Heading2Icon,
+  Heading3 as Heading3Icon,
+  Italic as ItalicIcon,
+  Play as PlayIcon,
+  Strikethrough as StrikeIcon,
+  Trash2 as TrashIcon,
+  Underline as UnderlineIcon,
+} from 'lucide-react'
 import { formatTime } from '../player/format'
 import type { Document } from '../../api/hooks/useDocuments'
 
@@ -65,8 +74,11 @@ type BubbleSelection =
 interface FormattingState {
   bold: boolean
   italic: boolean
+  underline: boolean
+  strike: boolean
   h1: boolean
   h2: boolean
+  h3: boolean
   bulletList: boolean
 }
 
@@ -78,6 +90,11 @@ type CommentDraftTarget = { kind: 'text' } | { kind: 'clip'; nodeId: string }
 interface DocumentEditorProps {
   projectId: string
   documentId: string
+  /** `'panel'` (default) is the narrow docked `DocumentPanel` column;
+   * `'fullscreen'` is `DocumentPage`, which has its own `DocumentCommentsPanel`
+   * sidebar to hover-highlight into, so it skips the floating hover-preview
+   * popup (redundant there) and renders the page wider/taller. */
+  variant?: 'panel' | 'fullscreen'
 }
 
 interface PendingCommentMark {
@@ -95,27 +112,36 @@ interface PendingCommentMark {
  * (rather than `DocumentPanel`, which doesn't have an editor instance to call
  * `insertClipBlockAt` on) once this document's editor has finished loading.
  */
-export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
+export function DocumentEditor({ projectId, documentId, variant = 'panel' }: DocumentEditorProps) {
+  const showHoverPreview = variant !== 'fullscreen'
   const { data: doc, isLoading } = useDocument(documentId)
   const updateDocument = useUpdateDocument(projectId, documentId)
   const resolveClipBlock = useResolveClipBlock(documentId)
   const { data: comments } = useDocumentComments(documentId)
   const createDocumentComment = useCreateDocumentComment(documentId)
+  const deleteDocumentComment = useDeleteDocumentComment(documentId)
   const pendingInsert = useDocumentPanelStore((s) => s.pendingInsert)
   const consumePendingInsert = useDocumentPanelStore((s) => s.consumePendingInsert)
   const setPreviewClip = useDocumentPanelStore((s) => s.setPreviewClip)
   const setInsertMarkerDocumentId = useDocumentPanelStore((s) => s.setInsertMarkerDocumentId)
   const selectComment = useCommentsStore((s) => s.select)
+  const hoverComment = useCommentsStore((s) => s.hover)
+  const selectedCommentId = useCommentsStore((s) => s.selectedId)
+  const hoveredCommentId = useCommentsStore((s) => s.hoveredId)
   const client = useQueryClient()
 
   // The version to send with the next save; kept outside React state since
   // updating it must never itself trigger a re-render/editor reset.
   const versionRef = useRef(1)
   const [initialized, setInitialized] = useState(false)
-  const [title, setTitle] = useState('')
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [commentDraft, setCommentDraft] = useState<CommentDraftTarget | null>(null)
   const [commentDraftText, setCommentDraftText] = useState('')
+  // The comment currently under the pointer, plus where to float its preview
+  // — `null` whenever the pointer isn't over a commented span/clip.
+  const [hoverPreview, setHoverPreview] = useState<{ commentId: string; rect: DOMRect } | null>(
+    null,
+  )
 
   // Set right after applying a comment mark; cleared once that specific save
   // resolves. Scopes the 409-retry below to "the very next autosave" caused
@@ -125,22 +151,32 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // below — exactly one retry, per the design record.
   const markRetryRef = useRef<PendingCommentMark | null>(null)
 
+  // Mirrors the latest `comments` into a ref for `onUpdate`'s orphan-comment
+  // reconciliation below — that closure is captured once per `documentId`
+  // (see `useEditor`'s deps array), so it would otherwise only ever see
+  // whatever `comments` looked like when the editor was created.
+  const commentsRef = useRef<Comment[]>([])
+  useEffect(() => {
+    commentsRef.current = comments ?? []
+  }, [comments])
+
   const editor = useEditor(
     {
       extensions: [
         StarterKit.configure({
-          heading: { levels: [1, 2] },
+          heading: { levels: [1, 2, 3] },
           blockquote: false,
           code: false,
           codeBlock: false,
           horizontalRule: false,
-          strike: false,
           link: false,
           underline: false,
         }),
+        Underline,
         ClipBlock,
         CommentMark,
         CommentResolvedDecoration,
+        CommentHighlightDecoration,
         InsertMarker,
       ],
       content: { type: 'doc', content: [] },
@@ -148,15 +184,25 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
         const savingMark = pendingMarkSaveRef.current
         saveTimeoutRef.current = setTimeout(() => {
+          const content = stripResolvedClipFields(editor.getJSON()) as Document['content']
           updateDocument.mutate(
-            {
-              content: stripResolvedClipFields(editor.getJSON()) as Document['content'],
-              expectedVersion: versionRef.current,
-            },
+            { content, expectedVersion: versionRef.current },
             {
               onSuccess: (updated) => {
                 versionRef.current = updated.version
                 if (pendingMarkSaveRef.current === savingMark) pendingMarkSaveRef.current = null
+                // Reconcile against exactly what was just persisted, not a
+                // before/after diff — a comment whose mark/clip node isn't
+                // in it anymore lost the text/clip it was attached to.
+                // Anything still mid-flight through the mark-save/retry
+                // dance below is excluded so this can't delete a comment
+                // whose mark simply hasn't reached a saved snapshot yet.
+                const excludeIds = new Set<string>()
+                if (pendingMarkSaveRef.current) excludeIds.add(pendingMarkSaveRef.current.commentId)
+                if (markRetryRef.current) excludeIds.add(markRetryRef.current.commentId)
+                for (const id of findOrphanedCommentIds(content, commentsRef.current, excludeIds)) {
+                  deleteDocumentComment.mutate(id)
+                }
               },
               onError: (error) => {
                 if (pendingMarkSaveRef.current !== savingMark) return
@@ -183,15 +229,25 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   useEffect(() => {
     if (!editor || !doc || initialized) return
     editor.commands.setContent(doc.content, { emitUpdate: false })
-    versionRef.current = doc.version
-    setTitle(doc.title)
     setInitialized(true)
   }, [editor, doc, initialized])
 
+  // Keeps `versionRef` current with the latest version this client has seen
+  // for *any* field — not just this component's own saves. The document
+  // panel's tab bar can rename this same document (a title-only PATCH) while
+  // its editor is open; without this, a subsequent content autosave here
+  // would still be carrying the pre-rename version and get rejected as a
+  // stale-version conflict. Safe to run on every `doc` change since a ref
+  // write never triggers a re-render.
+  useEffect(() => {
+    if (doc) versionRef.current = doc.version
+  }, [doc])
+
   // One-shot retry: re-apply a comment mark that was lost to a conflicting
   // save, now that the document has reloaded fresh content. If the mapped
-  // range no longer makes sense in the reloaded doc, give up quietly — the
-  // comment still exists and lists/functions via its `Comment` row.
+  // range no longer makes sense in the reloaded doc, there's nothing left to
+  // re-mark — delete the comment rather than leaving it orphaned, same as
+  // `findOrphanedCommentIds` would once caught by a later save.
   useEffect(() => {
     if (!editor || !initialized) return
     const pending = markRetryRef.current
@@ -200,13 +256,16 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     const size = editor.state.doc.content.size
     const from = Math.min(pending.from, size)
     const to = Math.min(pending.to, size)
-    if (from >= to) return
+    if (from >= to) {
+      deleteDocumentComment.mutate(pending.commentId)
+      return
+    }
     editor
       .chain()
       .setTextSelection({ from, to })
       .setMark('comment', { commentId: pending.commentId })
       .run()
-  }, [editor, initialized])
+  }, [editor, initialized, deleteDocumentComment])
 
   // Derives what the shared BubbleMenu popup should show from the editor's
   // live selection. `useEditorState` only re-renders this component when the
@@ -240,8 +299,11 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     selector: ({ editor }) => ({
       bold: editor?.isActive('bold') ?? false,
       italic: editor?.isActive('italic') ?? false,
+      underline: editor?.isActive('underline') ?? false,
+      strike: editor?.isActive('strike') ?? false,
       h1: editor?.isActive('heading', { level: 1 }) ?? false,
       h2: editor?.isActive('heading', { level: 2 }) ?? false,
+      h3: editor?.isActive('heading', { level: 3 }) ?? false,
       bulletList: editor?.isActive('bulletList') ?? false,
     }),
   })
@@ -314,6 +376,93 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
     }
     return map
   }, [comments])
+
+  // Reverse of the above — which comment (if any) anchors to a given clip
+  // node, needed to resolve a click/hover on a clip block back to a comment
+  // id for selecting/highlighting it (text marks carry their commentId
+  // directly via `data-comment-id`; clip nodes don't, so this is the lookup
+  // path for those).
+  const commentIdByNodeId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const comment of comments ?? []) {
+      const nodeId = documentAnchor(comment)?.clip_node_id
+      if (nodeId) map.set(nodeId, comment.id)
+    }
+    return map
+  }, [comments])
+
+  // What "hovering or clicking a commented section" should highlight right
+  // now — hover takes precedence while active, falling back to whatever's
+  // selected (e.g. from `DocumentCommentsPanel` on the fullscreen page).
+  const highlightedCommentId = hoveredCommentId ?? selectedCommentId
+
+  useEffect(() => {
+    if (!editor) return
+    editor.view.dispatch(editor.state.tr.setMeta(commentHighlightPluginKey, highlightedCommentId))
+  }, [editor, highlightedCommentId])
+
+  const highlightedNodeId = useMemo(() => {
+    if (!highlightedCommentId) return null
+    for (const [nodeId, commentId] of commentIdByNodeId) {
+      if (commentId === highlightedCommentId) return nodeId
+    }
+    return null
+  }, [commentIdByNodeId, highlightedCommentId])
+
+  // Scrolls the selected comment's mark/clip into view — driven by
+  // `selectedCommentId` specifically (not the hover-inclusive
+  // `highlightedCommentId` above), so hovering a comment in
+  // `DocumentCommentsPanel` highlights it without yanking the scroll
+  // position, while clicking (which sets `selectedId`) does jump to it —
+  // the same split TranscriptViewer makes between token hover and selection.
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!selectedCommentId) return
+    const container = contentRef.current
+    if (!container) return
+    const escaped = CSS.escape(selectedCommentId)
+    const markEl = container.querySelector(`[data-comment-id="${escaped}"]`)
+    if (markEl) {
+      markEl.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      return
+    }
+    let nodeId: string | null = null
+    for (const [candidateNodeId, commentId] of commentIdByNodeId) {
+      if (commentId === selectedCommentId) {
+        nodeId = candidateNodeId
+        break
+      }
+    }
+    if (!nodeId) return
+    container
+      .querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [selectedCommentId, commentIdByNodeId])
+
+  function resolveCommentIdAt(target: HTMLElement): string | null {
+    const markEl = target.closest('[data-comment-id]')
+    if (markEl) return markEl.getAttribute('data-comment-id')
+    const clipEl = target.closest('[data-node-id]')
+    const nodeId = clipEl?.getAttribute('data-node-id')
+    return nodeId ? (commentIdByNodeId.get(nodeId) ?? null) : null
+  }
+
+  function handleContentMouseOver(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement
+    const commentId = resolveCommentIdAt(target)
+    hoverComment(commentId)
+    if (!commentId) {
+      setHoverPreview(null)
+      return
+    }
+    const el = target.closest('[data-comment-id],[data-node-id]')
+    if (el) setHoverPreview({ commentId, rect: el.getBoundingClientRect() })
+  }
+
+  function handleContentMouseLeave() {
+    hoverComment(null)
+    setHoverPreview(null)
+  }
 
   async function submitCommentDraft() {
     if (!editor || !commentDraft) return
@@ -438,6 +587,20 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
       onClick: () => editor?.chain().focus().toggleItalic().run(),
     },
     {
+      id: 'underline',
+      icon: UnderlineIcon,
+      label: 'Underline',
+      active: formattingState.underline,
+      onClick: () => editor?.chain().focus().toggleUnderline().run(),
+    },
+    {
+      id: 'strike',
+      icon: StrikeIcon,
+      label: 'Strikethrough',
+      active: formattingState.strike,
+      onClick: () => editor?.chain().focus().toggleStrike().run(),
+    },
+    {
       id: 'h1',
       icon: Heading1Icon,
       label: 'Heading 1',
@@ -452,6 +615,13 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
       onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
     },
     {
+      id: 'h3',
+      icon: Heading3Icon,
+      label: 'Heading 3',
+      active: formattingState.h3,
+      onClick: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(),
+    },
+    {
       id: 'bulletList',
       icon: BulletListIcon,
       label: 'Bullet list',
@@ -464,21 +634,17 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   // E6's shared popup, reusing the same `useCommentsStore` selection state
   // `CommentsPanel` already renders for transcript comments (decision: one
   // shared comments UI for both contexts).
-  function handleContentClick(event: React.MouseEvent<HTMLDivElement>) {
-    const target = (event.target as HTMLElement).closest('[data-comment-id]')
-    const commentId = target?.getAttribute('data-comment-id')
+  //
+  // Bound to `mousedown`, not `click`: the insert-marker's `selectionUpdate`
+  // listener above reacts to ProseMirror's own selection change — which PM
+  // applies on mousedown, before mouseup — by redrawing decorations, which
+  // splits the very mark span the pointer is down on into multiple DOM
+  // nodes. That mid-gesture DOM swap makes the browser's native `click`
+  // synthesis unreliable (it can require a second click to "take"), so this
+  // reads `event.target` on mousedown instead, before any of that happens.
+  function handleContentMouseDown(event: React.MouseEvent<HTMLDivElement>) {
+    const commentId = resolveCommentIdAt(event.target as HTMLElement)
     if (commentId) selectComment(commentId)
-  }
-
-  // Renames on blur, sharing this same version-tracking with content saves —
-  // splitting title/content into separately-versioned mutations would let one
-  // silently invalidate the other's `expected_version`.
-  function saveTitle() {
-    if (!initialized || title === doc?.title) return
-    updateDocument.mutate(
-      { title, expectedVersion: versionRef.current },
-      { onSuccess: (updated) => (versionRef.current = updated.version) },
-    )
   }
 
   // Insert a queued clip once there's an initialized editor to receive it —
@@ -535,22 +701,15 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
   }
 
   if (isLoading || !editor) {
-    return <div className="p-6 text-center text-sm text-slate-400">Loading document…</div>
+    return <div className="p-6 text-center text-body text-text-muted">Loading document…</div>
   }
 
   return (
     <div className="flex h-full flex-col">
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={saveTitle}
-        aria-label="Document title"
-        className="border-b border-slate-200 px-4 py-3 text-sm font-medium text-slate-800 focus:outline-none"
-      />
       {/* Fixed above the document (not floating) — formatting applies from
           wherever the cursor is, so it doesn't need a selection to show,
           unlike the contextual BubbleMenu below. */}
-      <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-3 py-1.5">
+      <div className="flex items-center gap-1 border-b border-border bg-surface px-3 py-1.5">
         {formattingActions.map((action) => {
           const Icon = action.icon
           return (
@@ -561,8 +720,8 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
               title={action.label}
               aria-pressed={action.active}
               onClick={action.onClick}
-              className={`rounded p-1.5 hover:bg-slate-100 ${
-                action.active ? 'bg-slate-200 text-slate-800' : 'text-slate-500'
+              className={`rounded-md p-1.5 hover:bg-surface-raised ${
+                action.active ? 'bg-brand-subtle text-brand-text' : 'text-text-muted'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -571,28 +730,61 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
         })}
       </div>
       {isDocumentConflict(updateDocument.error) && (
-        <div className="flex items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <div className="flex items-center gap-3 border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
           <span>This document was edited by someone else. Your change was not saved.</span>
           <button
             type="button"
             onClick={reloadAfterConflict}
-            className="ml-auto rounded bg-red-600 px-2 py-1 font-medium text-white hover:bg-red-500"
+            className="ml-auto rounded-md bg-danger px-2 py-1 font-medium text-text-inverted hover:opacity-90"
           >
             Reload
           </button>
         </div>
       )}
       {updateDocument.isError && !isDocumentConflict(updateDocument.error) && (
-        <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <div className="border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
           Your last change could not be saved. Check your connection and permissions, then try
           again.
         </div>
       )}
-      <DocumentCommentsContext.Provider value={{ clipCommentStatus }}>
-        {/* A gray backdrop behind a bounded white "page" (rather than the
+      <DocumentCommentsContext.Provider value={{ clipCommentStatus, highlightedNodeId }}>
+        {/* A recessed backdrop behind a bounded "page" (rather than the
             editor just filling the panel edge-to-edge) is what actually
             reads as "a document" instead of plain panel content. */}
-        <div className="relative flex-1 overflow-y-auto bg-slate-100" onClick={handleContentClick}>
+        <div
+          ref={contentRef}
+          className="relative flex-1 overflow-y-auto bg-page"
+          onMouseDown={handleContentMouseDown}
+          onMouseOver={handleContentMouseOver}
+          onMouseLeave={handleContentMouseLeave}
+        >
+          {showHoverPreview &&
+            hoverPreview &&
+            (() => {
+              const comment = (comments ?? []).find((c) => c.id === hoverPreview.commentId)
+              if (!comment) return null
+              const enoughRoomAbove = hoverPreview.rect.top > 56
+              // Same success/warning split as the underline itself
+              // (`commentResolvedDecoration`) — the hover box should read as
+              // "the same thing, zoomed in", not an unrelated neutral popup.
+              const accentClass = comment.resolved
+                ? 'border-success bg-success-subtle text-success-text'
+                : 'border-warning bg-warning-subtle text-warning-text'
+              return createPortal(
+                <div
+                  role="tooltip"
+                  className={`fixed z-50 max-w-xs rounded-md border px-3 py-2 text-small shadow-lg ${accentClass}`}
+                  style={{
+                    left: Math.max(8, hoverPreview.rect.left),
+                    top: enoughRoomAbove ? hoverPreview.rect.top - 8 : hoverPreview.rect.bottom + 8,
+                    transform: enoughRoomAbove ? 'translateY(-100%)' : undefined,
+                  }}
+                >
+                  {comment.text}
+                </div>,
+                document.body,
+              )
+            })()}
           <BubbleMenu
             editor={editor}
             shouldShow={shouldShowBubble}
@@ -603,7 +795,7 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
             // of the screen (the panel sits flush against it).
             options={{ strategy: 'fixed', shift: { padding: 8 } }}
             appendTo={() => document.body}
-            className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+            className="overflow-hidden rounded-md border border-border bg-surface shadow-lg"
           >
             {commentDraft ? (
               <SelectionToolbar
@@ -615,8 +807,8 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
                   onChange: setCommentDraftText,
                   onConfirm: () => void submitCommentDraft(),
                   onCancel: () => setCommentDraft(null),
-                  accentClass: 'border-violet-100 bg-violet-50',
-                  inputAccentClass: 'border-violet-400',
+                  accentClass: 'border-warning-subtle bg-warning-subtle',
+                  inputAccentClass: 'border-warning',
                 }}
               />
             ) : (
@@ -640,9 +832,34 @@ export function DocumentEditor({ projectId, documentId }: DocumentEditorProps) {
               )
             )}
           </BubbleMenu>
-          <div className="mx-auto max-w-2xl px-4 py-6">
-            <div className="rounded-md border border-slate-200 bg-white px-8 py-8 shadow-sm">
-              <EditorContent editor={editor} className="prose prose-sm max-w-none" />
+          <div
+            className={
+              variant === 'fullscreen'
+                ? 'mx-auto flex min-h-full max-w-[840px] flex-col px-6 py-10'
+                : 'mx-auto max-w-2xl px-4 py-6'
+            }
+          >
+            <div
+              className={
+                variant === 'fullscreen'
+                  ? 'flex-1 rounded-md border border-border bg-surface px-16 py-16 shadow-sm'
+                  : 'rounded-md border border-border bg-surface px-8 py-8 shadow-sm'
+              }
+            >
+              <EditorContent
+                editor={editor}
+                // `@tailwindcss/typography`'s default prose line-height (1.75
+                // base / ~1.71 for `prose-sm`) reads fine for long-form
+                // marketing copy but is noticeably loose for an editable
+                // document — `leading-normal` tightens it back to a more
+                // typical editor line spacing without touching `.prose`
+                // globally (which `ChatMessageList` also renders through).
+                className={
+                  variant === 'fullscreen'
+                    ? 'prose max-w-none leading-normal'
+                    : 'prose prose-sm max-w-none leading-normal'
+                }
+              />
             </div>
           </div>
         </div>

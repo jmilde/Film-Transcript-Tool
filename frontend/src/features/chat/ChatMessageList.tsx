@@ -21,13 +21,13 @@ interface ChatMessageListProps {
  * available (what the agent is doing right now), otherwise just bouncing dots. */
 function TypingBubble({ statusMessage }: { statusMessage?: string | null }) {
   return (
-    <div className="max-w-lg text-sm text-slate-800" aria-label="Assistant is answering">
-      <span className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2">
-        {statusMessage && <span className="text-slate-500 italic">{statusMessage}</span>}
+    <div className="max-w-lg text-body text-text" aria-label="Assistant is answering">
+      <span className="inline-flex items-center gap-2 rounded-lg bg-surface-raised px-3 py-2">
+        {statusMessage && <span className="text-text-muted italic">{statusMessage}</span>}
         <span className="inline-flex items-center gap-1">
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.3s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.15s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted" />
         </span>
       </span>
     </div>
@@ -93,19 +93,19 @@ export function ChatMessageList({
       {messages.map((message) =>
         message.role === 'user' ? (
           <div key={message.id} className="text-right">
-            <span className="inline-block max-w-lg rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
+            <span className="inline-block max-w-lg rounded-lg bg-brand px-3 py-2 text-body text-text-inverted">
               {message.content}
             </span>
           </div>
         ) : (
-          <div key={message.id} className="max-w-lg space-y-1 text-sm text-slate-800">
+          <div key={message.id} className="max-w-lg space-y-1 text-body text-text">
             {renderAnswer(message.content, message.citations, onSelectCitation)}
           </div>
         ),
       )}
       {pendingQuestion && (
         <div className="text-right">
-          <span className="inline-block max-w-lg rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
+          <span className="inline-block max-w-lg rounded-lg bg-brand px-3 py-2 text-body text-text-inverted">
             {pendingQuestion}
           </span>
         </div>

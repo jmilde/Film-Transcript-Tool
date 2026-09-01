@@ -71,7 +71,8 @@ describe('TranslationControl', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Translations/ }))
     await userEvent.click(screen.getByRole('button', { name: '+ Add translation' }))
-    await userEvent.selectOptions(screen.getByLabelText('Target language'), 'es')
+    await userEvent.click(screen.getByRole('combobox', { name: 'Target language' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Spanish' }))
     await userEvent.click(screen.getByRole('button', { name: 'Translate' }))
 
     expect(await screen.findByText('Translating…')).toBeInTheDocument()
@@ -106,7 +107,8 @@ describe('TranslationControl', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Translations/ }))
     await userEvent.click(screen.getByRole('button', { name: '+ Add translation' }))
-    await userEvent.selectOptions(screen.getByLabelText('Target language'), 'es')
+    await userEvent.click(screen.getByRole('combobox', { name: 'Target language' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Spanish' }))
     await userEvent.click(screen.getByRole('button', { name: 'Translate' }))
 
     expect(await screen.findByText('Translation failed.')).toBeInTheDocument()

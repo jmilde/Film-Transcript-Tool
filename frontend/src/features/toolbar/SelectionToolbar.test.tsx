@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { SelectionToolbar } from './SelectionToolbar'
-import { PlayIcon, TrashIcon } from '../../components/icons'
+import { Play, Trash2 } from 'lucide-react'
 import type { ToolbarAction } from './SelectionToolbar'
 
 describe('SelectionToolbar', () => {
@@ -10,8 +10,8 @@ describe('SelectionToolbar', () => {
     const onPlay = vi.fn()
     const onDelete = vi.fn()
     const actions: ToolbarAction[] = [
-      { id: 'play', icon: PlayIcon, label: 'Play selection', variant: 'primary', onClick: onPlay },
-      { id: 'delete', icon: TrashIcon, label: 'Delete', variant: 'danger', onClick: onDelete },
+      { id: 'play', icon: Play, label: 'Play selection', variant: 'primary', onClick: onPlay },
+      { id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger', onClick: onDelete },
     ]
     render(
       <SelectionToolbar

@@ -85,6 +85,7 @@ def test_create_list_and_get_document(
     listed = auth_client.get(f"/projects/{project.id}/documents").json()
     assert len(listed) == 1
     assert listed[0]["id"] == body["id"]
+    assert listed[0]["version"] == 1
     assert "content" not in listed[0]
 
     fetched = auth_client.get(f"/documents/{body['id']}")

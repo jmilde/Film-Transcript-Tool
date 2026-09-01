@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -195,3 +195,16 @@ def update(
         db.commit()
         db.refresh(comment)
     return _comment_read(db, comment)
+
+
+@router.delete("/comments/{comment_id}", status_code=204)
+def delete(
+    comment: Comment = Depends(require_comment_access),
+    db: Session = Depends(get_db),
+) -> Response:
+    # `CommentRange`/`DocumentCommentAnchor`/`CommentReply` all carry an
+    # `ondelete="CASCADE"` foreign key onto `comments.id`, so deleting the
+    # comment row is enough for Postgres to clean up its anchor and replies.
+    db.delete(comment)
+    db.commit()
+    return Response(status_code=204)

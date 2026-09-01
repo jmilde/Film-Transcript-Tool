@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react'
+import { Input } from '../../components/ui/Input'
+import { Button } from '../../components/ui/Button'
 
 interface ChatInputProps {
   isPending: boolean
@@ -19,21 +21,17 @@ export function ChatInput({ isPending, onSubmit }: ChatInputProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex items-center gap-2">
-      <input
+      <Input
         autoFocus
         value={value}
         onChange={(e) => setValue(e.target.value)}
         disabled={isPending}
         placeholder="Ask about this project's videos…"
-        className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+        className="w-full"
       />
-      <button
-        type="submit"
-        disabled={isPending || !value.trim()}
-        className="shrink-0 rounded bg-slate-800 px-3 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
-      >
+      <Button type="submit" disabled={isPending || !value.trim()} className="shrink-0">
         {isPending ? 'Thinking…' : 'Send'}
-      </button>
+      </Button>
     </form>
   )
 }

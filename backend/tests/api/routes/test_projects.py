@@ -1,8 +1,11 @@
 import uuid
 from collections.abc import Callable
 
+from app.models.document import Document
+from app.models.folder import Folder
 from app.models.membership import MembershipRole, ProjectMembership
 from app.models.user import User
+from app.models.video import Video
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -17,6 +20,53 @@ def test_create_project(auth_client: TestClient) -> None:
     assert body["archived_at"] is None
     assert body["my_role"] == "owner"
     assert uuid.UUID(body["id"])
+    assert body["video_count"] == 0
+    assert body["member_count"] == 1
+    assert body["document_count"] == 0
+
+
+def test_project_counts_reflect_videos_members_documents(
+    auth_client: TestClient,
+    user: User,
+    other_user: User,
+    db_session: Session,
+) -> None:
+    pid = auth_client.post("/projects", json={"name": "P"}).json()["id"]
+    project_id = uuid.UUID(pid)
+    folder = Folder(project_id=project_id, name="F", created_by=user.id, updated_by=user.id)
+    db_session.add(folder)
+    db_session.flush()
+    db_session.add(
+        Video(
+            folder_id=folder.id,
+            project_id=project_id,
+            name="V",
+            original_filename="v.mp4",
+            created_by=user.id,
+            updated_by=user.id,
+        )
+    )
+    db_session.add(
+        Document(
+            project_id=project_id,
+            title="D",
+            content={"type": "doc", "content": []},
+            created_by=user.id,
+            updated_by=user.id,
+        )
+    )
+    db_session.add(
+        ProjectMembership(project_id=project_id, user_id=other_user.id, role=MembershipRole.VIEWER)
+    )
+    db_session.flush()
+
+    resp = auth_client.get(f"/projects/{pid}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["video_count"] == 1
+    assert body["member_count"] == 2
+    assert body["document_count"] == 1
 
 
 def test_list_projects_only_members(

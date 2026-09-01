@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -7,15 +7,69 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { AppShell } from './AppShell'
 import { AuthProvider } from '../auth/AuthProvider'
 import { useDocumentPanelStore } from '../store/documentPanel'
+import { useSearchOverlayStore } from '../store/searchOverlay'
+import { useThemeStore } from '../store/theme'
 import { server } from '../test/server'
 
 const PROJECT_ID = 'p-1'
+const VIDEO_ID = 'v-1'
+const DOCUMENT_ID = 'd-1'
 
 function PageA() {
   return <div>Page A</div>
 }
 function PageB() {
   return <div>Page B</div>
+}
+
+function projectHandler() {
+  return http.get(`http://localhost:8000/projects/${PROJECT_ID}`, () =>
+    HttpResponse.json({
+      id: PROJECT_ID,
+      name: 'Documentary One',
+      description: null,
+      archived_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      my_role: 'editor',
+    }),
+  )
+}
+
+function videoHandler() {
+  return http.get(`http://localhost:8000/videos/${VIDEO_ID}`, () =>
+    HttpResponse.json({
+      id: VIDEO_ID,
+      folder_id: 'f-1',
+      project_id: PROJECT_ID,
+      name: 'Clip.mp4',
+      original_filename: 'clip.mp4',
+      folder_path: [
+        { id: 'f-season1', name: 'Season 1' },
+        { id: 'f-interviews', name: 'Interviews' },
+      ],
+      duration: null,
+      frame_rate: null,
+      width: null,
+      height: null,
+      assets: [],
+      jobs: [],
+    }),
+  )
+}
+
+function documentHandler() {
+  return http.get(`http://localhost:8000/documents/${DOCUMENT_ID}`, () =>
+    HttpResponse.json({
+      id: DOCUMENT_ID,
+      project_id: PROJECT_ID,
+      title: 'Narration',
+      content: { type: 'doc', content: [] },
+      version: 1,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }),
+  )
 }
 
 beforeEach(() => {
@@ -25,12 +79,16 @@ beforeEach(() => {
     activeDocumentId: null,
     pendingInsert: null,
   })
+  useSearchOverlayStore.setState({ isOpen: false, query: '' })
+  useThemeStore.setState({ isDark: false })
+  document.documentElement.classList.remove('dark')
+  localStorage.clear()
   server.use(
     http.get(`http://localhost:8000/projects/${PROJECT_ID}/documents`, () => HttpResponse.json([])),
   )
 })
 
-function renderShell() {
+function renderShell(initialPath = '/a') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
@@ -39,10 +97,16 @@ function renderShell() {
         children: [
           { path: 'a', element: <PageA /> },
           { path: 'b', element: <PageB /> },
+          { path: 'projects/:projectId', element: <PageA /> },
+          { path: 'projects/:projectId/x', element: <PageA /> },
+          { path: 'projects/:projectId/y', element: <PageB /> },
+          { path: 'projects/:projectId/chat', element: <PageA /> },
+          { path: 'videos/:videoId', element: <PageA /> },
+          { path: 'projects/:projectId/documents/:documentId', element: <PageA /> },
         ],
       },
     ],
-    { initialEntries: ['/a'] },
+    { initialEntries: [initialPath] },
   )
   return {
     router,
@@ -57,18 +121,151 @@ function renderShell() {
 }
 
 describe('AppShell', () => {
+  it('links the app title back to the projects list', async () => {
+    server.use(projectHandler())
+    renderShell(`/projects/${PROJECT_ID}`)
+    await screen.findByText('Documentary One')
+
+    expect(screen.getByRole('link', { name: 'Film Transcript Tool' })).toHaveAttribute('href', '/')
+  })
+
+
   it('keeps the document panel open across a route change', async () => {
+    server.use(projectHandler())
     useDocumentPanelStore.setState({ activeProjectId: PROJECT_ID })
-    const { router } = renderShell()
+    const { router } = renderShell(`/projects/${PROJECT_ID}/x`)
 
     await userEvent.click(screen.getByRole('button', { name: 'Open document panel' }))
     expect(useDocumentPanelStore.getState().isOpen).toBe(true)
     expect(screen.getByText('Page A')).toBeInTheDocument()
 
-    await router.navigate('/b')
+    await router.navigate(`/projects/${PROJECT_ID}/y`)
 
     expect(await screen.findByText('Page B')).toBeInTheDocument()
     expect(useDocumentPanelStore.getState().isOpen).toBe(true)
     expect(screen.getByRole('button', { name: 'Close document panel' })).toBeInTheDocument()
+  })
+
+  it('hides the document panel entirely when no project is in scope', () => {
+    renderShell('/a')
+
+    expect(screen.queryByRole('button', { name: 'Open document panel' })).not.toBeInTheDocument()
+  })
+
+  it('hides the document panel on the fullscreen document route', async () => {
+    server.use(projectHandler(), documentHandler())
+    renderShell(`/projects/${PROJECT_ID}/documents/${DOCUMENT_ID}`)
+
+    await screen.findByText('Documentary One')
+    expect(screen.queryByRole('button', { name: 'Open document panel' })).not.toBeInTheDocument()
+  })
+
+  it('renders just the project crumb on a project-only route', async () => {
+    server.use(projectHandler())
+    renderShell(`/projects/${PROJECT_ID}`)
+
+    expect(await screen.findByText('Documentary One')).toBeInTheDocument()
+    // The lone crumb is the current page, so it's plain text, not a link.
+    expect(screen.queryByRole('link', { name: 'Documentary One' })).not.toBeInTheDocument()
+  })
+
+  it('renders the full Project > Folder > ... > Video trail on a video route', async () => {
+    server.use(projectHandler(), videoHandler())
+    renderShell(`/videos/${VIDEO_ID}`)
+
+    const projectLink = await screen.findByRole('link', { name: 'Documentary One' })
+    expect(projectLink).toHaveAttribute('href', `/projects/${PROJECT_ID}`)
+    // Each ancestor folder is its own link into ProjectView's folder route,
+    // not just a plain label — this is what makes the crumb navigable into
+    // subfolders instead of a dead end.
+    expect(screen.getByRole('link', { name: 'Season 1' })).toHaveAttribute(
+      'href',
+      `/projects/${PROJECT_ID}/folders/f-season1`,
+    )
+    expect(screen.getByRole('link', { name: 'Interviews' })).toHaveAttribute(
+      'href',
+      `/projects/${PROJECT_ID}/folders/f-interviews`,
+    )
+    expect(screen.getByText('Clip.mp4')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Clip.mp4' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the project crumb clickable on the chat route, unlike a plain last-item crumb', async () => {
+    server.use(projectHandler())
+    renderShell(`/projects/${PROJECT_ID}/chat`)
+
+    const projectLink = await screen.findByRole('link', { name: 'Documentary One' })
+    expect(projectLink).toHaveAttribute('href', `/projects/${PROJECT_ID}`)
+    expect(within(screen.getByRole('navigation')).getByText('Ask')).toBeInTheDocument()
+  })
+
+  it('keeps the project crumb clickable on the fullscreen document route, showing the document title', async () => {
+    server.use(projectHandler(), documentHandler())
+    renderShell(`/projects/${PROJECT_ID}/documents/${DOCUMENT_ID}`)
+
+    const projectLink = await screen.findByRole('link', { name: 'Documentary One' })
+    expect(projectLink).toHaveAttribute('href', `/projects/${PROJECT_ID}`)
+    expect(within(screen.getByRole('navigation')).getByText('Narration')).toBeInTheDocument()
+  })
+
+  it('opens the search palette from the header Search trigger', async () => {
+    server.use(projectHandler())
+    renderShell(`/projects/${PROJECT_ID}`)
+    await screen.findByText('Documentary One')
+
+    await userEvent.click(screen.getByRole('button', { name: /Search/ }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText('Search transcripts, speakers, comments…'),
+    ).toBeInTheDocument()
+  })
+
+  it('opens the search palette with ⌘F from a non-project-URL route (video)', async () => {
+    server.use(projectHandler(), videoHandler())
+    renderShell(`/videos/${VIDEO_ID}`)
+    await screen.findByText('Documentary One')
+
+    await userEvent.keyboard('{Meta>}f{/Meta}')
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('disables Search and Ask when no project is in scope', async () => {
+    renderShell('/a')
+
+    expect(screen.getByRole('button', { name: /Search/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled()
+  })
+
+  it('navigates to the chat page via the Ask button', async () => {
+    server.use(projectHandler())
+    const { router } = renderShell(`/projects/${PROJECT_ID}`)
+    await screen.findByText('Documentary One')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/chat`))
+  })
+
+  it('toggles the dark class and persists it across a remount', async () => {
+    renderShell('/a')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle theme' }))
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(useThemeStore.getState().isDark).toBe(true)
+
+    // Simulate a fresh page load, where the DOM starts without `.dark` and
+    // the persisted choice hasn't been re-applied yet. `setState` itself
+    // would re-persist `false` and defeat the point of this test, so restore
+    // the "on-disk" value directly afterward — this is exactly what the
+    // persist middleware rehydrates from on a real module init.
+    document.documentElement.classList.remove('dark')
+    useThemeStore.setState({ isDark: false })
+    localStorage.setItem('theme', JSON.stringify({ state: { isDark: true }, version: 0 }))
+    await useThemeStore.persist.rehydrate()
+
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(useThemeStore.getState().isDark).toBe(true)
   })
 })

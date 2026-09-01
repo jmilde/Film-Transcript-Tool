@@ -1,4 +1,5 @@
 import { useChatConversations } from '../../api/hooks/useChat'
+import { Button } from '../../components/ui/Button'
 
 interface ChatHistorySidebarProps {
   projectId: string
@@ -17,14 +18,10 @@ export function ChatHistorySidebar({
   const { data: conversations } = useChatConversations(projectId)
 
   return (
-    <div className="flex w-56 shrink-0 flex-col border-r border-slate-200 pr-3">
-      <button
-        type="button"
-        onClick={onNewChat}
-        className="mb-2 rounded border border-slate-300 px-2 py-1.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-      >
+    <div className="flex w-56 shrink-0 flex-col border-r border-border pr-3">
+      <Button variant="secondary" size="sm" onClick={onNewChat} className="mb-2 justify-start">
         + New chat
-      </button>
+      </Button>
       <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
         {conversations && conversations.length > 0 ? (
           conversations.map((conversation) => (
@@ -32,10 +29,10 @@ export function ChatHistorySidebar({
               <button
                 type="button"
                 onClick={() => onSelect(conversation.id)}
-                className={`block w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-slate-50 ${
+                className={`block w-full truncate rounded-md px-2 py-1.5 text-left text-body hover:bg-surface-raised ${
                   conversation.id === activeConversationId
-                    ? 'bg-slate-100 font-medium text-slate-900'
-                    : 'text-slate-600'
+                    ? 'bg-brand-subtle font-medium text-text'
+                    : 'text-text-muted'
                 }`}
               >
                 {conversation.title ?? 'Untitled conversation'}
@@ -43,7 +40,7 @@ export function ChatHistorySidebar({
             </li>
           ))
         ) : (
-          <li className="px-2 py-1.5 text-sm text-slate-400">No conversations yet.</li>
+          <li className="px-2 py-1.5 text-small text-text-muted">No conversations yet.</li>
         )}
       </ul>
     </div>

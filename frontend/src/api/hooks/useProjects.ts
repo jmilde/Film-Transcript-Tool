@@ -27,7 +27,12 @@ export function useProject(projectId: string | undefined) {
 export function useCreateProject() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async (name: string) => unwrap(await api.POST('/projects', { body: { name } })),
+    mutationFn: async (input: { name: string; description?: string }) =>
+      unwrap(
+        await api.POST('/projects', {
+          body: { name: input.name, description: input.description || null },
+        }),
+      ),
     onSuccess: () => client.invalidateQueries({ queryKey: ['projects'] }),
   })
 }

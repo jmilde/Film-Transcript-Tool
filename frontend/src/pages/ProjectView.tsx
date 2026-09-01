@@ -1,11 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useProject } from '../api/hooks/useProjects'
 import { useCreateFolder } from '../api/hooks/useFolders'
 import { FolderTree } from '../features/folders/FolderTree'
 import { FolderPanel } from '../features/folders/FolderPanel'
 import { MembersPanel } from '../features/members/MembersPanel'
 import { useDocumentPanelStore } from '../store/documentPanel'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Dialog, DialogContent, DialogTrigger } from '../components/ui/Dialog'
+import { FileText as DocumentIcon, Plus as PlusIcon, Video as VideoIcon } from 'lucide-react'
 
 export function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -15,64 +19,52 @@ export function ProjectView() {
 
 function ProjectViewInner({ projectId }: { projectId: string }) {
   const { data: project, isPending, isError } = useProject(projectId)
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  // The selected folder lives in the URL (not local state) so it's
+  // shareable/bookmarkable and each ancestor in a video's breadcrumb
+  // (AppShell) can link straight back to that folder here.
+  const { folderId: selectedFolderId = null } = useParams<{ folderId?: string }>()
   const navigate = useNavigate()
+  function selectFolder(folderId: string | null) {
+    void navigate(
+      folderId ? `/projects/${projectId}/folders/${folderId}` : `/projects/${projectId}`,
+    )
+  }
 
   const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
   useEffect(() => setActiveProject(projectId), [projectId, setActiveProject])
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-        e.preventDefault()
-        void navigate(`/projects/${projectId}/search`)
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [navigate, projectId])
-
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link to="/" className="text-sm text-slate-500 hover:underline">
-            ← Projects
-          </Link>
-          {isPending && <p className="mt-2 text-slate-500">Loading project…</p>}
-          {isError && <p className="mt-2 text-red-600">Could not load this project.</p>}
-          {project && (
-            <>
-              <h2 className="mt-1 text-xl font-semibold text-slate-800">{project.name}</h2>
-              {project.description && (
-                <p className="text-sm text-slate-500">{project.description}</p>
-              )}
-            </>
-          )}
+      {isPending && <p className="text-text-muted">Loading project…</p>}
+      {isError && <p className="text-danger-text">Could not load this project.</p>}
+      {project && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-h2 text-text">{project.name}</h2>
+            {project.description && (
+              <p className="mt-0.5 truncate text-small text-text-muted">{project.description}</p>
+            )}
+            <div className="mt-2 flex items-center gap-4 text-small text-text-muted">
+              <span className="flex items-center gap-1.5">
+                <VideoIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                {project.video_count} videos
+              </span>
+              <span className="flex items-center gap-1.5">
+                <DocumentIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                {project.document_count} documents
+              </span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <MembersPanel projectId={projectId} myRole={project.my_role} />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {project && <MembersPanel projectId={projectId} myRole={project.my_role} />}
-          <button
-            type="button"
-            onClick={() => void navigate(`/projects/${projectId}/chat`)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
-          >
-            Ask
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate(`/projects/${projectId}/search`)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
-          >
-            Search <span className="text-slate-400">⌘F</span>
-          </button>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[16rem_1fr]">
-        <aside className="rounded-lg border border-slate-200 bg-white p-3">
+        <aside className="rounded-md border border-border bg-surface p-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            <span className="text-small font-medium tracking-wide text-text-muted uppercase">
               Folders
             </span>
             <NewFolder projectId={projectId} parentFolderId={selectedFolderId} />
@@ -80,12 +72,12 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
           <FolderTree
             projectId={projectId}
             selectedFolderId={selectedFolderId}
-            onSelect={setSelectedFolderId}
+            onSelect={selectFolder}
           />
         </aside>
 
         <section>
-          <FolderPanel folderId={selectedFolderId} onSelectFolder={setSelectedFolderId} />
+          <FolderPanel folderId={selectedFolderId} onSelectFolder={selectFolder} />
         </section>
       </div>
     </div>
@@ -118,31 +110,32 @@ function NewFolder({
     setOpen(false)
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        aria-label="New folder"
-        onClick={() => setOpen(true)}
-        className="rounded px-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-      >
-        +
-      </button>
-    )
-  }
-
   return (
-    <form onSubmit={onSubmit} className="flex gap-1">
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Name"
-        className="w-24 rounded border border-slate-300 px-1.5 py-0.5 text-sm"
-      />
-      <button type="submit" disabled={createFolder.isPending} className="text-sm text-slate-700">
-        Add
-      </button>
-    </form>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label="New folder">
+          <PlusIcon className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent title="New folder">
+        <form onSubmit={onSubmit} className="space-y-3">
+          <Input
+            autoFocus
+            aria-label="Folder name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Folder name"
+            className="w-full"
+          />
+          <Button
+            type="submit"
+            disabled={!name.trim() || createFolder.isPending}
+            className="w-full"
+          >
+            {createFolder.isPending ? 'Creating…' : 'Create'}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

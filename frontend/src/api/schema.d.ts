@@ -494,7 +494,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete */
+        delete: operations["delete_comments__comment_id__delete"];
         options?: never;
         head?: never;
         /** Update */
@@ -1051,6 +1052,10 @@ export interface components {
         /**
          * DocumentSummary
          * @description List-view shape — no ``content``, keeping the panel's document switcher cheap.
+         *
+         *     ``version`` lets the frontend rename a document (a title-only PATCH, which
+         *     still requires ``expected_version``) straight from a tab-bar list entry,
+         *     without first loading that document's full content.
          */
         DocumentSummary: {
             /**
@@ -1060,6 +1065,8 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /** Version */
+            version: number;
             /**
              * Updated At
              * Format: date-time
@@ -1120,6 +1127,16 @@ export interface components {
          * @enum {string}
          */
         ExportType: "markdown" | "srt";
+        /** FolderBreadcrumbRead */
+        FolderBreadcrumbRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** FolderContents */
         FolderContents: {
             folder: components["schemas"]["FolderRead"];
@@ -1284,6 +1301,12 @@ export interface components {
              */
             updated_at: string;
             my_role: components["schemas"]["MembershipRole"];
+            /** Video Count */
+            video_count: number;
+            /** Member Count */
+            member_count: number;
+            /** Document Count */
+            document_count: number;
         };
         /** ProjectUpdate */
         ProjectUpdate: {
@@ -1625,6 +1648,8 @@ export interface components {
             assets: components["schemas"]["VideoAssetRead"][];
             /** Jobs */
             jobs: components["schemas"]["VideoJobRead"][];
+            /** Folder Path */
+            folder_path: components["schemas"]["FolderBreadcrumbRead"][];
         };
         /** VideoSummary */
         VideoSummary: {
@@ -2770,6 +2795,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CommentRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_comments__comment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

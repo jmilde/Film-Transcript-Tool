@@ -51,12 +51,29 @@ describe('ClipBlockView', () => {
 
     rerender(
       <DocumentCommentsContext.Provider
-        value={{ clipCommentStatus: new Map([['n-1', { resolved: false }]]) }}
+        value={{
+          clipCommentStatus: new Map([['n-1', { resolved: false }]]),
+          highlightedNodeId: null,
+        }}
       >
         <ClipBlockView {...makeProps()} />
       </DocumentCommentsContext.Provider>,
     )
 
     expect(screen.getByText('hello there').className).toContain('underline')
+  })
+
+  it('gains a highlight ring/tint when its comment is hovered or selected', () => {
+    render(
+      <DocumentCommentsContext.Provider
+        value={{ clipCommentStatus: new Map(), highlightedNodeId: 'n-1' }}
+      >
+        <ClipBlockView {...makeProps()} />
+      </DocumentCommentsContext.Provider>,
+    )
+
+    const span = screen.getByText('hello there')
+    expect(span.className).toContain('ring-1')
+    expect(span.className).toContain('bg-brand-subtle')
   })
 })

@@ -7,6 +7,11 @@ export interface ClipCommentStatus {
 export interface DocumentCommentsContextValue {
   /** Keyed by a clipBlock node's stable `nodeId`; absent means no comment. */
   clipCommentStatus: Map<string, ClipCommentStatus>
+  /** The clip node (if any) whose comment is currently hovered/selected —
+   * mirrors `commentHighlightDecoration.ts`'s text-mark highlight, just via
+   * context instead of a PM decoration since clip blocks render as React
+   * node views, not marks. */
+  highlightedNodeId: string | null
 }
 
 /**
@@ -20,6 +25,7 @@ export interface DocumentCommentsContextValue {
  */
 export const DocumentCommentsContext = createContext<DocumentCommentsContextValue>({
   clipCommentStatus: new Map(),
+  highlightedNodeId: null,
 })
 
 export function useDocumentCommentsContext(): DocumentCommentsContextValue {

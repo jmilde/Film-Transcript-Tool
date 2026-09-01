@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useVideo } from '../api/hooks/useVideos'
 import { useProject } from '../api/hooks/useProjects'
@@ -10,13 +10,15 @@ import { transcriptAnchor, useComments } from '../api/hooks/useComments'
 import { usePlaybackStore } from '../store/playback'
 import { useSelectionStore } from '../store/selection'
 import { useDocumentPanelStore } from '../store/documentPanel'
+import { useSearchOverlayStore } from '../store/searchOverlay'
 import { VideoPlayer } from '../features/player/VideoPlayer'
 import { Waveform } from '../features/player/Waveform'
 import { TranscriptViewer } from '../features/transcript/TranscriptViewer'
 import { CommentsPanel } from '../features/comments/CommentsPanel'
 import { TranslationControl } from '../features/translation/TranslationControl'
 import { ExportControl } from '../features/export/ExportControl'
-import { CloseIcon } from '../components/icons'
+import { ReturnToOrigin } from '../features/navigation/ReturnToOrigin'
+import { X as CloseIcon } from 'lucide-react'
 import type { PendingSearchNav } from '../features/search/types'
 
 export function VideoWorkspace() {
@@ -39,9 +41,11 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const resetPlayback = usePlaybackStore((s) => s.reset)
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const setSelectionRange = useSelectionStore((s) => s.setRange)
+  const navigate = useNavigate()
+  const openSearchOverlay = useSearchOverlayStore((s) => s.open)
 
-  // Set via navigate(..., { state }) when arriving from a search hit
-  // (SearchPage). Applied once below, after the transcript/comments it
+  // Set via navigate(..., { state }) when arriving from a search hit or a
+  // chat citation. Applied once below, after the transcript/comments it
   // targets have loaded.
   const location = useLocation()
   const pendingSearch = location.state as PendingSearchNav | null
@@ -156,31 +160,22 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const src = media ? proxyUrl(videoId, media.token) : undefined
 
   if (videoError) {
-    return (
-      <div className="space-y-3">
-        <Link to="/" className="text-sm text-slate-500 hover:underline">
-          ← Projects
-        </Link>
-        <p className="text-red-600">Could not load this video.</p>
-      </div>
-    )
+    return <p className="text-danger-text">Could not load this video.</p>
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="mb-3 flex items-center gap-3">
-        <Link
-          to={video ? `/projects/${video.project_id}` : '/'}
-          className="text-sm text-slate-500 hover:underline"
-        >
-          ← Projects
-        </Link>
-        {pendingSearch?.returnTo && (
-          <Link to={pendingSearch.returnTo} className="text-sm text-slate-500 hover:underline">
-            ← Back
-          </Link>
-        )}
-        <h2 className="truncate text-lg font-semibold text-slate-800">{video?.name ?? 'Video'}</h2>
+        {pendingSearch &&
+          (pendingSearch.origin === 'chat' ? (
+            <ReturnToOrigin
+              label="Back to chat"
+              onClick={() => void navigate(pendingSearch.returnTo)}
+            />
+          ) : (
+            <ReturnToOrigin label="Back to search" onClick={() => openSearchOverlay()} />
+          ))}
+        <h2 className="truncate text-h3 text-text">{video?.name ?? 'Video'}</h2>
         <div className="ml-auto flex items-center gap-2">
           <TranslationControl
             videoId={videoId}
@@ -200,13 +195,13 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
       {/* Numeric sizes are pixels in v4; strings without units are percentages. */}
       <Group
         orientation="horizontal"
-        className="flex-1 overflow-hidden rounded-lg border border-slate-200"
+        className="flex-1 overflow-hidden rounded-lg border border-border"
       >
-        <Panel defaultSize="55" minSize="30" className="bg-white">
+        <Panel defaultSize="55" minSize="30" className="bg-surface">
           {secondTranscriptId ? (
             <Group orientation="horizontal" className="h-full">
               <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
-                <div className="border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
+                <div className="border-b border-border px-4 py-1.5 text-small font-medium text-text-muted">
                   Original
                 </div>
                 <div className="min-h-0 flex-1">
@@ -222,16 +217,16 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                   />
                 </div>
               </Panel>
-              <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
+              <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
               <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-1.5 text-xs font-medium text-slate-400">
+                <div className="flex items-center justify-between border-b border-border px-4 py-1.5 text-small font-medium text-text-muted">
                   Translation ({secondTranscript?.language ?? '…'})
                   <button
                     type="button"
                     aria-label="Close translation"
                     title="Close translation"
                     onClick={() => setSecondTranscriptId(null)}
-                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    className="rounded-md p-0.5 text-text-muted hover:bg-surface-raised hover:text-text"
                   >
                     <CloseIcon className="h-3.5 w-3.5" />
                   </button>
@@ -263,13 +258,13 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
             />
           )}
         </Panel>
-        <Separator className="w-1.5 bg-slate-200 transition-colors hover:bg-slate-300" />
+        <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
         <Panel defaultSize="45" minSize="25">
           <div className="h-full space-y-3 overflow-y-auto p-4">
             {src ? (
               <VideoPlayer src={src} videoRef={videoRef} />
             ) : (
-              <div className="flex aspect-video items-center justify-center rounded bg-slate-100 text-sm text-slate-400">
+              <div className="flex aspect-video items-center justify-center rounded bg-surface-raised text-body text-text-muted">
                 Loading player…
               </div>
             )}

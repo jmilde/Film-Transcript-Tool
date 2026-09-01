@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { createMemoryRouter, RouterProvider, useParams } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
@@ -10,23 +10,12 @@ import { ProjectView } from './ProjectView'
 const PROJECT_ID = '00000000-0000-0000-0000-0000000000aa'
 const FOLDER_ID = '00000000-0000-0000-0000-0000000000f1'
 
-function SearchRouteStub() {
-  const { projectId } = useParams<{ projectId: string }>()
-  return <div>search page: {projectId}</div>
-}
-
-function ChatRouteStub() {
-  const { projectId } = useParams<{ projectId: string }>()
-  return <div>chat page: {projectId}</div>
-}
-
 function renderProjectView() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
     [
       { path: '/projects/:projectId', element: <ProjectView /> },
-      { path: '/projects/:projectId/search', element: <SearchRouteStub /> },
-      { path: '/projects/:projectId/chat', element: <ChatRouteStub /> },
+      { path: '/projects/:projectId/folders/:folderId', element: <ProjectView /> },
     ],
     { initialEntries: [`/projects/${PROJECT_ID}`] },
   )
@@ -47,7 +36,16 @@ function baseHandlers() {
         archived_at: null,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
+        my_role: 'owner',
+        video_count: 2,
+        member_count: 1,
+        document_count: 0,
       }),
+    ),
+    http.get(`http://localhost:8000/projects/${PROJECT_ID}/members`, () =>
+      HttpResponse.json([
+        { user_id: 'u1', email: 'owner@example.com', display_name: null, role: 'owner' },
+      ]),
     ),
     http.get(`http://localhost:8000/projects/${PROJECT_ID}/folders`, () =>
       HttpResponse.json([
@@ -97,33 +95,32 @@ describe('ProjectView', () => {
     expect(await screen.findByText('Clip One')).toBeInTheDocument()
   })
 
-  it('navigates to the search page with Ctrl/Cmd+F', async () => {
+  it('creates a folder via the New folder dialog', async () => {
     baseHandlers()
+    let body: unknown
+    server.use(
+      http.post(`http://localhost:8000/projects/${PROJECT_ID}/folders`, async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({
+          id: 'new-folder',
+          project_id: PROJECT_ID,
+          parent_folder_id: null,
+          name: 'B-roll',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        })
+      }),
+    )
     renderProjectView()
-    await screen.findByRole('heading', { name: 'Documentary One' })
 
-    await userEvent.keyboard('{Meta>}f{/Meta}')
+    await userEvent.click(await screen.findByRole('button', { name: 'New folder' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Folder name' }), 'B-roll')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
-    expect(await screen.findByText(`search page: ${PROJECT_ID}`)).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(body).toEqual({ name: 'B-roll', parent_folder_id: null })
   })
 
-  it('navigates to the search page via the Search button', async () => {
-    baseHandlers()
-    renderProjectView()
-    await screen.findByRole('heading', { name: 'Documentary One' })
-
-    await userEvent.click(screen.getByRole('button', { name: /Search/ }))
-
-    expect(await screen.findByText(`search page: ${PROJECT_ID}`)).toBeInTheDocument()
-  })
-
-  it('navigates to the chat page via the Ask button', async () => {
-    baseHandlers()
-    renderProjectView()
-    await screen.findByRole('heading', { name: 'Documentary One' })
-
-    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
-
-    expect(await screen.findByText(`chat page: ${PROJECT_ID}`)).toBeInTheDocument()
-  })
+  // Search (⌘F/button) and Ask now live in AppShell's global header, not this
+  // page — see AppShell.test.tsx.
 })

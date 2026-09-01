@@ -4,9 +4,9 @@ import { AppShell } from '../components/AppShell'
 import { SignIn } from '../pages/SignIn'
 import { Projects } from '../pages/Projects'
 import { ProjectView } from '../pages/ProjectView'
-import { SearchPage } from '../pages/SearchPage'
 import { ChatPage } from '../pages/ChatPage'
 import { VideoWorkspace } from '../pages/VideoWorkspace'
+import { DocumentPage } from '../pages/DocumentPage'
 
 export const router = createBrowserRouter([
   { path: '/signin', element: <SignIn /> },
@@ -18,11 +18,15 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Projects /> },
           { path: 'projects/:projectId', element: <ProjectView /> },
-          { path: 'projects/:projectId/search', element: <SearchPage /> },
+          { path: 'projects/:projectId/folders/:folderId', element: <ProjectView /> },
           { path: 'projects/:projectId/chat', element: <ChatPage /> },
           { path: 'projects/:projectId/chat/new', element: <ChatPage /> },
           { path: 'projects/:projectId/chat/:conversationId', element: <ChatPage /> },
           { path: 'videos/:videoId', element: <VideoWorkspace /> },
+          {
+            path: 'projects/:projectId/documents/:documentId',
+            element: <DocumentPage />,
+          },
         ],
       },
     ],

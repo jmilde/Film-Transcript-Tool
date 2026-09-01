@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateTranslation } from '../../api/hooks/useTranslate'
 import { useJob } from '../../api/hooks/useJobs'
-import { TranslateIcon } from '../../components/icons'
+import { Languages as TranslateIcon } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/Popover'
+import { Select } from '../../components/ui/Select'
+import { Button } from '../../components/ui/Button'
 import type { TranscriptSummary } from '../../api/hooks/useTranscripts'
 
 interface TranslationControlProps {
@@ -109,87 +112,73 @@ export function TranslationControl({
   const currentLabel = languageName(transcripts?.find((t) => t.id === secondTranscriptId)?.language)
 
   return (
-    <div className="relative text-xs">
-      <button
-        type="button"
-        onClick={() => setPanelOpen((open) => !open)}
-        className="flex items-center gap-1.5 rounded border border-slate-300 px-2 py-1 text-slate-600 hover:bg-slate-100"
+    <div className="flex items-center gap-2 text-small">
+      <Popover
+        open={panelOpen}
+        onOpenChange={(open) => {
+          setPanelOpen(open)
+          if (!open) setAddOpen(false)
+        }}
       >
-        <TranslateIcon className="h-4 w-4" />
-        {currentLabel ?? 'Translations'}
-      </button>
-
-      {translating && <span className="ml-2 text-slate-400">Translating…</span>}
-      {job?.status === 'failed' && <span className="ml-2 text-red-600">Translation failed.</span>}
-
-      {panelOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setPanelOpen(false)} />
-          <div className="absolute top-full right-0 z-50 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-            {addOpen ? (
-              <div className="space-y-2 p-2">
-                <select
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  aria-label="Target language"
-                  className="w-full rounded border border-slate-300 px-1.5 py-1"
-                >
-                  {availableLanguages.map((l) => (
-                    <option key={l.code} value={l.code}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setAddOpen(false)}
-                    className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={submitTranslation}
-                    disabled={!targetLanguage}
-                    className="rounded bg-slate-800 px-2 py-1 text-white hover:bg-slate-700 disabled:opacity-50"
-                  >
-                    Translate
-                  </button>
-                </div>
+        <PopoverTrigger asChild>
+          <Button variant="secondary" size="sm">
+            <TranslateIcon className="h-4 w-4" />
+            {currentLabel ?? 'Translations'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-56 p-0">
+          {addOpen ? (
+            <div className="space-y-2 p-2">
+              <Select
+                aria-label="Target language"
+                value={targetLanguage}
+                onValueChange={setTargetLanguage}
+                options={availableLanguages.map((l) => ({ value: l.code, label: l.name }))}
+                className="w-full"
+              />
+              <div className="flex justify-end gap-1">
+                <Button variant="secondary" size="sm" onClick={() => setAddOpen(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={submitTranslation} disabled={!targetLanguage}>
+                  Translate
+                </Button>
               </div>
-            ) : (
-              <>
-                {translations.length === 0 && (
-                  <div className="px-3 py-2 text-slate-400">No translations yet.</div>
-                )}
-                {translations.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => selectExisting(t.id)}
-                    className={`block w-full px-3 py-1.5 text-left hover:bg-slate-50 ${
-                      t.id === secondTranscriptId ? 'font-medium text-slate-900' : 'text-slate-600'
-                    }`}
-                  >
-                    {languageName(t.language) ?? t.language ?? t.id}
-                  </button>
-                ))}
-                <div className="mt-1 border-t border-slate-100 pt-1">
-                  <button
-                    type="button"
-                    onClick={openAdd}
-                    disabled={!originalTranscriptId || availableLanguages.length === 0}
-                    className="block w-full px-3 py-1.5 text-left text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    + Add translation
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
+            </div>
+          ) : (
+            <>
+              {translations.length === 0 && (
+                <div className="px-3 py-2 text-text-muted">No translations yet.</div>
+              )}
+              {translations.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => selectExisting(t.id)}
+                  className={`block w-full px-3 py-1.5 text-left hover:bg-surface-raised ${
+                    t.id === secondTranscriptId ? 'font-medium text-text' : 'text-text-muted'
+                  }`}
+                >
+                  {languageName(t.language) ?? t.language ?? t.id}
+                </button>
+              ))}
+              <div className="mt-1 border-t border-border pt-1">
+                <button
+                  type="button"
+                  onClick={openAdd}
+                  disabled={!originalTranscriptId || availableLanguages.length === 0}
+                  className="block w-full px-3 py-1.5 text-left text-text-muted hover:bg-surface-raised disabled:opacity-50"
+                >
+                  + Add translation
+                </button>
+              </div>
+            </>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      {translating && <span className="text-text-muted">Translating…</span>}
+      {job?.status === 'failed' && <span className="text-danger-text">Translation failed.</span>}
     </div>
   )
 }
