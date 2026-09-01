@@ -29,10 +29,18 @@ import {
  */
 export function DocumentPanel({
   panelRef,
+  originLabel,
+  originPath,
 }: {
   /** Optional so existing standalone tests (rendered outside `AppShell`'s
    * `Panel`) don't need to fabricate one — the effect below just no-ops. */
   panelRef?: RefObject<PanelImperativeHandle | null>
+  /** The current page's own name (video title / "Ask" / project name) and
+   * URL, from `AppShell` — carried as router `state` into the fullscreen
+   * document route so its back button can say and go back to *this* page
+   * rather than assuming the docked panel only ever lives on a project page. */
+  originLabel?: string | null
+  originPath?: string
 }) {
   const navigate = useNavigate()
   const isOpen = useDocumentPanelStore((s) => s.isOpen)
@@ -107,7 +115,9 @@ export function DocumentPanel({
           onClick={() =>
             activeProjectId &&
             activeDocumentId &&
-            void navigate(`/projects/${activeProjectId}/documents/${activeDocumentId}`)
+            void navigate(`/projects/${activeProjectId}/documents/${activeDocumentId}`, {
+              state: { originLabel, originPath },
+            })
           }
           className="ml-auto rounded-md p-1 text-text-muted hover:bg-surface-raised hover:text-text disabled:opacity-40"
         >

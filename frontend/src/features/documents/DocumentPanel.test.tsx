@@ -30,10 +30,22 @@ function documentBody(id: string, title: string, version = 1) {
   }
 }
 
-function renderPanel(panelRef?: RefObject<PanelImperativeHandle | null>) {
+function renderPanel(
+  panelRef?: RefObject<PanelImperativeHandle | null>,
+  origin?: { originLabel?: string | null; originPath?: string },
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([
-    { path: '/', element: <DocumentPanel panelRef={panelRef} /> },
+    {
+      path: '/',
+      element: (
+        <DocumentPanel
+          panelRef={panelRef}
+          originLabel={origin?.originLabel}
+          originPath={origin?.originPath}
+        />
+      ),
+    },
     { path: '/projects/:projectId/documents/:documentId', element: <div>Fullscreen page</div> },
   ])
   render(
@@ -217,6 +229,22 @@ describe('DocumentPanel', () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/documents/d-1`),
     )
+  })
+
+  it('carries the current page as router state so fullscreen can go back to it', async () => {
+    useDocumentPanelStore.setState({ isOpen: true, activeProjectId: PROJECT_ID })
+    const router = renderPanel(undefined, { originLabel: 'Clip.mp4', originPath: '/videos/v-1' })
+    await waitFor(() => expect(useDocumentPanelStore.getState().activeDocumentId).toBe('d-1'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open fullscreen' }))
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/projects/${PROJECT_ID}/documents/d-1`),
+    )
+    expect(router.state.location.state).toEqual({
+      originLabel: 'Clip.mp4',
+      originPath: '/videos/v-1',
+    })
   })
 
   it('disables the fullscreen button with no document open', () => {

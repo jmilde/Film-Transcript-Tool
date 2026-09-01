@@ -23,19 +23,32 @@ beforeEach(() => {
   })
 })
 
-function renderPage() {
+function renderPage(state?: { originLabel?: string | null; originPath?: string }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
-    [{ path: '/projects/:projectId/documents/:documentId', element: <DocumentPage /> }],
-    { initialEntries: [`/projects/${PROJECT_ID}/documents/${DOCUMENT_ID}`] },
+    [
+      { path: '/projects/:projectId/documents/:documentId', element: <DocumentPage /> },
+      { path: '/videos/:videoId', element: <div>Video page</div> },
+    ],
+    {
+      initialEntries: [
+        {
+          pathname: `/projects/${PROJECT_ID}/documents/${DOCUMENT_ID}`,
+          state,
+        },
+      ],
+    },
   )
-  return render(
-    <QueryClientProvider client={client}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </QueryClientProvider>,
-  )
+  return {
+    router,
+    ...render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </QueryClientProvider>,
+    ),
+  }
 }
 
 function baseHandlers() {
@@ -96,6 +109,17 @@ describe('DocumentPage', () => {
     await screen.findByText('Hello there')
 
     expect(screen.getByRole('button', { name: /^Back to /i })).toBeInTheDocument()
+  })
+
+  it('names and returns to wherever fullscreen was opened from, not always the project', async () => {
+    baseHandlers()
+    const { router } = renderPage({ originLabel: 'Clip.mp4', originPath: '/videos/v-1' })
+    await screen.findByText('Hello there')
+
+    const back = screen.getByRole('button', { name: 'Back to Clip.mp4' })
+    await userEvent.click(back)
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/videos/v-1'))
   })
 
   it('selects a comment in the shared store when clicked in the side panel', async () => {

@@ -60,6 +60,14 @@ export function AppShell() {
   // a redundant second copy of the same editor.
   const showDocumentPanel = Boolean(effectiveProjectId) && !documentId
 
+  // What "Open fullscreen" on the docked panel should say/do when it comes
+  // back — the docked panel can be open on a video page or a chat page just
+  // as easily as a bare project page, so the fullscreen document route can't
+  // assume "back" always means the project itself. This is exactly the
+  // current page's own crumb (video name / "Ask" / project name) plus its
+  // URL, handed down so `DocumentPanel` can carry it as router `state`.
+  const originLabel = videoId && video ? video.name : isChatPage ? 'Ask' : (project?.name ?? null)
+
   // `Breadcrumb` always renders its last item as plain "current page" text —
   // so every route that sits *under* the project (a video, or chat) must add
   // its own trailing crumb, or the project item would wrongly render as
@@ -170,7 +178,11 @@ export function AppShell() {
             defaultSize="25"
             minSize={320}
           >
-            <DocumentPanel panelRef={documentPanelRef} />
+            <DocumentPanel
+              panelRef={documentPanelRef}
+              originLabel={originLabel}
+              originPath={location.pathname}
+            />
           </Panel>
         </Group>
       ) : (

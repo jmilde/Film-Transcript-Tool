@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { ArrowLeft as BackIcon, X as CloseIcon } from 'lucide-react'
 import { useDeleteDocument, useDocument, useDocuments } from '../api/hooks/useDocuments'
@@ -33,9 +33,21 @@ export function DocumentPage() {
  */
 function DocumentPageInner({ projectId, documentId }: { projectId: string; documentId: string }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { isError } = useDocument(documentId)
   const { data: comments, isLoading: commentsLoading } = useDocumentComments(documentId)
   const { data: project } = useProject(projectId)
+
+  // Where "Open fullscreen" was clicked from, carried here as router state by
+  // `DocumentPanel` — the docked panel it was opened from isn't always a bare
+  // project page (it can be a video or the chat page too), so the back
+  // button must go back to *that* page, not always assume the project. Falls
+  // back to the project itself when this route was reached some other way
+  // (a direct link, or a full page reload, which router state doesn't
+  // survive).
+  const origin = location.state as { originLabel?: string | null; originPath?: string } | null
+  const backLabel = origin?.originLabel ?? project?.name ?? 'project'
+  const backPath = origin?.originPath ?? `/projects/${projectId}`
 
   const setActiveProject = useDocumentPanelStore((s) => s.setActiveProject)
   const openTab = useDocumentPanelStore((s) => s.openTab)
@@ -56,24 +68,27 @@ function DocumentPageInner({ projectId, documentId }: { projectId: string; docum
     openTab(documentId)
   }, [projectId, documentId, setActiveProject, openTab])
 
+  // Carries `origin` along to the next document too — otherwise switching
+  // tabs while in fullscreen would drop the real origin and quietly fall
+  // back to "back to the project" even though the user first arrived from a
+  // video or the chat page.
   function goToDocument(id: string) {
-    navigate(`/projects/${projectId}/documents/${id}`)
+    navigate(`/projects/${projectId}/documents/${id}`, { state: origin })
   }
 
   function goBack() {
-    if (window.history.length > 1) navigate(-1)
-    else navigate(`/projects/${projectId}`)
+    navigate(backPath)
   }
 
   // Closing/deleting the tab this page is currently showing needs somewhere
   // else to go — the neighbor `closeTab` just activated, or back to the
-  // project if that was the last open tab.
+  // origin if that was the last open tab.
   function handleCloseTab(id: string) {
     closeTab(id)
     if (id !== documentId) return
     const next = useDocumentPanelStore.getState().activeDocumentId
-    if (next) navigate(`/projects/${projectId}/documents/${next}`, { replace: true })
-    else navigate(`/projects/${projectId}`)
+    if (next) navigate(`/projects/${projectId}/documents/${next}`, { replace: true, state: origin })
+    else navigate(backPath)
   }
 
   function handleDeleteTab(id: string) {
@@ -92,7 +107,7 @@ function DocumentPageInner({ projectId, documentId }: { projectId: string; docum
         className="mb-2 flex w-fit shrink-0 items-center gap-1.5 text-small text-text-muted hover:text-text"
       >
         <BackIcon className="h-3.5 w-3.5" aria-hidden="true" />
-        Back to {project?.name ?? 'project'}
+        Back to {backLabel}
       </button>
 
       <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-border">
