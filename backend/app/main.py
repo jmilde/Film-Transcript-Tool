@@ -20,6 +20,7 @@ from app.api.routes import (
 )
 from app.config import get_settings
 from app.core.errors import register_error_handlers
+from app.db.session import engine
 
 # INFO-level `app.*` logging (chat/search retrieval diagnostics in particular —
 # see app/services/chat.py, app/services/chat_retrieval.py,
@@ -27,8 +28,16 @@ from app.core.errors import register_error_handlers
 # configured, Python's logging falls back to WARNING-only on stderr.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
+logger = logging.getLogger(__name__)
+
 
 def create_app() -> FastAPI:
+    # `render_as_string(hide_password=True)` masks the password but keeps
+    # host/port/database visible — makes it obvious at a glance whether this
+    # process is talking to the local Docker Postgres or a hosted one (e.g.
+    # Supabase), without ever logging a credential.
+    logger.info("API connecting to database: %s", engine.url.render_as_string(hide_password=True))
+
     app = FastAPI(title="Film Transcript Tool API")
 
     # The browser frontend is served from a different origin (the Vite dev server

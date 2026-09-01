@@ -1,107 +1,108 @@
 # Film Transcript Tool
-> A local-first transcript management application for documentary filmmakers.
-Film Transcript Tool helps filmmakers organize interview footage by combining automatic transcription, speaker diarization, transcript editing, comments, and synchronized video playback into a single application.
-The application is designed to complement professional editing software such as DaVinci Resolve rather than replace it.
 
----
+A transcript-first tool for documentary filmmakers: upload footage, get automatic
+speaker-diarized transcription, edit and translate the transcript, comment on
+specific clips, and search across an entire project — all synced to the video
+timeline. A built-in document editor lets you pull quotes straight out of any
+transcript to assemble a paper edit alongside the raw footage. Built to
+complement editing software like DaVinci Resolve, not replace it.
 
-# Goals
-The project focuses on providing a fast and intuitive transcript-first workflow.
-Core goals include:
-- Local-first development and deployment
-- Automatic transcription using Deepgram
-- Speaker diarization and speaker management
-- Transcript editing
-- Transcript comments
-- Nested project organization
-- Fast transcript search
-- High-quality proxy generation
-- Markdown and SRT export
-- Docker-based deployment
-- Cloud-ready architecture
+![Video view with synced transcript, translation, and comments](docs/screenshots/video-nino-translation-view.png)
 
----
+## Features
 
-# Non Goals (Version 1)
-Version 1 intentionally excludes:
-- AI assistants
-- Semantic search
-- Automatic summaries
-- Topic extraction
-- DaVinci Resolve integration
-- Collaborative real-time editing
-- Mobile applications
+- **Automatic transcription & diarization** — Deepgram transcribes and identifies speakers, down to the word-level timestamp
+- **Token-level editing** — every word is individually editable; nothing is destructively overwritten, so the original transcript is always recoverable
+- **Translation** — machine-translate a transcript into another language as an independent, editable copy, side-by-side with the original
+- **Timeline sync** — click any word to jump the video to that moment; playback auto-scrolls the transcript
+- **Comments** — anchor threaded comments to a time range or a specific span of text
+- **Full-text & semantic search** — find a phrase across every video in a project, or ask a project-scoped AI assistant a question in plain language and get answers grounded in cited transcript excerpts
+- **Documents** — a rich-text editor per project for drafting, with one-click insertion of transcript quotes (linked back to their source clip)
+- **Nested projects & folders**, proxy + waveform generation, Markdown/SRT export
 
-The architecture should make these features easy to add in later versions.
+## Screenshots
 
----
+| | |
+|---|---|
+| ![Semantic search over a project's transcripts](docs/screenshots/ask-minerals.png)<br>Ask a question, get cited transcript excerpts | ![Full-text search results](docs/screenshots/search-minerals.png)<br>Full-text search across a project |
+| ![Transcript editor with document panel](docs/screenshots/projects-with-document-panel.png)<br>Notes panel alongside the project view | ![Synced video and transcript](docs/screenshots/video-nino-document-view.png)<br>Video, transcript, comments, and notes in one view |
 
-# Technology Stack
+## Tech stack
 
-## Backend
+**Backend** — Python, FastAPI, SQLAlchemy 2, Pydantic v2, Alembic, Postgres-backed job queue worker, `uv`
+**Frontend** — React, TypeScript, Vite, Tailwind CSS, TanStack Query, Tiptap
+**Infra** — PostgreSQL, Supabase (auth), Deepgram (transcription), FFmpeg (proxies/waveforms), Docker
 
-- Python 3.13+
-- FastAPI
-- SQLAlchemy 2.x
-- Pydantic v2
-- Alembic
-- uv
+```mermaid
+flowchart LR
+    FE["Frontend\nReact / Vite"]
+    API["Backend API\nFastAPI"]
+    DB[("Postgres\n(data + job queue)")]
+    STORE[("Storage\nlocal FS, swappable for S3")]
+    WORKER["Worker\npolls & locks jobs"]
+    DG(["Deepgram\ntranscription + diarization"])
+    DL(["DeepL\ntranslation"])
+    OR(["OpenRouter\nsemantic search agent"])
+    FF(["FFmpeg\nproxies + waveforms"])
 
-## Frontend
+    FE -->|REST / JSON| API
+    API --> DB
+    API --> STORE
+    API -->|enqueues job row| DB
+    WORKER -->|polls + row-locks| DB
+    WORKER --> STORE
+    WORKER --> DG
+    WORKER --> DL
+    WORKER --> OR
+    WORKER --> FF
+```
 
-- React
-- TypeScript
-- Vite
-- TailwindCSS
-- TanStack Query
-- React Router
+The frontend never touches Postgres or media files directly — it only calls
+the backend API. The API handles auth, validation, and DB transactions, but
+never does long-running work inline: transcription, translation, proxy/waveform
+generation, and exports are all jobs the worker picks up from a Postgres-backed
+queue (row-locking, no separate broker). See
+[`docs/300_architecture.md`](docs/300_architecture.md) for the full design.
 
-## Database
+## Running locally
 
-- PostgreSQL
-- Supabase (Database, Authentication and Storage)
+Requires Docker, Python 3.12+ with [`uv`](https://docs.astral.sh/uv/), Node 20+, and a free [Supabase](https://supabase.com) project (used only for auth), plus a [Deepgram](https://deepgram.com) API key.
 
-## Media
+```bash
+# 1. Start local Postgres (Docker)
+docker compose up -d --wait db-dev
 
-- FFmpeg
-- Deepgram API
+# 2. Configure the backend
+cp backend/.env.example backend/.env
+# fill in SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY / SUPABASE_JWKS_URL and DEEPGRAM_API_KEY
+# DATABASE_URL already points at the local db-dev container
 
-## Deployment
+# 3. Migrate the database
+make db-migrate
 
-- Docker
-- Docker Compose
+# 4. Run the app (each in its own terminal)
+make run-backend   # http://localhost:8000
+make run-worker
+make run-frontend  # http://localhost:5173
+```
 
----
+Sign in through the frontend with your Supabase Auth project — the matching
+`User` row is created automatically on first login, and creating a project
+grants you `OWNER` membership. No seed script needed.
 
-# Core Features
+Run `make help` for the full list of developer commands (tests, lint, type
+checks, etc.).
 
-- Project management
-- Nested folders
-- Video uploads
-- Automatic proxy generation
-- Waveform generation
-- Speaker diarization
-- Transcript editing
-- Transcript synchronization
-- Comments
-- Search
-- Markdown export
-- SRT export
+## Documentation
 
----
+The `/docs` directory is the source-of-truth spec for the whole system —
+product requirements, data model, processing pipeline, API surface, and more.
 
-# Documentation
-
-Project documentation is located in `/docs`.
-
-| Document | Description |
+| Document | Covers |
 |-----------|-------------|
-| 100_product_spec.md | Functional product specification |
-| 200_user_workflows.md | User workflows |
-| 300_architecture.md | System architecture |
-| 400_database.md | Database schema |
-| 500_transcript_model.md | Transcript editing model |
-| 600_processing_pipeline.md | Processing pipeline |
-| 700_backend_api.md | REST API |
-| 800_frontend.md | Frontend architecture |
-| 900_export.md | Export formats |
+| [`100_product_spec.md`](docs/100_product_spec.md) | Functional requirements |
+| [`300_architecture.md`](docs/300_architecture.md) | System architecture |
+| [`400_database.md`](docs/400_database.md) | Data model |
+| [`600_processing_pipeline.md`](docs/600_processing_pipeline.md) | Async processing pipeline |
+| [`700_backend_api.md`](docs/700_backend_api.md) | REST API |
+| [`800_frontend.md`](docs/800_frontend.md) | Frontend structure |

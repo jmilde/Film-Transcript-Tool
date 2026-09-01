@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import Callable, Iterator
+from urllib.parse import urlsplit
 
 import pytest
 from app.config import get_settings
@@ -11,8 +12,38 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-# Tests talk to the real Supabase Postgres over the worker/session connection
-# (port 5432), which supports holding a transaction open for the whole test.
+# Tests talk to a local Dockerized Postgres over the worker/session connection
+# (the `db-test` container, port 5443 — see repo-root docker-compose.yml and
+# Makefile), which supports holding a transaction open for the whole test.
+_ALLOWED_TEST_DB_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Hard-abort before any test runs if DATABASE_URL_WORKER isn't local.
+
+    Tests commit real rows outside the rollback fixture (e.g. `committed_token`
+    in tests/services/test_tokens.py) and `make test` runs `alembic upgrade
+    head` against this URL. If it resolved to a hosted database — most
+    dangerously the real Supabase Postgres — a test run could wipe or corrupt
+    real data. `make test`/`test-all`/`test-integration` already bind this to
+    the local `db-test` container, but this check protects against invoking
+    pytest directly with a stale `backend/.env` pointed at Supabase.
+    """
+    del config  # required by the pytest_configure hook signature, unused here
+    url = get_settings().database_url_worker
+    host = urlsplit(url).hostname
+    if host not in _ALLOWED_TEST_DB_HOSTS:
+        raise pytest.UsageError(
+            f"Refusing to run tests: DATABASE_URL_WORKER resolves to host "
+            f"{host!r}, not localhost. Tests commit real data and run "
+            f"migrations against this database — pointing it at a remote/"
+            f"hosted Postgres (e.g. Supabase) risks destroying real data. "
+            f"Run `make test` (binds this to the local Docker db-test "
+            f"container on port 5443) instead of invoking pytest directly, "
+            f"or otherwise point DATABASE_URL_WORKER at a local Postgres."
+        )
+
+
 _test_engine = create_engine(get_settings().database_url_worker, pool_pre_ping=True)
 
 

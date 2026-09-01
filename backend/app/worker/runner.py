@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.session import WorkerSessionLocal
+from app.db.session import WorkerSessionLocal, worker_engine
 from app.models.job import JobStatus, JobType, ProcessingJob
 from app.services.pipeline import next_stage
 from app.worker.claim import claim_next_job
@@ -20,6 +20,8 @@ from app.worker.handlers.thumbnail import handle_generate_thumbnail
 from app.worker.handlers.transcribe import handle_transcribe
 from app.worker.handlers.translate import handle_translate
 from app.worker.handlers.waveform import handle_generate_waveform
+
+logger = logging.getLogger(__name__)
 
 JobHandler = Callable[[Session, ProcessingJob], dict[str, Any] | None]
 
@@ -112,4 +114,11 @@ if __name__ == "__main__":
     # Separate process from the API, so it needs its own handler — see
     # app/main.py's basicConfig call for why this is necessary at all.
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    # `render_as_string(hide_password=True)` masks the password but keeps
+    # host/port/database visible — makes it obvious at a glance whether this
+    # process is polling the local Docker Postgres or a hosted one (e.g.
+    # Supabase), without ever logging a credential.
+    logger.info(
+        "Worker connecting to database: %s", worker_engine.url.render_as_string(hide_password=True)
+    )
     run_forever()
