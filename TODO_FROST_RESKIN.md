@@ -223,35 +223,111 @@ already looking right from inheriting the Pass 1 primitives. Treat
 each bullet as "audit, then reskin if it doesn't already look right,"
 not "definitely rewrite."
 
-- [ ] `frontend/src/features/transcript/TranscriptViewer.tsx`: glass
+- [x] `frontend/src/features/transcript/TranscriptViewer.tsx`: glass
       panel treatment per pane (mirrors the mockup's
       `transcript-pane.tsx`) — uppercase-tracked mini-label pane
       header, glass search input (should mostly fall out of Phase 4's
       `Input` if this component already uses it; check), active-token
       highlight stays on the existing `info` semantic var (don't
       change the meaning, only the surrounding chrome).
-- [ ] `frontend/src/features/player/VideoPlayer.tsx`,
+
+      Search header/input/nav buttons reskinned to `border-glass-line`/
+      `bg-glass`/`hover:bg-glass`; token hover switched from
+      `surface-raised` to `bg-glass`. The uppercase-tracked mini-label
+      pane header lives in `VideoWorkspace.tsx` (the "Original"/
+      "Translation" labels for the dual-transcript view), not inside
+      this component itself — the single-transcript case has no
+      standalone title to relabel, so nothing was added there.
+      Semantic highlight colors (brand selection, warning search
+      match, info active token, success/warning comment underline)
+      untouched. The floating selection-toolbar popup (portaled here)
+      and `SelectionToolbar.tsx` itself were deliberately kept
+      **solid** (`bg-surface`/`border-border`, just bumped to
+      `rounded-lg`) rather than glassed — it floats over arbitrary
+      transcript text, so legibility wins, same call as the shared
+      Popover/Dialog/DropdownMenu/Select shells below.
+- [x] `frontend/src/features/player/VideoPlayer.tsx`,
       `PlayerControls.tsx`, `Waveform.tsx`: player chrome as a
       glass-strong rounded-2xl card (mirrors `player-card.tsx`).
       `Waveform.tsx` reads raw theme vars via `getComputedStyle` for
       its canvas fill — re-check contrast of played/unplayed bars once
       sitting on a glass panel instead of a flat surface; extend the
       set of vars it reads if needed, don't hardcode a canvas color.
-- [ ] `frontend/src/features/comments/CommentsPanel.tsx`: glass-strong
+
+      The glass-strong rounded-2xl card itself is composed in
+      `VideoWorkspace.tsx` (`<Card variant="dense">` wrapping
+      `VideoPlayer` + `Waveform`, `!p-0` + `overflow-hidden` so the
+      video bleeds edge-to-edge like the mockup) rather than inside
+      `VideoPlayer.tsx`, to avoid nesting a second glass/blur layer
+      inside the panel. `VideoPlayer.tsx` now renders the video
+      edge-to-edge (`bg-black`, no rounding/padding of its own — the
+      card clips it) with `PlayerControls` in its own `p-3` wrapper.
+      `PlayerControls.tsx` buttons rebordered to `border-glass-line`/
+      `hover:bg-glass`, bumped to `rounded-lg`. `Waveform.tsx`: left
+      the canvas fill/playhead colors and `bg-surface-raised` trough
+      untouched per the "don't hardcode a canvas color, and don't
+      change behavior" rule — only bumped radii to `rounded-lg`.
+      `CommentsPanel` got its own separate `Card` below the player
+      card (not merged into one), matching the mockup's separate
+      player-card/comments-card look and keeping each to a single
+      blur layer.
+- [x] `frontend/src/features/comments/CommentsPanel.tsx`: glass-strong
       card, avatar-initials chip styling (mirrors `comments-card.tsx`);
       Resolve action keeps the `success` semantic, unresolved keeps
       `warning` — per the existing mapping in `frontend/CLAUDE.md`,
       unchanged.
-- [ ] `frontend/src/features/folders/FolderTree.tsx`,
+
+      Added a neutral (not brand-tinted) initial-letter avatar chip
+      per comment — deliberately neutral because this panel already
+      uses `bg-brand-subtle` to mean "selected/located comment," so a
+      brand-colored avatar would collide with that existing meaning;
+      the avatar's job is just to carry the identity, not decorate.
+      Unselected comment rows switched from `border-border bg-surface`
+      to `border-glass-line bg-glass` (a lighter translucent tint
+      nested inside the dense glass-strong Card `VideoWorkspace.tsx`
+      wraps this component in). Resolve/Reopen and reply-indent border
+      colors updated to glass equivalents; `success`/`warning`
+      semantics on Resolve/underlines untouched.
+- [x] `frontend/src/features/folders/FolderTree.tsx`,
       `FolderPanel.tsx`: glass sidebar panel; active-folder/active-row
       tint reuses the existing `brand-subtle` var (already matches the
       mockup's `frost-accent/10` pattern conceptually — just confirm
       it still reads well once the panel itself is translucent).
-- [ ] `frontend/src/features/documents/DocumentPanel.tsx`,
+
+      The actual glass "sidebar panel" surface is the `<aside>` wrapper
+      in `pages/ProjectView.tsx`, not `FolderTree.tsx` itself (that
+      file only renders the tree's own rows/nesting, no outer chrome)
+      — reskinned that `<aside>` by hand to the same look `Card`'s
+      airy/neutral variant produces (`Card` can't be used directly
+      since it only emits a `<div>` and this needs to stay a semantic
+      `<aside>`). Also reskinned `ProjectView.tsx`'s project-header
+      card to use the real `Card` component (airy, neutral tint).
+      `FolderTree.tsx`/`FolderPanel.tsx`: hover/drag-over states moved
+      from `bg-surface-raised` to `bg-glass`, `bg-brand-subtle`
+      selection semantics untouched, radii bumped. `FolderPanel`'s
+      video/subfolder list container reskinned to a neutral
+      `bg-glass-strong` panel (a judgment call — it's a dense data
+      list sitting on an airy page, treated like the dense workspace's
+      neutral glass rather than a tinted airy card).
+- [x] `frontend/src/features/documents/DocumentPanel.tsx`,
       `DocumentTabStrip.tsx`: drawer-style glass panel (mirrors
       `documents-drawer.tsx`) — search input, new-document row,
       hover-reveal delete affordance on each doc row.
-- [ ] `frontend/src/features/toolbar/SelectionToolbar.tsx` and the
+
+      Both docked in `AppShell`, not `VideoWorkspace` — treated as a
+      neutral dense-style glass surface (no tint), same rule as the
+      video workspace. `DocumentPanel.tsx`: collapsed rail button and
+      main drawer both switched to `border-glass-line`/
+      `bg-glass-strong`/`backdrop-blur-md`; "Documents" header label
+      restyled to the uppercase-tracked `font-display` mini-label
+      (mirrors `documents-drawer.tsx`'s header treatment) instead of a
+      plain title. `DocumentTabStrip.tsx`: tab strip bar → `bg-glass`,
+      active tab merges into the panel body via
+      `border-b-glass-strong`/`bg-glass-strong`, inactive tab/menu/
+      close hovers → `bg-glass`, rename input and "+" picker trigger →
+      `bg-glass`. The `Popover` this renders (existing-document list)
+      was left solid, per the popover/dialog judgment call below.
+- [x] `frontend/src/features/toolbar/SelectionToolbar.tsx` and the
       Radix-backed popovers (`MembersPanel`, `TranslationControl`,
       `ExportControl`, the document switcher `Select`): once their
       trigger buttons inherit Pass 1's `Button`, check whether the
@@ -259,12 +335,32 @@ not "definitely rewrite."
       glass background too for visual consistency, or whether a solid
       surface reads better for a floating overlay — this is a judgment
       call, not automatic.
-- [ ] No new `ThemeToggle` component needed — `AppShell` already has a
+
+      **Judgment call: kept solid, not glassed.** `Popover.tsx`,
+      `Dialog.tsx`, `DropdownMenu.tsx`, `Select.tsx` (the shared
+      overlay-shell primitives) and the transcript's own selection
+      popup were all left on their existing `bg-surface`/
+      `bg-surface-raised` fills. Reasoning: these are shared primitives
+      that float over arbitrary content (video, transcript text) in
+      both airy and dense contexts — legibility over an unknown
+      background wins over the frosted look used for the surrounding
+      docked/anchored chrome. `MembersPanel`/`TranslationControl`/
+      `ExportControl` needed no changes beyond what their trigger
+      `Button`s already inherited from Pass 1. `SelectionToolbar.tsx`
+      itself only got a radius bump (`rounded-md` → `rounded-lg`) to
+      match the rest of the extended radius scale, no color changes.
+- [x] No new `ThemeToggle` component needed — `AppShell` already has a
       theme-toggle `Button` wired to `useThemeStore`, unlike the
       mockup's standalone one.
-- [ ] Update any per-component test files whose assertions are coupled
+- [x] Update any per-component test files whose assertions are coupled
       to markup/classes that changed.
-- [ ] Verify: full manual walk-through in both themes — sign in →
+
+      None needed changes — no Pass 2 test file asserted on the
+      specific `border-border`/`bg-surface`/`rounded-md` class strings
+      touched this pass (confirmed by grepping every touched
+      component's `.test.tsx` before editing). All 222 tests still
+      pass unmodified.
+- [x] Verify: full manual walk-through in both themes — sign in →
       Projects → create/open a project → browse folders → open a
       video → select transcript text → add a comment → open the
       document panel → add a clip → format text → open the
@@ -273,6 +369,32 @@ not "definitely rewrite."
       `grep -rE "slate-|gray-|zinc-|neutral-|amber-|violet-|red-|sky-|teal-|orange-|yellow-|emerald-|text-white|bg-white" frontend/src`
       (mirrors the check the original overhaul ended each reskin phase
       with) — should stay clean.
+
+      Ran lint/typecheck/test (222/222)/build clean. Brought the local
+      dev stack back up (same as Pass 1: Docker Postgres, backend on
+      the spare port, Vite dev server) and walked Projects →
+      ProjectView (header card + folder sidebar) → a folder's video
+      list → VideoWorkspace, in both themes: selected a transcript
+      range, opened the Comment draft, submitted a comment and
+      confirmed the neutral avatar chip + glass-tinted row render
+      correctly with no color collision against the existing
+      brand-tinted "selected comment" state; confirmed the
+      unresolved-comment underline (warning) still shows on the
+      commented span; opened the docked document panel (glass drawer,
+      uppercase-tracked "DOCUMENTS" label, active-tab-merges-into-body
+      look) in both themes — no muddy/opaque glass-on-glass anywhere,
+      including the video-player-card-inside-transparent-panel and
+      comments-card nesting this pass specifically introduced.
+      **Not walked this session** (same as Pass 1): Chat and SignIn
+      pages, and the Translation/Export popovers' *content* specifically
+      (their trigger buttons were visually confirmed via Pass 1's
+      Button reskin; the popovers themselves are intentionally
+      unchanged solid shells per the judgment call above, so there was
+      nothing new to visually verify there). Final raw-color grep is
+      clean — the only hits are substring false positives
+      (`translate-x` containing "slate-", "shared-doc" containing
+      "red-") and the pre-existing `bg-black/50`/`text-white` media-
+      chrome overlay exception on the clip-preview close button.
 
 ## Cleanup
 

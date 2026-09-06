@@ -123,7 +123,7 @@ function FolderPanelInner({
         <p className="text-small text-text-muted">This folder is empty.</p>
       ) : (
         <ul
-          className="divide-y divide-border rounded-lg border border-border bg-surface"
+          className="divide-y divide-glass-line rounded-xl border border-glass-line bg-glass-strong backdrop-blur-md"
           onClick={() => setSelected(new Set())}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes(VIDEO_DND_TYPE)) e.preventDefault()
@@ -148,8 +148,8 @@ function FolderPanelInner({
                 }}
                 className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-text ${
                   dragOverFolderId === f.id
-                    ? 'bg-surface-raised ring-1 ring-inset ring-brand'
-                    : 'hover:bg-surface-raised'
+                    ? 'bg-glass ring-1 ring-inset ring-brand'
+                    : 'hover:bg-glass'
                 }`}
               >
                 <FolderIcon className="h-4 w-4 shrink-0 text-text-muted" />
@@ -173,7 +173,7 @@ function FolderPanelInner({
                 }
               }}
               className={`flex cursor-pointer items-center gap-2 px-4 py-2.5 ${
-                selected.has(v.id) ? 'bg-brand-subtle' : 'hover:bg-surface-raised'
+                selected.has(v.id) ? 'bg-brand-subtle' : 'hover:bg-glass'
               }`}
             >
               <VideoIcon className="h-4 w-4 shrink-0 text-text-muted" />

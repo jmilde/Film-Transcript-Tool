@@ -44,25 +44,30 @@ export function VideoPlayer({ src, videoRef }: PlayerProps) {
   }
 
   return (
-    <div className="space-y-2">
+    // No rounding/padding here — the enclosing glass Card (VideoWorkspace)
+    // clips this edge-to-edge via its own `overflow-hidden`, matching the
+    // frosted player-card look where the video bleeds to the card's corners.
+    <div>
       <video
         ref={videoRef}
         src={src}
-        className="w-full rounded bg-black"
+        className="aspect-video w-full bg-black"
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
-      <PlayerControls
-        currentTime={currentTime}
-        duration={duration}
-        playing={playing}
-        speed={speed}
-        onTogglePlay={togglePlay}
-        onSkip={skip}
-        onToggleSpeed={toggleSpeed}
-      />
+      <div className="p-3">
+        <PlayerControls
+          currentTime={currentTime}
+          duration={duration}
+          playing={playing}
+          speed={speed}
+          onTogglePlay={togglePlay}
+          onSkip={skip}
+          onToggleSpeed={toggleSpeed}
+        />
+      </div>
     </div>
   )
 }

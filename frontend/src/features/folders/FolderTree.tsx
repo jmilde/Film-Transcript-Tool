@@ -65,7 +65,7 @@ export function FolderTree({ projectId, selectedFolderId, onSelect }: TreeProps)
 
   return (
     <div
-      className={`min-h-16 rounded-md text-body ${rootDragOver ? 'bg-brand-subtle ring-1 ring-inset ring-brand' : ''}`}
+      className={`min-h-16 rounded-lg text-body ${rootDragOver ? 'bg-brand-subtle ring-1 ring-inset ring-brand' : ''}`}
       onClick={() => onSelect(null)}
       onDragOver={handleRootDragOver}
       onDragLeave={() => setRootDragOver(false)}
@@ -179,12 +179,12 @@ function FolderTreeNode({
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         onClick={(e) => e.stopPropagation()}
-        className={`flex items-center rounded-md ${
+        className={`flex items-center rounded-lg ${
           isSelected
             ? 'bg-brand-subtle'
             : dragOver
-              ? 'bg-surface-raised ring-1 ring-inset ring-brand'
-              : 'hover:bg-surface-raised'
+              ? 'bg-glass ring-1 ring-inset ring-brand'
+              : 'hover:bg-glass'
         }`}
         style={{ paddingLeft: depth * 14 }}
       >

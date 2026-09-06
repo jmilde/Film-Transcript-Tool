@@ -43,7 +43,7 @@ export function PlayerControls({
           aria-label="Skip back 5 seconds"
           title="Skip back 5s"
           onClick={() => onSkip(-SKIP_SECONDS)}
-          className="rounded-md p-1.5 text-text-muted hover:bg-surface-raised"
+          className="rounded-lg p-1.5 text-text-muted hover:bg-glass"
         >
           <SkipBackIcon className="h-5 w-5" />
         </button>
@@ -52,7 +52,7 @@ export function PlayerControls({
           aria-label={playing ? 'Pause' : 'Play'}
           title={playing ? 'Pause' : 'Play'}
           onClick={onTogglePlay}
-          className="rounded-md bg-brand p-2 text-text-inverted hover:bg-brand-hover"
+          className="rounded-lg bg-brand p-2 text-text-inverted hover:bg-brand-hover"
         >
           {playing ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
         </button>
@@ -61,7 +61,7 @@ export function PlayerControls({
           aria-label="Skip forward 5 seconds"
           title="Skip forward 5s"
           onClick={() => onSkip(SKIP_SECONDS)}
-          className="rounded-md p-1.5 text-text-muted hover:bg-surface-raised"
+          className="rounded-lg p-1.5 text-text-muted hover:bg-glass"
         >
           <SkipForwardIcon className="h-5 w-5" />
         </button>
@@ -70,10 +70,10 @@ export function PlayerControls({
           aria-label="Toggle 2x speed"
           title="2x speed"
           onClick={onToggleSpeed}
-          className={`rounded-md border px-2 py-1 text-small font-semibold ${
+          className={`rounded-lg border px-2 py-1 text-small font-semibold ${
             speed === 2
               ? 'border-brand bg-brand text-text-inverted'
-              : 'border-border text-text-muted hover:bg-surface-raised'
+              : 'border-glass-line text-text-muted hover:bg-glass'
           }`}
         >
           2x

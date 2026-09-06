@@ -7,6 +7,7 @@ import { FolderPanel } from '../features/folders/FolderPanel'
 import { MembersPanel } from '../features/members/MembersPanel'
 import { useDocumentPanelStore } from '../store/documentPanel'
 import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Dialog, DialogContent, DialogTrigger } from '../components/ui/Dialog'
 import { FileText as DocumentIcon, Plus as PlusIcon, Video as VideoIcon } from 'lucide-react'
@@ -38,7 +39,10 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
       {isPending && <p className="text-text-muted">Loading project…</p>}
       {isError && <p className="text-danger-text">Could not load this project.</p>}
       {project && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-5 py-4">
+        <Card
+          variant="airy"
+          className="flex items-center justify-between gap-3 !px-5 !py-4"
+        >
           <div className="min-w-0">
             <h2 className="text-h2 text-text">{project.name}</h2>
             {project.description && (
@@ -58,13 +62,16 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
           <div className="flex shrink-0 items-center gap-2">
             <MembersPanel projectId={projectId} myRole={project.my_role} />
           </div>
-        </div>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[16rem_1fr]">
-        <aside className="rounded-md border border-border bg-surface p-3">
+        {/* Not a `Card` — `Card` only renders a `<div>`, and this needs to
+            stay a semantic `<aside>`; classes mirror Card's airy/neutral
+            look by hand. */}
+        <aside className="rounded-2xl border border-glass-line bg-glass-strong p-3 shadow-sm backdrop-blur-md">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-small font-medium tracking-wide text-text-muted uppercase">
+            <span className="font-display text-small font-medium tracking-wide text-text-muted uppercase">
               Folders
             </span>
             <NewFolder projectId={projectId} parentFolderId={selectedFolderId} />
