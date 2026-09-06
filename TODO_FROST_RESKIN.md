@@ -191,16 +191,27 @@ working.
       1's primitives, and **note** (for Pass 2) any surface that looks
       obviously unfinished or low-contrast.
 
-      Ran lint/typecheck/test/build clean. Manually verified the
-      Projects page in both themes via the dev server (screenshotted) —
-      glass header, icon mark, `font-display` wordmark, and the blob
-      gradient all render correctly with good contrast in light and
-      dark; no CSS-related console errors (only pre-existing
-      backend-connectivity CORS noise, unrelated to this change).
-      **Not verified**: ProjectView/VideoWorkspace/Chat/SignIn, since
-      the local backend/Supabase auth needed to reach them wasn't
-      available in this session — a follow-up manual pass through the
-      full app is still needed before/during Pass 2's per-feature work.
+      Ran lint/typecheck/test/build clean. Brought up the local dev
+      Postgres + backend (`make db-up && make db-migrate`, backend on
+      a spare port since 8000 was held by an unrelated process) and
+      manually walked Projects → ProjectView → a folder →
+      VideoWorkspace with real seeded data, in both themes. Findings:
+      - Airy `Card` tints (`bg-*-subtle`) were fully opaque, so
+        `backdrop-blur` had nothing to blur — fixed by making the
+        Phase 3 tint classes translucent (`/70`) and switching the
+        `neutral` tint to `bg-glass-strong`, so airy cards are now
+        actually frosted glass, not flat color with rounder corners.
+      - The dense `VideoWorkspace` (transcript pane, player card,
+        comments panel, search input) reads well in both themes purely
+        from inheriting Pass 1 — no contrast problems, stays neutral
+        as required.
+      - Confirmed (not a bug, just Pass 2 scope): the Search
+        command-palette `Dialog` shell is still flat `bg-surface`,
+        matching the "judgment call" TODO item under Pass 2's toolbar/
+        popovers bullet.
+      **Not verified this session**: Chat and SignIn specifically (no
+      chat history / no signed-out state readily reachable with the
+      one seeded project) — worth a quick look before/during Pass 2.
 
 ---
 
