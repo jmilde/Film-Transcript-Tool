@@ -44,7 +44,7 @@ function ProjectViewInner({ projectId }: { projectId: string }) {
           className="flex items-center justify-between gap-3 !px-5 !py-4"
         >
           <div className="min-w-0">
-            <h2 className="text-h2 text-text">{project.name}</h2>
+            <h2 className="font-display text-h2 text-text">{project.name}</h2>
             {project.description && (
               <p className="mt-0.5 truncate text-small text-text-muted">{project.description}</p>
             )}

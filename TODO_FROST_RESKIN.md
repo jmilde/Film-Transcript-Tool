@@ -396,6 +396,18 @@ not "definitely rewrite."
       "red-") and the pre-existing `bg-black/50`/`text-white` media-
       chrome overlay exception on the clip-preview close button.
 
+      **Follow-up** (post-review feedback): adapted `pages/Projects.tsx`
+      and `pages/ProjectView.tsx` more closely to the mockup's visual
+      language — `font-display` on the page/project headings (matching
+      the mockup's `font-display` `h1`), an icon-badge per project
+      card (`Clapperboard` in a `bg-brand` rounded square, mirroring
+      the `AppShell` wordmark mark) for stronger visual identity, and
+      a dashed-border `FolderOpen`-icon empty state (mirrors the
+      mockup's `routes/index.tsx` "Select a folder…" placeholder)
+      replacing the old plain-text empty state. Re-verified with the
+      full gate (lint/typecheck/test 222/222/build) and a two-theme
+      browser check of both pages.
+
 ## Cleanup
 
 - [ ] Once Pass 2 is reviewed and merged, delete the
