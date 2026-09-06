@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels'
-import { Moon, Search as SearchIcon, Sun } from 'lucide-react'
+import { Clapperboard, Moon, Search as SearchIcon, Sun } from 'lucide-react'
 import { DocumentPanel } from '../features/documents/DocumentPanel'
 import { useProject } from '../api/hooks/useProjects'
 import { useVideo } from '../api/hooks/useVideos'
@@ -113,10 +113,30 @@ export function AppShell() {
   const toggleTheme = useThemeStore((s) => s.toggle)
 
   return (
-    <div className="flex h-screen flex-col bg-page text-text">
-      <header className="flex items-center gap-4 border-b border-border bg-surface px-6 py-3">
-        <Link to="/" className="text-h3 whitespace-nowrap hover:opacity-80">
-          Film Transcript Tool
+    <div className="app-bg relative flex h-screen flex-col overflow-hidden text-text">
+      {/* Decorative only — kept out of the accessible tree and out of the
+          way of pointer events so they never intercept clicks on the real
+          chrome sitting above them. */}
+      <div
+        aria-hidden="true"
+        className="animate-float pointer-events-none absolute -left-24 top-10 size-96 rounded-full bg-brand/20 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="animate-float pointer-events-none absolute right-0 top-1/3 size-[28rem] rounded-full bg-info/15 blur-3xl"
+        style={{ animationDuration: '14s', animationDirection: 'reverse' }}
+      />
+      <div
+        aria-hidden="true"
+        className="animate-float pointer-events-none absolute bottom-0 left-1/3 size-80 rounded-full bg-brand/10 blur-3xl"
+        style={{ animationDuration: '9s' }}
+      />
+      <header className="relative flex items-center gap-4 border-b border-glass-line bg-glass-strong px-6 py-3 backdrop-blur-xl">
+        <Link to="/" className="flex items-center gap-2.5 whitespace-nowrap hover:opacity-80">
+          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand text-text-inverted shadow-sm">
+            <Clapperboard className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span className="font-display text-h3">Film Transcript Tool</span>
         </Link>
         {breadcrumbItems.length > 0 && <Breadcrumb items={breadcrumbItems} />}
         <div className="ml-auto flex items-center gap-2">
@@ -157,7 +177,11 @@ export function AppShell() {
           react-resizable-panels to re-mount with the right panel count
           instead of trying to reconcile a changed child list in place. */}
       {showDocumentPanel ? (
-        <Group key="with-document-panel" orientation="horizontal" className="flex-1 overflow-hidden">
+        <Group
+          key="with-document-panel"
+          orientation="horizontal"
+          className="relative flex-1 overflow-hidden"
+        >
           <Panel defaultSize="75" minSize="40">
             <main className="h-full overflow-auto px-6 py-8">
               <Outlet />
@@ -186,7 +210,7 @@ export function AppShell() {
           </Panel>
         </Group>
       ) : (
-        <main className="h-full flex-1 overflow-auto px-6 py-8">
+        <main className="relative h-full flex-1 overflow-auto px-6 py-8">
           <Outlet />
         </main>
       )}

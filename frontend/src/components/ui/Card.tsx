@@ -23,7 +23,7 @@ const TINT_CLASSES: Record<CardTint, string> = {
 export function Card({ variant = 'dense', tint = 'neutral', className = '', ...props }: CardProps) {
   const base =
     variant === 'airy'
-      ? `rounded-lg p-4 shadow-sm ${TINT_CLASSES[tint]}`
-      : 'rounded-md border border-border bg-surface p-3'
+      ? `rounded-2xl p-4 shadow-sm backdrop-blur-md ${TINT_CLASSES[tint]}`
+      : 'rounded-xl border border-glass-line bg-glass-strong p-3 backdrop-blur-md'
   return <div className={`${base} ${className}`} {...props} />
 }

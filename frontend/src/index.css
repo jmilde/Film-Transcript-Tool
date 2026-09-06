@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/inter';
+@import '@fontsource-variable/space-grotesk';
 @plugin '@tailwindcss/typography';
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -37,6 +38,13 @@
   --raw-info: oklch(62% 0.14 240);
   --raw-info-subtle: oklch(94% 0.03 240);
   --raw-info-text: oklch(46% 0.14 240);
+
+  /* Frosted-glass surfaces — translucent white, sits on top of `--raw-page`
+     (light) or lightens it slightly (dark); not a semantic color, so it's
+     exempt from the brand/success/warning/danger/info set. */
+  --raw-glass: oklch(100% 0 0 / 45%);
+  --raw-glass-strong: oklch(100% 0 0 / 68%);
+  --raw-glass-line: oklch(100% 0 0 / 70%);
 }
 
 .dark {
@@ -69,6 +77,10 @@
   --raw-info: oklch(72% 0.13 240);
   --raw-info-subtle: oklch(32% 0.05 240);
   --raw-info-text: oklch(82% 0.1 240);
+
+  --raw-glass: oklch(100% 0 0 / 6%);
+  --raw-glass-strong: oklch(100% 0 0 / 10%);
+  --raw-glass-line: oklch(100% 0 0 / 12%);
 }
 
 /* Map the runtime-overridable raw values into Tailwind v4 theme keys, so
@@ -76,6 +88,7 @@
    color-scheme is active instead of a value baked in at build time. */
 @theme inline {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
 
   --color-page: var(--raw-page);
   --color-surface: var(--raw-surface);
@@ -104,9 +117,15 @@
   --color-info-subtle: var(--raw-info-subtle);
   --color-info-text: var(--raw-info-text);
 
+  --color-glass: var(--raw-glass);
+  --color-glass-strong: var(--raw-glass-strong);
+  --color-glass-line: var(--raw-glass-line);
+
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;
   --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
   --radius-full: 9999px;
 
   --text-h1: 1.875rem;
@@ -134,6 +153,7 @@
   --animate-scale-in: scale-in 150ms ease-out;
   --animate-scale-out: scale-out 100ms ease-in;
   --animate-slide-down: slide-down 150ms ease-out;
+  --animate-float: float 11s ease-in-out infinite;
 }
 
 @keyframes fade-in {
@@ -181,6 +201,27 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, -18px) scale(1.08);
+  }
+}
+
+/* Decorative gradient wash behind the app shell — built from the same page/
+   subtle-tint theme vars as everything else, so it retints with `.dark`
+   automatically instead of needing its own light/dark hex pair. */
+.app-bg {
+  background-image: linear-gradient(
+    135deg,
+    var(--color-brand-subtle),
+    var(--color-page) 50%,
+    var(--color-info-subtle)
+  );
 }
 
 body {

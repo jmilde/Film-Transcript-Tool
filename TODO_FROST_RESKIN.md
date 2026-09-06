@@ -82,11 +82,11 @@ working.
 
 ### Phase 1 — Dependencies & theme tokens
 
-- [ ] `cd frontend && npm install @fontsource-variable/space-grotesk`
-- [ ] `frontend/src/index.css`: import it the same way Inter is
+- [x] `cd frontend && npm install @fontsource-variable/space-grotesk`
+- [x] `frontend/src/index.css`: import it the same way Inter is
       imported, add a `--font-display` variable in the `@theme inline`
       block (e.g. `'Space Grotesk Variable', ui-sans-serif, ...`)
-- [ ] Add glass-surface raw vars for both `:root` and `.dark`, named
+- [x] Add glass-surface raw vars for both `:root` and `.dark`, named
       to fit the existing `--raw-*` convention (e.g. `--raw-glass`,
       `--raw-glass-strong`, `--raw-glass-line`), with values mirroring
       the mockup's `frost-panel`/`frost-panel-strong`/`frost-line`
@@ -95,21 +95,21 @@ working.
       `--color-glass`, `--color-glass-strong`, `--color-glass-line` so
       they're usable as `bg-glass`, `bg-glass-strong`,
       `border-glass-line` Tailwind classes.
-- [ ] Extend the radius scale (`--radius-lg`/add `--radius-xl`/
+- [x] Extend the radius scale (`--radius-lg`/add `--radius-xl`/
       `--radius-2xl`) for the rounder card/button/panel language.
-- [ ] Add a decorative background: a gradient utility class (e.g.
+- [x] Add a decorative background: a gradient utility class (e.g.
       `.app-bg`, built from existing `page`/`brand-subtle`-style theme
       vars, not new hex) plus a `frost-float`-equivalent `@keyframes`
       + `--animate-*` var for the blobs (follow the existing pattern
       of hand-defined `@keyframes` already in this file for
       fade/scale/slide — no animation library).
-- [ ] Verify: toggle the `dark` class on `<html>` via devtools and
+- [x] Verify: toggle the `dark` class on `<html>` via devtools and
       confirm the new glass vars flip correctly; no console errors;
       `npm run typecheck` clean (no component changes yet).
 
 ### Phase 2 — `Button` primitive
 
-- [ ] `frontend/src/components/ui/Button.tsx`: round the shared base
+- [x] `frontend/src/components/ui/Button.tsx`: round the shared base
       class (`rounded-md` → the new larger radius) and re-skin
       `secondary`/`ghost` to a translucent glass-panel look
       (`bg-glass`/`bg-glass-strong` + `backdrop-blur` + an outline
@@ -118,43 +118,47 @@ working.
       and with `shadow-sm`. Variant prop API (`primary` / `secondary`
       / `ghost` / `destructive`) must not change — no call sites should
       need touching.
-- [ ] `Button.test.tsx`: confirm existing assertions (role/variant/
+- [x] `Button.test.tsx`: confirm existing assertions (role/variant/
       disabled state) still pass; they should, since tests target
       behavior/props, not raw class strings — fix if any do.
-- [ ] Verify: `npm run test -- Button`, `npm run typecheck`.
+- [x] Verify: `npm run test -- Button`, `npm run typecheck`.
 
 ### Phase 3 — `Card` primitive
 
-- [ ] `frontend/src/components/ui/Card.tsx`: `dense` variant becomes a
+- [x] `frontend/src/components/ui/Card.tsx`: `dense` variant becomes a
       neutral glass-strong panel (`bg-glass-strong` + `backdrop-blur`
       + `border-glass-line`, new rounded-xl radius) — **no tint**,
       preserving the "dense = color reserved for meaning" rule.
       `airy` variant becomes a tinted glass panel: layer the existing
       `tint` background under `backdrop-blur`, bump to the new
       rounded-2xl radius, keep `shadow-sm`.
-- [ ] `Card.test.tsx`: update/verify variant assertions.
-- [ ] Verify: `npm run test -- Card`.
+- [x] `Card.test.tsx`: update/verify variant assertions. (Updated the
+      dense-variant assertion from `border-border` to `border-glass-line`
+      to match the new outline.)
+- [x] Verify: `npm run test -- Card`.
 
 ### Phase 4 — `Input`, `Textarea`, `Badge`
 
-- [ ] `frontend/src/components/ui/Input.tsx` (and `Textarea.tsx`):
+- [x] `frontend/src/components/ui/Input.tsx` (and `Textarea.tsx`):
       replace the hard `border border-border` treatment with a glass
       background (`bg-glass`) + outline, keep the `focus:border-brand`
       (or switch to an outline-based focus ring, whichever reads
       better against the translucent background) — check contrast in
       both themes once the blob background is in place behind it.
-- [ ] `frontend/src/components/ui/Badge.tsx`: pill shape/semantics
+- [x] `frontend/src/components/ui/Badge.tsx`: pill shape/semantics
       unchanged; check whether the mockup's uppercase-tracked
       micro-label feel is worth a small `tracking-wide` tweak, or
       whether that's better reserved for section headers (Phase 5)
       rather than status pills — use judgment, this one's minor.
-- [ ] Update `Input.test.tsx`/`Textarea.test.tsx`/`Badge.test.tsx` if
-      any class-coupled assertions break.
-- [ ] Verify: `npm run test`.
+      Left as-is: reserved the uppercase-tracked treatment for
+      Breadcrumb/section-label use instead of status pills.
+- [x] Update `Input.test.tsx`/`Textarea.test.tsx`/`Badge.test.tsx` if
+      any class-coupled assertions break. (None did.)
+- [x] Verify: `npm run test`.
 
 ### Phase 5 — `AppShell`: shell & header reskin
 
-- [ ] `frontend/src/components/AppShell.tsx`: wrap the shell in the
+- [x] `frontend/src/components/AppShell.tsx`: wrap the shell in the
       Phase 1 gradient background, with 2–3 decorative blurred blob
       `<div>`s (`aria-hidden="true"`, `pointer-events-none`,
       absolutely positioned, animated via Phase 1's keyframes,
@@ -162,29 +166,41 @@ working.
       `position: relative` content wrapper. Contain them with
       `overflow-hidden` on the outer shell so they don't cause page
       scroll.
-- [ ] Header becomes a blurred glass bar: `bg-glass-strong
+- [x] Header becomes a blurred glass bar: `bg-glass-strong
       backdrop-blur border-b border-glass-line` in place of
       `bg-surface border-border`.
-- [ ] Add a small accent-colored rounded icon mark next to the
+- [x] Add a small accent-colored rounded icon mark next to the
       wordmark (e.g. `lucide-react`'s `Clapperboard`, already a
       dependency, in a `bg-brand` rounded box — matches the mockup's
       `app-header.tsx`); set the wordmark text in `font-display`.
-- [ ] Optional: set `Breadcrumb`'s current (bold) item in
+- [x] Optional: set `Breadcrumb`'s current (bold) item in
       `font-display` for a bit more of the mockup's typographic
       character — judgment call, skip if it reads oddly at breadcrumb
-      sizes.
-- [ ] `AppShell.test.tsx`: confirm the decorative blobs don't leak
+      sizes. (Applied — reads fine at breadcrumb size.)
+- [x] `AppShell.test.tsx`: confirm the decorative blobs don't leak
       into the accessible tree (they're `aria-hidden`, so existing
       role-based queries should be unaffected) — add a quick assertion
       if there's an easy way to confirm `aria-hidden` is present, not
-      required if existing tests already pass untouched.
-- [ ] Verify: `npm run lint && npm run typecheck && npm run test &&
+      required if existing tests already pass untouched. (All 13
+      existing tests pass untouched.)
+- [x] Verify: `npm run lint && npm run typecheck && npm run test &&
       npm run build`. Then run the dev server and manually load every
       existing page (Projects, ProjectView, VideoWorkspace, Chat,
       SignIn) in both light and dark — confirm nothing is illegible
       against the new blurred background purely from inheriting Pass
       1's primitives, and **note** (for Pass 2) any surface that looks
       obviously unfinished or low-contrast.
+
+      Ran lint/typecheck/test/build clean. Manually verified the
+      Projects page in both themes via the dev server (screenshotted) —
+      glass header, icon mark, `font-display` wordmark, and the blob
+      gradient all render correctly with good contrast in light and
+      dark; no CSS-related console errors (only pre-existing
+      backend-connectivity CORS noise, unrelated to this change).
+      **Not verified**: ProjectView/VideoWorkspace/Chat/SignIn, since
+      the local backend/Supabase auth needed to reach them wasn't
+      available in this session — a follow-up manual pass through the
+      full app is still needed before/during Pass 2's per-feature work.
 
 ---
 
