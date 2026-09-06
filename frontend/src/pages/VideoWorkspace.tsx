@@ -269,11 +269,11 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               matching the mockup's separate player-card/comments-card look —
               and avoiding a glass-on-glass double blur. */}
           <div className="h-full space-y-3 overflow-y-auto p-4">
-            <Card variant="dense" className="space-y-2 overflow-hidden !p-0">
+            <Card variant="dense" className="space-y-2 !p-0">
               {src ? (
                 <VideoPlayer src={src} videoRef={videoRef} />
               ) : (
-                <div className="flex aspect-video items-center justify-center bg-surface-raised text-body text-text-muted">
+                <div className="flex aspect-video items-center justify-center rounded-t-xl bg-surface-raised text-body text-text-muted">
                   Loading player…
                 </div>
               )}

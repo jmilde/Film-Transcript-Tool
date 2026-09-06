@@ -41,10 +41,16 @@
 
   /* Frosted-glass surfaces — translucent white, sits on top of `--raw-page`
      (light) or lightens it slightly (dark); not a semantic color, so it's
-     exempt from the brand/success/warning/danger/info set. */
+     exempt from the brand/success/warning/danger/info set.
+     `--raw-glass-line` is deliberately NOT translucent white here (unlike
+     dark mode, where a light line reads as a highlight on a dark fill) — a
+     white line on top of glass fills that are themselves near-white (as
+     they are here, sitting on the light theme's near-white page) is
+     invisible. A translucent dark line gives it contrast in both themes
+     while still staying a "glass" line, not an opaque `--raw-border`. */
   --raw-glass: oklch(100% 0 0 / 45%);
   --raw-glass-strong: oklch(100% 0 0 / 68%);
-  --raw-glass-line: oklch(100% 0 0 / 70%);
+  --raw-glass-line: oklch(30% 0.02 260 / 14%);
 }
 
 .dark {

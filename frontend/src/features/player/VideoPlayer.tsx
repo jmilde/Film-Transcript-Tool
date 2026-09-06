@@ -44,14 +44,16 @@ export function VideoPlayer({ src, videoRef }: PlayerProps) {
   }
 
   return (
-    // No rounding/padding here — the enclosing glass Card (VideoWorkspace)
-    // clips this edge-to-edge via its own `overflow-hidden`, matching the
-    // frosted player-card look where the video bleeds to the card's corners.
+    // The video clips its own top corners to match the enclosing glass
+    // Card's rounding (VideoWorkspace) — the Card itself deliberately isn't
+    // `overflow-hidden`, since that would also clip PlayerControls' button
+    // row if it ever overflows a narrowed panel, silently hiding controls
+    // instead of just letting them spill visibly.
     <div>
       <video
         ref={videoRef}
         src={src}
-        className="aspect-video w-full bg-black"
+        className="aspect-video w-full rounded-t-xl bg-black"
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onPlay={() => setPlaying(true)}
