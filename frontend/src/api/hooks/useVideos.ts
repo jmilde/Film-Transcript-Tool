@@ -4,6 +4,8 @@ import type { components } from '../schema'
 
 export type Video = components['schemas']['VideoRead']
 export type VideoUploadResponse = components['schemas']['VideoUploadResponse']
+export type VideoStatus = components['schemas']['VideoStatusRead']
+export type DuplicateCheck = components['schemas']['DuplicateCheckRead']
 
 /** Full video detail (assets + processing jobs). */
 export function useVideo(videoId: string | null) {
@@ -37,25 +39,65 @@ export function useVideoProcessing(videoId: string, enabled: boolean) {
   })
 }
 
+/** Upload a video (multipart) into a folder; kicks off the processing pipeline.
+ * Extracted as a plain function (not just a mutation) so the upload-queue
+ * runner (`useUploadRunner`) can call it imperatively for entries whose
+ * `folderId` varies per-entry, which a hook bound to one `folderId` can't do. */
+export async function uploadVideoFile(folderId: string, file: File): Promise<VideoUploadResponse> {
+  return unwrap(
+    await api.POST('/folders/{folder_id}/videos', {
+      params: { path: { folder_id: folderId } },
+      // openapi-typescript types binary upload fields as `string`; the actual
+      // runtime value is a File, which the serializer packs into form data.
+      body: { file: file as unknown as string },
+      bodySerializer(body) {
+        const form = new FormData()
+        form.set('file', body.file as unknown as Blob)
+        return form
+      },
+    }),
+  )
+}
+
 /** Upload a video (multipart) into a folder; kicks off the processing pipeline. */
 export function useUploadVideo(folderId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async (file: File) =>
-      unwrap(
-        await api.POST('/folders/{folder_id}/videos', {
-          params: { path: { folder_id: folderId } },
-          // openapi-typescript types binary upload fields as `string`; the actual
-          // runtime value is a File, which the serializer packs into form data.
-          body: { file: file as unknown as string },
-          bodySerializer(body) {
-            const form = new FormData()
-            form.set('file', body.file as unknown as Blob)
-            return form
-          },
-        }),
-      ),
+    mutationFn: async (file: File) => uploadVideoFile(folderId, file),
     onSuccess: () => client.invalidateQueries({ queryKey: ['folder', folderId] }),
+  })
+}
+
+/** Look up whether a folder already has a video matching this filename+size,
+ * before transferring the file's bytes. A plain function (like
+ * `uploadVideoFile`) since the upload-queue runner calls it imperatively per
+ * queue entry rather than from a component's render. */
+export async function checkDuplicateVideo(
+  folderId: string,
+  filename: string,
+  size: number,
+): Promise<DuplicateCheck> {
+  return unwrap(
+    await api.GET('/folders/{folder_id}/videos/duplicate-check', {
+      params: { path: { folder_id: folderId }, query: { filename, size } },
+    }),
+  )
+}
+
+/**
+ * Poll the batch status endpoint for a set of videos' processing jobs while
+ * any are still in flight — the upload tray's equivalent of
+ * `useVideoProcessing`, generalized from one video to the whole live set in
+ * one request. `useVideoProcessing` itself stays as-is for `ProcessingBadge`,
+ * a separate single-video call site this doesn't replace.
+ */
+export function useBatchVideoStatus(videoIds: string[], enabled: boolean) {
+  return useQuery({
+    queryKey: ['videos', 'status', [...videoIds].sort()],
+    enabled: enabled && videoIds.length > 0,
+    queryFn: async () =>
+      unwrap(await api.GET('/videos/status', { params: { query: { ids: videoIds.join(',') } } })),
+    refetchInterval: 1500,
   })
 }
 

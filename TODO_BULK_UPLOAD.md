@@ -152,26 +152,30 @@ From the design session — see the spec doc for the full reasoning:
 
 ## Phase 5 — Frontend: queue runner
 
-- [ ] New hook/module (e.g. `frontend/src/features/folders/useUploadRunner.ts`)
+- [x] New hook/module (e.g. `frontend/src/features/folders/useUploadRunner.ts`)
       draining `queued` entries from the Phase 3 store with a concurrency cap
       of 3: `queued → checking` (call Phase 1's duplicate-check endpoint;
       match → `skipped`; no match → continue) `→ uploading` (POST via the
       existing `useUploadVideo`/equivalent in `frontend/src/api/hooks/useVideos.ts`;
       success → `processing` with `videoId`; failure → `failed` with a retry
       action that re-invokes just this entry).
-- [ ] Generalize `useVideoProcessing` (`frontend/src/api/hooks/useVideos.ts`)
+- [x] Generalize `useVideoProcessing` (`frontend/src/api/hooks/useVideos.ts`)
       into a hook polling Phase 0's batch endpoint (~1.5s interval) for the
       store's current `processing`-status `videoId` set, updating each entry
       to `ready`/`failed` based on job outcomes. Keep the existing per-video
       `useVideoProcessing` for the standalone `ProcessingBadge` use case if
       still needed elsewhere, or replace it entirely if the batch hook fully
       subsumes it — check remaining call sites before deleting.
-- [ ] Failed processing jobs get a retry action hitting the existing
+      (Kept `useVideoProcessing` as-is — added a new `useBatchVideoStatus`
+      hook alongside it rather than modifying it in place, since
+      `ProcessingBadge` in `FolderPanel.tsx` is still a live single-video
+      call site for the standalone single-file upload button.)
+- [x] Failed processing jobs get a retry action hitting the existing
       `POST /jobs/{job_id}/retry`.
-- [ ] Tests: runner concurrency cap (never more than 3 in flight), status
+- [x] Tests: runner concurrency cap (never more than 3 in flight), status
       transition correctness per outcome (skip/success/upload-fail/job-fail),
       retry re-invokes only the failed entry.
-- [ ] Verify: `npm run test` green.
+- [x] Verify: `npm run test` green.
 
 ## Phase 6 — Frontend: UploadTray component
 

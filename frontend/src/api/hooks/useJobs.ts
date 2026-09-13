@@ -27,3 +27,10 @@ export function useJob(jobId: string | null) {
     },
   })
 }
+
+/** Retry a failed job. A plain function (like `uploadVideoFile`) rather than
+ * a mutation hook, since the upload-queue runner retries an arbitrary job id
+ * imperatively rather than from a component bound to one job. */
+export async function retryJob(jobId: string): Promise<Job> {
+  return unwrap(await api.POST('/jobs/{job_id}/retry', { params: { path: { job_id: jobId } } }))
+}
