@@ -1,13 +1,7 @@
 import { create } from 'zustand'
 
 export type UploadStatus =
-  | 'queued'
-  | 'checking'
-  | 'skipped'
-  | 'uploading'
-  | 'processing'
-  | 'ready'
-  | 'failed'
+  'queued' | 'checking' | 'skipped' | 'uploading' | 'processing' | 'ready' | 'failed'
 
 export interface UploadEntry {
   localId: string

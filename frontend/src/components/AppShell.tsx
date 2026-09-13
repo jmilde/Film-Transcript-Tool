@@ -13,6 +13,7 @@ import { Breadcrumb } from './ui/Breadcrumb'
 import type { BreadcrumbItem } from './ui/Breadcrumb'
 import { Button } from './ui/Button'
 import { UserMenu } from './UserMenu'
+import { UploadTray } from './UploadTray'
 
 /**
  * Top-level chrome: uniform header (breadcrumb, global Search/Ask, theme
@@ -215,6 +216,7 @@ export function AppShell() {
         </main>
       )}
       <SearchCommandPalette projectId={effectiveProjectId} />
+      <UploadTray />
     </div>
   )
 }

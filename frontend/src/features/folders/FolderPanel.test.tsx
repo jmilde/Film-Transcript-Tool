@@ -61,7 +61,9 @@ function directoryDataTransferItem(entries: FileSystemEntry[]): DataTransferItem
 
 function renderFolderPanel() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const router = createMemoryRouter([{ path: '/', element: <FolderPanel folderId={FOLDER_ID} onSelectFolder={() => {}} /> }])
+  const router = createMemoryRouter([
+    { path: '/', element: <FolderPanel folderId={FOLDER_ID} onSelectFolder={() => {}} /> },
+  ])
   return render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />

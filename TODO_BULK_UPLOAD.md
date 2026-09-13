@@ -179,17 +179,20 @@ From the design session — see the spec doc for the full reasoning:
 
 ## Phase 6 — Frontend: UploadTray component
 
-- [ ] New `frontend/src/features/folders/UploadTray.tsx` (or
+- [x] New `frontend/src/features/folders/UploadTray.tsx` (or
       `frontend/src/components/UploadTray.tsx` if it's app-shell-generic),
       fixed-position (e.g. bottom-right), rendered once in the app shell.
       Lists every non-idle entry from the Phase 3 store with its status via
       the existing `Badge` component (`frontend/src/components/ui/Badge`);
       per-entry dismiss action; a "clear completed" action wired to the
       store's `clearCompleted()`.
-- [ ] Tests: renders one row per entry with correct status badge, dismiss
+      (Placed in `components/` — app-shell-generic, not folder-scoped. Also
+      mounts `useUploadRunner` since nothing else in the tree does; the tray
+      being mounted in `AppShell` is what actually drives the queue.)
+- [x] Tests: renders one row per entry with correct status badge, dismiss
       removes just that entry, "clear completed" only removes `ready`
       entries and leaves others.
-- [ ] Verify: `npm run test` green.
+- [x] Verify: `npm run test` green.
 
 ## Phase 7 — End-to-end verification
 

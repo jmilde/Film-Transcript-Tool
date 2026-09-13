@@ -26,14 +26,19 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function mockDuplicateCheck(respond: (filename: string) => { is_duplicate: boolean } | Promise<unknown>) {
+function mockDuplicateCheck(
+  respond: (filename: string) => { is_duplicate: boolean } | Promise<unknown>,
+) {
   server.use(
-    http.get(`http://localhost:8000/folders/${FOLDER_ID}/videos/duplicate-check`, async ({ request }) => {
-      const filename = new URL(request.url).searchParams.get('filename') as string
-      const result = respond(filename)
-      const body = result instanceof Promise ? await result : result
-      return HttpResponse.json(body ?? { is_duplicate: false, video_id: null })
-    }),
+    http.get(
+      `http://localhost:8000/folders/${FOLDER_ID}/videos/duplicate-check`,
+      async ({ request }) => {
+        const filename = new URL(request.url).searchParams.get('filename') as string
+        const result = respond(filename)
+        const body = result instanceof Promise ? await result : result
+        return HttpResponse.json(body ?? { is_duplicate: false, video_id: null })
+      },
+    ),
   )
 }
 
@@ -46,7 +51,10 @@ function mockUpload(
       const file = form.get('file') as File
       const result = respond(file.name)
       if (result === 'error') {
-        return HttpResponse.json({ error: { code: 'BAD_REQUEST', message: 'nope' } }, { status: 400 })
+        return HttpResponse.json(
+          { error: { code: 'BAD_REQUEST', message: 'nope' } },
+          { status: 400 },
+        )
       }
       return HttpResponse.json(result, { status: 201 })
     }),
@@ -86,7 +94,9 @@ describe('useUploadRunner concurrency', () => {
       const checking = useUploadQueueStore.getState().entries.filter((e) => e.status === 'checking')
       expect(checking).toHaveLength(3)
     })
-    expect(useUploadQueueStore.getState().entries.filter((e) => e.status === 'queued')).toHaveLength(2)
+    expect(
+      useUploadQueueStore.getState().entries.filter((e) => e.status === 'queued'),
+    ).toHaveLength(2)
     // Exactly 3 duplicate-check calls were dispatched — the cap held the rest back.
     expect(gates.size).toBe(3)
 
@@ -97,7 +107,9 @@ describe('useUploadRunner concurrency', () => {
     for (const gate of gates.values()) gate.resolve({ is_duplicate: false })
 
     await waitFor(() => {
-      const processing = useUploadQueueStore.getState().entries.filter((e) => e.status === 'processing')
+      const processing = useUploadQueueStore
+        .getState()
+        .entries.filter((e) => e.status === 'processing')
       expect(processing).toHaveLength(5)
     })
   })
@@ -129,7 +141,21 @@ describe('useUploadRunner status transitions', () => {
     mockUpload(() => ({ video_id: 'v-1', processing_job_id: 'j-1' }))
     mockBatchStatus((ids) =>
       ids.includes('v-1')
-        ? [{ video_id: 'v-1', status: 'ready', jobs: [{ id: 'j-1', type: 'extract_metadata', status: 'completed', progress: 100, error_message: null }] }]
+        ? [
+            {
+              video_id: 'v-1',
+              status: 'ready',
+              jobs: [
+                {
+                  id: 'j-1',
+                  type: 'extract_metadata',
+                  status: 'completed',
+                  progress: 100,
+                  error_message: null,
+                },
+              ],
+            },
+          ]
         : [],
     )
 
@@ -166,7 +192,13 @@ describe('useUploadRunner status transitions', () => {
               video_id: 'v-2',
               status: 'failed',
               jobs: [
-                { id: 'j-2', type: 'generate_proxy', status: 'failed', progress: 0, error_message: 'boom' },
+                {
+                  id: 'j-2',
+                  type: 'generate_proxy',
+                  status: 'failed',
+                  progress: 0,
+                  error_message: 'boom',
+                },
               ],
             },
           ]
@@ -202,7 +234,9 @@ describe('useUploadRunner status transitions', () => {
     mockUpload(() => ({ video_id: 'v-ok', processing_job_id: 'j-ok' }))
     mockBatchStatus(() => [])
 
-    useUploadQueueStore.getState().enqueue([makeFile('dup.mp4', 1), makeFile('ok.mp4', 3)], FOLDER_ID)
+    useUploadQueueStore
+      .getState()
+      .enqueue([makeFile('dup.mp4', 1), makeFile('ok.mp4', 3)], FOLDER_ID)
     useUploadQueueStore.getState().enqueue([makeFile('bad.mp4', 2)], BAD_FOLDER_ID)
     renderHook(() => useUploadRunner(), { wrapper })
 
@@ -247,11 +281,13 @@ describe('useUploadRunner retryEntry', () => {
     result.current.retryEntry('a')
 
     await waitFor(() => {
-      expect(useUploadQueueStore.getState().entries.find((e) => e.localId === 'a')?.status).not.toBe(
-        'failed',
-      )
+      expect(
+        useUploadQueueStore.getState().entries.find((e) => e.localId === 'a')?.status,
+      ).not.toBe('failed')
     })
-    expect(useUploadQueueStore.getState().entries.find((e) => e.localId === 'b')?.status).toBe('failed')
+    expect(useUploadQueueStore.getState().entries.find((e) => e.localId === 'b')?.status).toBe(
+      'failed',
+    )
   })
 
   it('retries only the failed job for a processing-stage failure', async () => {

@@ -60,7 +60,9 @@ function dataTransferItem(entry: FileSystemEntry | null, fallbackFile?: File): D
 
 describe('collectDroppedFiles', () => {
   it('collects plain file drops', async () => {
-    const items = [dataTransferItem(fileEntry(makeFile('a.mp4')))] as unknown as DataTransferItemList
+    const items = [
+      dataTransferItem(fileEntry(makeFile('a.mp4'))),
+    ] as unknown as DataTransferItemList
     const files = await collectDroppedFiles(items)
     expect(files.map((f) => f.name)).toEqual(['a.mp4'])
   })
