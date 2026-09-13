@@ -108,7 +108,7 @@ From the design session — see the spec doc for the full reasoning:
 
 ## Phase 2.5 — Regenerate OpenAPI schema
 
-- [ ] Run `make openapi` (repo root); commit the regenerated
+- [x] Run `make openapi` (repo root); commit the regenerated
       `frontend/src/api/schema.d.ts` alongside (or immediately before)
       Phase 3.
 
