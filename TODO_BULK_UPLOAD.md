@@ -114,19 +114,19 @@ From the design session — see the spec doc for the full reasoning:
 
 ## Phase 3 — Frontend: global upload queue store
 
-- [ ] New `frontend/src/store/uploadQueue.ts` (zustand): entry shape
+- [x] New `frontend/src/store/uploadQueue.ts` (zustand): entry shape
       `{localId, folderId, fileName, fileSize, status: 'queued' | 'checking'
       | 'skipped' | 'uploading' | 'processing' | 'ready' | 'failed', videoId?,
       jobIds?, error?}`. Mount/subscribe at the app shell level
       (`frontend/src/components/AppShell.tsx` or equivalent root layout), not
       inside `FolderPanel`, so it survives route changes.
-- [ ] Actions: `enqueue(files, folderId)` (dedupes by filename+size **within
+- [x] Actions: `enqueue(files, folderId)` (dedupes by filename+size **within
       the same call** before adding entries — see spec's intra-batch race
       note), `updateStatus(localId, patch)`, `dismiss(localId)`,
       `clearCompleted()`.
-- [ ] Tests: store unit tests for intra-batch dedup, status transitions, and
+- [x] Tests: store unit tests for intra-batch dedup, status transitions, and
       `clearCompleted` only removing `ready` entries.
-- [ ] Verify: `npm run test` green, `npm run typecheck` clean.
+- [x] Verify: `npm run test` green, `npm run typecheck` clean.
 
 ## Phase 4 — Frontend: enqueue entry points
 
