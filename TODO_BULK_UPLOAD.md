@@ -196,14 +196,62 @@ From the design session — see the spec doc for the full reasoning:
 
 ## Phase 7 — End-to-end verification
 
-- [ ] Manual click-through per `PLAYWRIGHT_MANUAL_TESTING.md` conventions:
-      drop multiple files onto a folder, drop an OS folder containing
-      videos, use the folder-select button, confirm the tray tracks all of
-      them through to ready/failed, confirm a duplicate (same file dropped
-      twice, or re-dropping an already-uploaded file) is skipped without a
-      network upload (check devtools network tab), confirm a small
-      (<=720p) source video has no `PROXY` asset created but still plays.
-- [ ] Verify: `make check` (backend) and `npm run test` (frontend) both
-      green; note any pre-existing flakiness separately rather than
-      attributing it to this work (see `TODO_FRONTEND_OVERHAUL.md` Phase 5
-      for the precedent on documenting pre-existing test flakiness).
+- [x] Manual click-through per `PLAYWRIGHT_MANUAL_TESTING.md` conventions,
+      against the real dev stack (backend + worker + frontend + dev
+      Postgres), using real ffmpeg-generated clips, in a scratch
+      "Bulk Upload Test" folder in the "Test" project:
+    - [x] Dropped multiple loose files (360p + 1080p) onto the folder — both
+          enqueued, uploaded, and reached `Ready`; new video rows appeared
+          in the folder list *without navigating away* (this specifically
+          exercises the folder-query-invalidation fix below).
+    - [x] Dropped a mix of two `.mp4` files and a `.txt` file as a loose
+          multi-file OS drop — both videos reached `Ready`; the `.txt` was
+          silently filtered client-side (confirmed via a DB query: no video
+          row was ever created for it — zero bytes uploaded, not just
+          hidden in the UI).
+    - [x] Used the "Select folder" button on a real nested directory
+          (top-level file + a file in a subfolder) — both uploaded via the
+          real `webkitdirectory` picker and reached `Ready`.
+    - [ ] **Not verified: dragging a real OS folder onto the drop zone.**
+          Playwright MCP's `browser_drop` explicitly rejects directory
+          paths ("Dropping a directory is not supported — pass individual
+          files"), so the `webkitGetAsEntry`/`readEntries` recursive-walk
+          code path in `fileDrop.ts` could only be exercised by its mocked
+          unit tests, not a real browser DnD folder drop. The folder-select
+          button's recursion *did* get verified live (same recursive
+          semantics, different browser API/code path). If this matters,
+          it needs a human dragging a real folder from Finder/Explorer.
+    - [x] Re-dropped an already-uploaded file (and a second already-queued
+          duplicate within the same drop) — both showed `Skipped
+          (duplicate)`; confirmed via the network tab that only the
+          `GET .../duplicate-check` request fired, no `POST .../videos`.
+    - [x] Confirmed via a direct DB query that the 360p upload has no
+          `PROXY` `VideoAsset` row (only `original`/`thumbnail`/`waveform`)
+          while the 1080p upload does; opened the 360p video's page and
+          confirmed it plays (falls back to `ORIGINAL`, as expected).
+    - [x] "Clear completed" removed only `Ready` entries, leaving `Skipped`
+          ones in place, and disables itself once nothing is `Ready`.
+          Per-entry dismiss removes just that row.
+    - [x] Tray persisted across an in-app route change (folder → video page
+          → back) and was correctly cleared by a hard reload, matching the
+          design spec's session-only non-goal.
+    - [ ] Not manually triggered: a `failed` entry + its retry action (well
+          covered by `useUploadRunner.test.tsx`'s mocked scenarios; wasn't
+          worth forcing a real failure — e.g. killing the worker mid-job —
+          for this pass).
+    - Found and fixed one real bug during this pass: the runner wasn't
+      invalidating the folder query after a successful upload (see the
+      "Fix: invalidate the folder query..." commit) — caught by the
+      advisor before the manual click-through, then confirmed fixed live.
+    - Incidental: found the pre-existing dev backend/frontend processes
+      wedged (a backend connection stuck `idle in transaction` for 90+
+      minutes, refusing new connections) — restarted both via
+      `make run-backend`/`make run-frontend`; unrelated to this feature.
+- [x] Verify: `make check` (backend, 376 passed) and `npm run test`
+      (frontend, 252 passed) both green. One pre-existing flake unrelated
+      to this work: a ProseMirror `DOMObserver`/timer teardown error
+      surfaced from `src/features/documents/clipClipboard.test.ts` on one
+      run (a document-clipboard test this work never touched) — not
+      attributed to this change, per the `TODO_FRONTEND_OVERHAUL.md` Phase
+      5 precedent for documenting pre-existing flakiness rather than
+      chasing it here.
