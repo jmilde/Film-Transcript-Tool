@@ -167,6 +167,27 @@ describe('useUploadRunner status transitions', () => {
     })
   })
 
+  it('invalidates the folder query on a successful upload, so an open FolderPanel picks up the new video', async () => {
+    mockDuplicateCheck(() => ({ is_duplicate: false }))
+    mockUpload(() => ({ video_id: 'v-1', processing_job_id: 'j-1' }))
+    mockBatchStatus(() => [])
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['folder', FOLDER_ID], { folder: {}, folders: [], videos: [] })
+    expect(client.getQueryState(['folder', FOLDER_ID])?.isInvalidated).toBe(false)
+
+    useUploadQueueStore.getState().enqueue([makeFile('ok.mp4', 5)], FOLDER_ID)
+    renderHook(() => useUploadRunner(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    })
+
+    await waitFor(() => {
+      expect(client.getQueryState(['folder', FOLDER_ID])?.isInvalidated).toBe(true)
+    })
+  })
+
   it('marks an upload failure as failed with no videoId', async () => {
     mockDuplicateCheck(() => ({ is_duplicate: false }))
     mockUpload(() => 'error')

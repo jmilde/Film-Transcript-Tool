@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   checkDuplicateVideo,
   uploadVideoFile,
@@ -27,6 +28,7 @@ const IN_FLIGHT_STATUSES = new Set<UploadEntry['status']>(['checking', 'uploadin
 export function useUploadRunner(): { retryEntry: (localId: string) => void } {
   const entries = useUploadQueueStore((s) => s.entries)
   const updateStatus = useUploadQueueStore((s) => s.updateStatus)
+  const queryClient = useQueryClient()
   // Entries this runner has already claimed off `queued`, so a re-render
   // triggered by an unrelated entry's status change doesn't re-dispatch the
   // same file's duplicate-check/upload a second time.
@@ -70,13 +72,19 @@ export function useUploadRunner(): { retryEntry: (localId: string) => void } {
           videoId: result.video_id,
           jobIds: [result.processing_job_id],
         })
+        // Mirrors useUploadVideo's onSuccess: the runner calls
+        // uploadVideoFile directly (bypassing that hook, since a single
+        // hook instance can't vary folderId per entry), so it must
+        // replicate the invalidation too — otherwise an open FolderPanel
+        // never shows the new video row until an unrelated refetch.
+        void queryClient.invalidateQueries({ queryKey: ['folder', entry.folderId] })
       } catch {
         updateStatus(entry.localId, { status: 'failed', error: 'Upload failed' })
       } finally {
         inFlightRef.current.delete(entry.localId)
       }
     },
-    [updateStatus],
+    [updateStatus, queryClient],
   )
 
   useEffect(() => {
