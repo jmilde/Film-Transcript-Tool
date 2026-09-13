@@ -1,7 +1,9 @@
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Response, UploadFile, status
+from fastapi import APIRouter, Depends, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,15 +22,17 @@ from app.db.session import get_db
 from app.models.asset import AssetType, VideoAsset
 from app.models.folder import Folder
 from app.models.job import JobStatus, ProcessingJob
-from app.models.membership import MembershipRole
+from app.models.membership import MembershipRole, ProjectMembership
 from app.models.user import User
 from app.models.video import Video
 from app.schemas.video import (
+    DuplicateCheckRead,
     FolderBreadcrumbRead,
     MediaTokenResponse,
     VideoAssetRead,
     VideoJobRead,
     VideoRead,
+    VideoStatusRead,
     VideoUpdate,
     VideoUploadResponse,
 )
@@ -51,17 +55,29 @@ def _find_asset(db: Session, video_id: uuid.UUID, asset_type: AssetType) -> Vide
     )
 
 
-def _video_read(db: Session, video: Video) -> VideoRead:
-    assets = db.execute(select(VideoAsset).where(VideoAsset.video_id == video.id)).scalars().all()
-    jobs = (
+def _fetch_jobs(db: Session, video_id: uuid.UUID) -> Sequence[ProcessingJob]:
+    return (
         db.execute(
             select(ProcessingJob)
-            .where(ProcessingJob.video_id == video.id)
+            .where(ProcessingJob.video_id == video_id)
             .order_by(ProcessingJob.created_at)
         )
         .scalars()
         .all()
     )
+
+
+def _derive_status(jobs: Sequence[ProcessingJob]) -> Literal["processing", "ready", "failed"]:
+    if any(j.status == JobStatus.FAILED for j in jobs):
+        return "failed"
+    if jobs and all(j.status == JobStatus.COMPLETED for j in jobs):
+        return "ready"
+    return "processing"
+
+
+def _video_read(db: Session, video: Video) -> VideoRead:
+    assets = db.execute(select(VideoAsset).where(VideoAsset.video_id == video.id)).scalars().all()
+    jobs = _fetch_jobs(db, video.id)
     folder_path = build_folder_breadcrumb_entries(db, [video.folder_id]).get(video.folder_id, [])
     return VideoRead(
         id=video.id,
@@ -129,6 +145,89 @@ def upload_video(
     db.flush()
     db.commit()
     return VideoUploadResponse(video_id=video.id, processing_job_id=job.id)
+
+
+@router.get("/videos/status", response_model=list[VideoStatusRead])
+def get_videos_status(
+    ids: str = Query(default=""),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[VideoStatusRead]:
+    """Batch job-status poll for the upload tray, replacing N per-video polls.
+
+    Declared ahead of ``/videos/{video_id}`` so the literal ``status`` path
+    segment isn't swallowed by that route's UUID path param. Unknown,
+    malformed, and foreign-project IDs are silently omitted from the
+    response rather than erroring the whole batch — the caller can't tell
+    them apart from an ID that hasn't been created yet, which is normal
+    tray churn, not something to be flagged as an error.
+    """
+    video_ids: list[uuid.UUID] = []
+    for part in ids.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            video_ids.append(uuid.UUID(part))
+        except ValueError:
+            continue
+    if not video_ids:
+        return []
+
+    videos = db.execute(select(Video).where(Video.id.in_(video_ids))).scalars().all()
+    if not videos:
+        return []
+    project_ids = {v.project_id for v in videos}
+    accessible_project_ids = set(
+        db.execute(
+            select(ProjectMembership.project_id).where(
+                ProjectMembership.project_id.in_(project_ids),
+                ProjectMembership.user_id == user.id,
+            )
+        ).scalars()
+    )
+
+    result = []
+    for video in videos:
+        if video.project_id not in accessible_project_ids:
+            continue
+        jobs = _fetch_jobs(db, video.id)
+        result.append(
+            VideoStatusRead(
+                video_id=video.id,
+                status=_derive_status(jobs),
+                jobs=[VideoJobRead.model_validate(j) for j in jobs],
+            )
+        )
+    return result
+
+
+@router.get("/folders/{folder_id}/videos/duplicate-check", response_model=DuplicateCheckRead)
+def check_duplicate_video(
+    filename: str,
+    size: int,
+    folder: Folder = Depends(require_folder_access),
+    db: Session = Depends(get_db),
+) -> DuplicateCheckRead:
+    """Look for a video already in this folder with matching filename+size.
+
+    Called by the frontend before transferring a file's bytes so an
+    already-uploaded file (or a same-batch re-drop) can be skipped without
+    the upload. Filename alone isn't enough — camera-default filenames like
+    ``MVI_0001.MP4`` routinely collide across unrelated clips — so size must
+    match too.
+    """
+    video_id = db.execute(
+        select(Video.id)
+        .join(VideoAsset, VideoAsset.video_id == Video.id)
+        .where(
+            Video.folder_id == folder.id,
+            Video.original_filename == filename,
+            VideoAsset.type == AssetType.ORIGINAL,
+            VideoAsset.size == size,
+        )
+    ).scalar_one_or_none()
+    return DuplicateCheckRead(is_duplicate=video_id is not None, video_id=video_id)
 
 
 @router.get("/videos/{video_id}", response_model=VideoRead)

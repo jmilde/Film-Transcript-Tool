@@ -53,7 +53,7 @@ From the design session — see the spec doc for the full reasoning:
 
 ## Phase 0 — Backend: batch status endpoint
 
-- [ ] Tests first in `backend/tests/api/routes/test_videos.py` (or a new
+- [x] Tests first in `backend/tests/api/routes/test_videos.py` (or a new
       `test_video_status.py` if that file is getting large): a new
       `GET /videos/status?ids=<uuid>,<uuid>,...` endpoint returns job status
       for each requested video, 403s/omits IDs outside the caller's project
@@ -61,19 +61,19 @@ From the design session — see the spec doc for the full reasoning:
       this and mirror it — don't leak existence of videos in other
       projects), handles an empty `ids` param, handles a mix of valid/
       invalid/foreign IDs in one request.
-- [ ] Implement in `backend/app/api/routes/videos.py`: parse the comma-
+- [x] Implement in `backend/app/api/routes/videos.py`: parse the comma-
       separated `ids` query param, reuse whatever helper already builds the
       `jobs` list on `VideoRead` (`_video_read()` or equivalent) so the shape
       matches exactly — do not reimplement job-serialization logic. Response:
       `[{video_id, status, jobs: [...]}, ...]`.
-- [ ] Add/extend the Pydantic response schema in `backend/app/schemas/video.py`
+- [x] Add/extend the Pydantic response schema in `backend/app/schemas/video.py`
       (e.g. `VideoStatusRead`) rather than reusing `VideoRead` wholesale if
       the full video shape isn't needed for polling.
-- [ ] Verify: `make check` green.
+- [x] Verify: `make check` green.
 
 ## Phase 1 — Backend: duplicate-check endpoint
 
-- [ ] Tests first: a new
+- [x] Tests first: a new
       `GET /folders/{folder_id}/videos/duplicate-check?filename=...&size=...`
       returns `{is_duplicate: true, video_id: ...}` when a video in that
       folder has matching `original_filename` **and** matching
@@ -81,15 +81,15 @@ From the design session — see the spec doc for the full reasoning:
       video_id: null}` on a filename-only collision (different size) and on
       no match at all; 404/403 on a folder the caller can't access (mirror
       existing folder-access checks elsewhere in `videos.py`/`folders.py`).
-- [ ] Implement in `backend/app/api/routes/videos.py` (or `folders.py`,
+- [x] Implement in `backend/app/api/routes/videos.py` (or `folders.py`,
       whichever already owns folder-scoped video routes) — a straightforward
       join/query against `Video` + `VideoAsset`, no new model fields needed
       (`VideoAsset.size` already exists per `backend/app/models/asset.py`).
-- [ ] Verify: `make check` green.
+- [x] Verify: `make check` green.
 
 ## Phase 2 — Backend: conditional proxy generation
 
-- [ ] Tests first in whatever test file covers
+- [x] Tests first in whatever test file covers
       `backend/app/worker/handlers/proxy.py` (check for an existing
       `tests/worker/handlers/test_proxy.py` or similar): given a `Video` with
       `height <= 720`, `handle_generate_proxy` completes the job without
@@ -99,12 +99,12 @@ From the design session — see the spec doc for the full reasoning:
       `ORIGINAL` when no `PROXY` asset exists (it already should — this is
       confirming the existing fallback covers the new skip case, not new
       fallback logic).
-- [ ] Implement the early-exit in `handle_generate_proxy`
+- [x] Implement the early-exit in `handle_generate_proxy`
       (`backend/app/worker/handlers/proxy.py`), reading `video.height`
       (already populated by the preceding `EXTRACT_METADATA` stage — confirm
       job ordering in `backend/app/services/pipeline.py`'s `UPLOAD_PIPELINE`
       guarantees this before relying on it).
-- [ ] Verify: `make check` green.
+- [x] Verify: `make check` green.
 
 ## Phase 2.5 — Regenerate OpenAPI schema
 

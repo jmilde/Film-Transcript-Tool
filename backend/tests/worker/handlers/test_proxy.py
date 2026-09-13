@@ -36,3 +36,40 @@ def test_generate_proxy_is_idempotent(media: MediaFixture) -> None:
         .where(VideoAsset.video_id == media.video.id, VideoAsset.type == AssetType.PROXY)
     ).scalar_one()
     assert count == 1
+
+
+def test_generate_proxy_skips_low_resolution_source(media: MediaFixture) -> None:
+    media.video.height = 720
+    media.db.flush()
+    job = media.job(JobType.GENERATE_PROXY)
+
+    result = handle_generate_proxy(media.db, job)
+
+    assert result == {"skipped": True, "reason": "source already <= 720p"}
+    assert find_asset(media.db, media.video.id, AssetType.PROXY) is None
+
+
+def test_generate_proxy_transcodes_when_above_threshold(media: MediaFixture) -> None:
+    media.video.height = 1080
+    media.db.flush()
+    job = media.job(JobType.GENERATE_PROXY)
+
+    result = handle_generate_proxy(media.db, job)
+
+    assert result is not None
+    assert "skipped" not in result
+    assert find_asset(media.db, media.video.id, AssetType.PROXY) is not None
+
+
+def test_generate_proxy_transcodes_when_height_unknown(media: MediaFixture) -> None:
+    # height is populated by the preceding EXTRACT_METADATA stage; if it's
+    # somehow still unset, fail open (transcode) rather than silently
+    # skipping proxy generation forever.
+    assert media.video.height is None
+    job = media.job(JobType.GENERATE_PROXY)
+
+    result = handle_generate_proxy(media.db, job)
+
+    assert result is not None
+    assert "skipped" not in result
+    assert find_asset(media.db, media.video.id, AssetType.PROXY) is not None

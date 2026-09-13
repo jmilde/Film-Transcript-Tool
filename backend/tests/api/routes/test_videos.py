@@ -228,6 +228,102 @@ def test_upload_viewer_forbidden(
     assert resp.status_code == 403
 
 
+# --- Duplicate check ---
+
+
+def test_duplicate_check_matches_filename_and_size(auth_client: TestClient, tmp_path: Path) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+    vid = auth_client.post(
+        f"/folders/{fid}/videos",
+        files={"file": ("clip.mp4", b"twelve-bytes", "video/mp4")},
+    ).json()["video_id"]
+
+    resp = auth_client.get(
+        f"/folders/{fid}/videos/duplicate-check",
+        params={"filename": "clip.mp4", "size": len(b"twelve-bytes")},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"is_duplicate": True, "video_id": vid}
+
+
+def test_duplicate_check_same_filename_different_size_is_not_duplicate(
+    auth_client: TestClient, tmp_path: Path
+) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+    auth_client.post(
+        f"/folders/{fid}/videos",
+        files={"file": ("MVI_0001.MP4", b"short", "video/mp4")},
+    )
+
+    resp = auth_client.get(
+        f"/folders/{fid}/videos/duplicate-check",
+        params={"filename": "MVI_0001.MP4", "size": 999999},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"is_duplicate": False, "video_id": None}
+
+
+def test_duplicate_check_no_match(auth_client: TestClient, tmp_path: Path) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+
+    resp = auth_client.get(
+        f"/folders/{fid}/videos/duplicate-check",
+        params={"filename": "nope.mp4", "size": 1},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"is_duplicate": False, "video_id": None}
+
+
+def test_duplicate_check_scoped_to_folder(auth_client: TestClient, tmp_path: Path) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+    other_fid = _make_folder(auth_client)
+    auth_client.post(
+        f"/folders/{fid}/videos",
+        files={"file": ("clip.mp4", b"data", "video/mp4")},
+    )
+
+    resp = auth_client.get(
+        f"/folders/{other_fid}/videos/duplicate-check",
+        params={"filename": "clip.mp4", "size": len(b"data")},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"is_duplicate": False, "video_id": None}
+
+
+def test_duplicate_check_non_member_forbidden(
+    auth_client: TestClient,
+    app_client: Callable[[User], TestClient],
+    other_user: User,
+    tmp_path: Path,
+) -> None:
+    _use_tmp_storage(auth_client, tmp_path)
+    fid = _make_folder(auth_client)
+
+    resp = app_client(other_user).get(
+        f"/folders/{fid}/videos/duplicate-check",
+        params={"filename": "clip.mp4", "size": 1},
+    )
+
+    assert resp.status_code == 403
+
+
+def test_duplicate_check_missing_folder_404(auth_client: TestClient) -> None:
+    resp = auth_client.get(
+        f"/folders/{uuid.uuid4()}/videos/duplicate-check",
+        params={"filename": "clip.mp4", "size": 1},
+    )
+
+    assert resp.status_code == 404
+
+
 # --- Media streaming (proxy / waveform / media-token) ---
 
 
