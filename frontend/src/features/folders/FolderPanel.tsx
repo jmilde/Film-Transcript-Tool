@@ -1,9 +1,11 @@
-import { useRef, useState, type DragEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useFolderContents } from '../../api/hooks/useFolders'
 import { useMoveVideo, useUploadVideo, useVideoProcessing } from '../../api/hooks/useVideos'
 import { Folder as FolderIcon, Video as VideoIcon } from 'lucide-react'
 import { VIDEO_DND_TYPE } from './FolderTree'
+import { collectDroppedFiles, filterVideoFiles } from './fileDrop'
+import { useUploadQueueStore } from '../../store/uploadQueue'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 
@@ -37,6 +39,7 @@ function FolderPanelInner({
 }) {
   const { data, isPending, isError } = useFolderContents(folderId)
   const moveVideo = useMoveVideo()
+  const enqueueUploads = useUploadQueueStore((s) => s.enqueue)
   // Videos uploaded in this session, tracked for live processing status.
   const [uploaded, setUploaded] = useState<string[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -100,6 +103,12 @@ function FolderPanelInner({
   }
 
   function handleSubfolderDrop(e: DragEvent, targetFolderId: string) {
+    // Guard first (rather than unconditionally stopping propagation) so an OS
+    // file/folder drop landing on a subfolder row still bubbles up to the
+    // panel's own OS-drop handler below instead of being silently eaten here
+    // — dropped files always upload flat into the open folder, never a
+    // subfolder (see the design spec's no-subfolder-mirroring non-goal).
+    if (!e.dataTransfer.types.includes(VIDEO_DND_TYPE)) return
     e.preventDefault()
     e.stopPropagation()
     setDragOverFolderId(null)
@@ -112,11 +121,34 @@ function FolderPanelInner({
     }
   }
 
+  // OS file/folder drags are distinguished from the app's own VIDEO_DND_TYPE
+  // payload by the presence of the standard 'Files' drag type — checked
+  // first so this panel accepts both without either path swallowing the
+  // other. Handlers live on the outer container (not the `<ul>` below) so
+  // dropping onto an *empty* folder — which renders no list at all — still
+  // works.
+  function handleOsFileDragOver(e: DragEvent) {
+    if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+  }
+
+  function handleOsFileDrop(e: DragEvent) {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    const items = e.dataTransfer.items
+    void collectDroppedFiles(items).then((files) => {
+      const videoFiles = filterVideoFiles(files)
+      if (videoFiles.length > 0) enqueueUploads(videoFiles, folderId)
+    })
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onDragOver={handleOsFileDragOver} onDrop={handleOsFileDrop}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-h3 text-text">{data.folder.name}</h3>
-        <UploadVideo folderId={folderId} onUploaded={(id) => setUploaded((v) => [...v, id])} />
+        <div className="flex gap-2">
+          <UploadVideo folderId={folderId} onUploaded={(id) => setUploaded((v) => [...v, id])} />
+          <SelectFolderButton folderId={folderId} />
+        </div>
       </div>
 
       {folders.length === 0 && videos.length === 0 ? (
@@ -216,6 +248,37 @@ function UploadVideo({
       />
       <Button onClick={() => inputRef.current?.click()} disabled={uploadVideo.isPending} size="sm">
         {uploadVideo.isPending ? 'Uploading…' : 'Upload video'}
+      </Button>
+    </>
+  )
+}
+
+/**
+ * Bulk-select an OS folder of videos via the folder picker. `webkitdirectory`
+ * has no React/JSX prop (it's not in the DOM typings' JSX attribute list, only
+ * on `HTMLInputElement` itself), so it's set imperatively on the element.
+ * Browsers without support (Firefox) just fall back to a plain multi-file
+ * picker rather than erroring.
+ */
+function SelectFolderButton({ folderId }: { folderId: string }) {
+  const enqueue = useUploadQueueStore((s) => s.enqueue)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.webkitdirectory = true
+  }, [])
+
+  function onChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = filterVideoFiles(Array.from(event.target.files ?? []))
+    event.target.value = '' // allow re-selecting the same folder
+    if (files.length > 0) enqueue(files, folderId)
+  }
+
+  return (
+    <>
+      <input ref={inputRef} type="file" multiple onChange={onChange} className="hidden" />
+      <Button variant="secondary" onClick={() => inputRef.current?.click()} size="sm">
+        Select folder
       </Button>
     </>
   )

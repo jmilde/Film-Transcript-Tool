@@ -130,25 +130,25 @@ From the design session — see the spec doc for the full reasoning:
 
 ## Phase 4 — Frontend: enqueue entry points
 
-- [ ] `frontend/src/features/folders/FolderPanel.tsx`: extend the existing
+- [x] `frontend/src/features/folders/FolderPanel.tsx`: extend the existing
       native drag-and-drop handling (currently only handles the app's own
       `VIDEO_DND_TYPE` payload for moving videos between folders — see
       existing DnD code in this file) to also detect OS file/folder drags by
       checking `dataTransfer.types.includes('Files')` before falling back to
       the existing internal-DnD path.
-- [ ] Recursively walk dropped folders via
+- [x] Recursively walk dropped folders via
       `DataTransferItem.webkitGetAsEntry()` (a folder drop doesn't expose
       nested files directly) to produce a flat `File[]`; filter to allowed
       video extensions client-side (mirror backend `ALLOWED_EXTENSIONS` from
       `backend/app/api/routes/videos.py`) before calling `enqueue`.
-- [ ] Add a "Select folder" button next to the existing single-file upload
+- [x] Add a "Select folder" button next to the existing single-file upload
       button, using `<input type="file" webkitdirectory multiple>`; Firefox
       (no `webkitdirectory` support) falls back to plain multi-file select —
       verify this degrades gracefully rather than erroring.
-- [ ] Tests: RTL tests for OS-file-drop detection (mock `dataTransfer.types`)
+- [x] Tests: RTL tests for OS-file-drop detection (mock `dataTransfer.types`)
       and folder-entry enumeration (mock `webkitGetAsEntry`); confirm
       existing internal video-move DnD tests still pass unchanged.
-- [ ] Verify: `npm run test` green.
+- [x] Verify: `npm run test` green.
 
 ## Phase 5 — Frontend: queue runner
 
