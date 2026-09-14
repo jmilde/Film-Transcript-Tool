@@ -7,7 +7,10 @@ timeline. A built-in document editor lets you pull quotes straight out of any
 transcript to assemble a paper edit alongside the raw footage. Built to
 complement editing software like DaVinci Resolve, not replace it.
 
-![Video view with synced transcript, translation, and comments](docs/screenshots/video-nino-translation-view.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/video-translation-view-dark.png">
+  <img alt="Video view with synced transcript, translation, and comments" src="docs/screenshots/video-translation-view-light.png">
+</picture>
 
 ## Features
 
@@ -22,10 +25,12 @@ complement editing software like DaVinci Resolve, not replace it.
 
 ## Screenshots
 
+Screenshots follow your system theme (GitHub's `prefers-color-scheme`) — the app itself has a light/dark toggle too.
+
 | | |
 |---|---|
-| ![Semantic search over a project's transcripts](docs/screenshots/ask-minerals.png)<br>Ask a question, get cited transcript excerpts | ![Full-text search results](docs/screenshots/search-minerals.png)<br>Full-text search across a project |
-| ![Transcript editor with document panel](docs/screenshots/projects-with-document-panel.png)<br>Notes panel alongside the project view | ![Synced video and transcript](docs/screenshots/video-nino-document-view.png)<br>Video, transcript, comments, and notes in one view |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ask-dark.png"><img alt="Semantic search over a project's transcripts" src="docs/screenshots/ask-light.png"></picture><br>Ask a question, get cited transcript excerpts | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/search-dark.png"><img alt="Full-text search results" src="docs/screenshots/search-light.png"></picture><br>Full-text search across a project |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/projects-document-panel-dark.png"><img alt="Project view with document panel" src="docs/screenshots/projects-document-panel-light.png"></picture><br>Notes panel alongside the project view | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/video-document-view-dark.png"><img alt="Synced video and transcript" src="docs/screenshots/video-document-view-light.png"></picture><br>Video, transcript, comments, and notes in one view |
 
 ## Tech stack
 
