@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -53,6 +54,24 @@ class VideoRead(BaseModel):
 class VideoUploadResponse(BaseModel):
     video_id: uuid.UUID
     processing_job_id: uuid.UUID
+
+
+class VideoStatusRead(BaseModel):
+    """One video's aggregate processing status, for the batch status poll.
+
+    ``status`` mirrors the derivation the frontend's per-video processing
+    badge already does client-side (failed > ready > processing), computed
+    once here so every poller (tray, badge) agrees.
+    """
+
+    video_id: uuid.UUID
+    status: Literal["processing", "ready", "failed"]
+    jobs: list[VideoJobRead]
+
+
+class DuplicateCheckRead(BaseModel):
+    is_duplicate: bool
+    video_id: uuid.UUID | None
 
 
 class VideoUpdate(BaseModel):

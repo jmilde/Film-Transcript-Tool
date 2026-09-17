@@ -5,7 +5,7 @@ import { Card } from './Card'
 describe('Card', () => {
   it('defaults to the dense, neutral workspace treatment', () => {
     render(<Card>content</Card>)
-    expect(screen.getByText('content').className).toContain('border-border')
+    expect(screen.getByText('content').className).toContain('border-glass-line')
   })
 
   it('applies the airy pastel treatment with a tint', () => {

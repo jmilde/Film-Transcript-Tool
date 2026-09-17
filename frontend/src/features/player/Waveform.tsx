@@ -136,7 +136,7 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
   return (
     <div className="relative pt-5">
       <div
-        className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-md bg-text px-1.5 py-0.5 font-mono text-[10px] text-page"
+        className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-lg bg-text px-1.5 py-0.5 font-mono text-[10px] text-page"
         style={{ left: `${labelLeft}%` }}
       >
         {formatTime(displayTime)}
@@ -149,7 +149,7 @@ export function Waveform({ peaks, onSeek }: WaveformProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="h-16 w-full cursor-pointer rounded-md bg-surface-raised"
+        className="h-16 w-full cursor-pointer rounded-lg bg-surface-raised"
       />
     </div>
   )

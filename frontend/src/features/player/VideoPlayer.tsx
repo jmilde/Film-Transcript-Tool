@@ -44,25 +44,32 @@ export function VideoPlayer({ src, videoRef }: PlayerProps) {
   }
 
   return (
-    <div className="space-y-2">
+    // The video clips its own top corners to match the enclosing glass
+    // Card's rounding (VideoWorkspace) — the Card itself deliberately isn't
+    // `overflow-hidden`, since that would also clip PlayerControls' button
+    // row if it ever overflows a narrowed panel, silently hiding controls
+    // instead of just letting them spill visibly.
+    <div>
       <video
         ref={videoRef}
         src={src}
-        className="w-full rounded bg-black"
+        className="aspect-video w-full rounded-t-xl bg-black"
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
-      <PlayerControls
-        currentTime={currentTime}
-        duration={duration}
-        playing={playing}
-        speed={speed}
-        onTogglePlay={togglePlay}
-        onSkip={skip}
-        onToggleSpeed={toggleSpeed}
-      />
+      <div className="p-3">
+        <PlayerControls
+          currentTime={currentTime}
+          duration={duration}
+          playing={playing}
+          speed={speed}
+          onTogglePlay={togglePlay}
+          onSkip={skip}
+          onToggleSpeed={toggleSpeed}
+        />
+      </div>
     </div>
   )
 }

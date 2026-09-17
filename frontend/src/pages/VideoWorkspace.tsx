@@ -18,6 +18,7 @@ import { CommentsPanel } from '../features/comments/CommentsPanel'
 import { TranslationControl } from '../features/translation/TranslationControl'
 import { ExportControl } from '../features/export/ExportControl'
 import { ReturnToOrigin } from '../features/navigation/ReturnToOrigin'
+import { Card } from '../components/ui/Card'
 import { X as CloseIcon } from 'lucide-react'
 import type { PendingSearchNav } from '../features/search/types'
 
@@ -192,16 +193,19 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
         </div>
       </div>
 
-      {/* Numeric sizes are pixels in v4; strings without units are percentages. */}
+      {/* Numeric sizes are pixels in v4; strings without units are percentages.
+          Dense workspace stays neutral (no tint) per frontend/CLAUDE.md — the
+          glass-strong fill just lets the app shell's blob background show
+          through, blurred, the same way every other frosted panel does. */}
       <Group
         orientation="horizontal"
-        className="flex-1 overflow-hidden rounded-lg border border-border"
+        className="flex-1 overflow-hidden rounded-xl border border-glass-line"
       >
-        <Panel defaultSize="55" minSize="30" className="bg-surface">
+        <Panel defaultSize="55" minSize="30" className="bg-glass-strong backdrop-blur-md">
           {secondTranscriptId ? (
             <Group orientation="horizontal" className="h-full">
               <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
-                <div className="border-b border-border px-4 py-1.5 text-small font-medium text-text-muted">
+                <div className="border-b border-glass-line px-4 py-1.5 font-display text-[11px] font-semibold tracking-wide text-text-muted uppercase">
                   Original
                 </div>
                 <div className="min-h-0 flex-1">
@@ -217,16 +221,16 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                   />
                 </div>
               </Panel>
-              <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
+              <Separator className="w-1.5 bg-glass-line transition-colors hover:bg-brand-subtle" />
               <Panel defaultSize="50" minSize="20" className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b border-border px-4 py-1.5 text-small font-medium text-text-muted">
+                <div className="flex items-center justify-between border-b border-glass-line px-4 py-1.5 font-display text-[11px] font-semibold tracking-wide text-text-muted uppercase">
                   Translation ({secondTranscript?.language ?? '…'})
                   <button
                     type="button"
                     aria-label="Close translation"
                     title="Close translation"
                     onClick={() => setSecondTranscriptId(null)}
-                    className="rounded-md p-0.5 text-text-muted hover:bg-surface-raised hover:text-text"
+                    className="rounded-md p-0.5 normal-case text-text-muted hover:bg-glass hover:text-text"
                   >
                     <CloseIcon className="h-3.5 w-3.5" />
                   </button>
@@ -258,23 +262,35 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
             />
           )}
         </Panel>
-        <Separator className="w-1.5 bg-border transition-colors hover:bg-brand-subtle" />
+        <Separator className="w-1.5 bg-glass-line transition-colors hover:bg-brand-subtle" />
         <Panel defaultSize="45" minSize="25">
+          {/* Player and comments are their own floating glass cards (not one
+              solid panel fill) so the blob background shows between them,
+              matching the mockup's separate player-card/comments-card look —
+              and avoiding a glass-on-glass double blur. */}
           <div className="h-full space-y-3 overflow-y-auto p-4">
-            {src ? (
-              <VideoPlayer src={src} videoRef={videoRef} />
-            ) : (
-              <div className="flex aspect-video items-center justify-center rounded bg-surface-raised text-body text-text-muted">
-                Loading player…
-              </div>
-            )}
-            {waveform.data && <Waveform peaks={waveform.data.peaks} onSeek={seek} />}
-            <CommentsPanel
-              transcriptId={transcriptId}
-              comments={comments}
-              isLoading={transcriptId !== null && commentsLoading}
-              onLocate={seek}
-            />
+            <Card variant="dense" className="space-y-2 !p-0">
+              {src ? (
+                <VideoPlayer src={src} videoRef={videoRef} />
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-t-xl bg-surface-raised text-body text-text-muted">
+                  Loading player…
+                </div>
+              )}
+              {waveform.data && (
+                <div className="px-3 pb-3">
+                  <Waveform peaks={waveform.data.peaks} onSeek={seek} />
+                </div>
+              )}
+            </Card>
+            <Card variant="dense">
+              <CommentsPanel
+                transcriptId={transcriptId}
+                comments={comments}
+                isLoading={transcriptId !== null && commentsLoading}
+                onLocate={seek}
+              />
+            </Card>
           </div>
         </Panel>
       </Group>
