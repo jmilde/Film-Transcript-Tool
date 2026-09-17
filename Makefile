@@ -22,7 +22,7 @@ TEST_DB_URL := postgresql+psycopg://postgres:postgres@localhost:5443/postgres
 .DEFAULT_GOAL := help
 .PHONY: help install db-up db-down db-wipe db-test-up db-test-down db-migrate \
 	test test-all test-integration lint lint-fix format format-check typecheck check check-all \
-	run-backend run-worker openapi fe-install run-frontend fe-build fe-lint fe-test fe-check
+	run run-backend run-worker openapi fe-install run-frontend fe-build fe-lint fe-test fe-check
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -81,6 +81,9 @@ typecheck: ## Run the strict type checker (mypy)
 check: lint format-check typecheck test ## Full offline quality gate: lint + format + types + tests (no integration)
 
 check-all: lint format-check typecheck test-all ## Full quality gate INCLUDING live integration tests
+
+run: ## Run backend, worker, and frontend together; Ctrl+C stops all three (DB must already be up/migrated)
+	./scripts/run-app.sh
 
 run-backend: ## Run the FastAPI dev server with autoreload (http://localhost:8000)
 	$(UV) run uvicorn app.main:app --reload
