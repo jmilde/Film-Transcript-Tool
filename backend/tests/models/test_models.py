@@ -159,7 +159,10 @@ def test_transcript_speaker_segment_token(db_session: Session, user: User) -> No
     db_session.flush()
 
     segment = TranscriptSegment(
-        transcript_id=transcript.id, speaker_id=speaker.id, position=Decimal(1)
+        transcript_id=transcript.id,
+        project_id=video.project_id,
+        speaker_id=speaker.id,
+        position=Decimal(1),
     )
     db_session.add(segment)
     db_session.flush()
@@ -201,7 +204,9 @@ def _make_transcript_with_token(
     db_session.add(transcript)
     db_session.flush()
 
-    segment = TranscriptSegment(transcript_id=transcript.id, position=Decimal(1))
+    segment = TranscriptSegment(
+        transcript_id=transcript.id, project_id=video.project_id, position=Decimal(1)
+    )
     db_session.add(segment)
     db_session.flush()
 

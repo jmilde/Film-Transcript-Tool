@@ -9,6 +9,11 @@ class TokenEdit(BaseModel):
     expected_version: int
 
 
+class TokenHighlightUpdate(BaseModel):
+    is_highlighted: bool
+    expected_version: int
+
+
 class TokenMergeItem(BaseModel):
     token_id: uuid.UUID
     expected_version: int

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { proxyUrl, useMediaToken } from '../../api/hooks/useMedia'
 import { PlayerControls } from '../player/PlayerControls'
+import { usePlaybackSpeed } from '../player/usePlaybackSpeed'
 
 interface ClipPreviewPlayerProps {
   videoId: string
@@ -27,7 +28,7 @@ export function ClipPreviewPlayer({ videoId, startTime, endTime }: ClipPreviewPl
   const [currentTime, setCurrentTime] = useState(startTime)
   const [duration, setDuration] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState(1)
+  const { speed, changeSpeed } = usePlaybackSpeed(videoRef)
 
   useEffect(() => {
     const el = videoRef.current
@@ -48,12 +49,6 @@ export function ClipPreviewPlayer({ videoId, startTime, endTime }: ClipPreviewPl
     if (!el) return
     const max = duration > 0 ? duration : Infinity
     el.currentTime = Math.min(Math.max(el.currentTime + seconds, 0), max)
-  }
-
-  function toggleSpeed() {
-    const next = speed === 1 ? 2 : 1
-    setSpeed(next)
-    if (videoRef.current) videoRef.current.playbackRate = next
   }
 
   if (!media) {
@@ -81,7 +76,7 @@ export function ClipPreviewPlayer({ videoId, startTime, endTime }: ClipPreviewPl
         speed={speed}
         onTogglePlay={togglePlay}
         onSkip={skip}
-        onToggleSpeed={toggleSpeed}
+        onSpeedChange={changeSpeed}
       />
       <Link
         to={`/videos/${videoId}`}

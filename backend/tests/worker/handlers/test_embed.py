@@ -84,6 +84,7 @@ def _add_segment_with_words(
 ) -> TranscriptSegment:
     segment = TranscriptSegment(
         transcript_id=transcript.id,
+        project_id=transcript.project_id,
         speaker_id=speaker_id,
         position=Decimal(position),
     )

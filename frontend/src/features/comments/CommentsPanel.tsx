@@ -1,11 +1,18 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/context'
-import { transcriptAnchor, useReplyToComment, useResolveComment } from '../../api/hooks/useComments'
+import {
+  transcriptAnchor,
+  useDeleteComment,
+  useReplyToComment,
+  useResolveComment,
+} from '../../api/hooks/useComments'
 import { useSelectionStore } from '../../store/selection'
 import { useCommentsStore } from '../../store/comments'
 import { formatTime } from '../player/format'
 import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
+import { Dialog, DialogContent } from '../../components/ui/Dialog'
+import { Trash2 as TrashIcon } from 'lucide-react'
 import type { Comment } from '../../api/hooks/useComments'
 
 interface CommentsPanelProps {
@@ -36,7 +43,10 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
 
   const resolveComment = useResolveComment(transcriptId ?? '')
   const replyToComment = useReplyToComment(transcriptId ?? '')
+  const deleteComment = useDeleteComment(transcriptId ?? '')
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const deletingComment = comments?.find((c) => c.id === deletingId) ?? null
 
   function locate(comment: Comment) {
     const anchor = transcriptAnchor(comment)
@@ -92,19 +102,30 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
               >
                 {anchor ? `${formatTime(anchor.in_time)} – ${formatTime(anchor.out_time)}` : null}
               </button>
-              <button
-                type="button"
-                className={`rounded-md border px-2 py-0.5 text-small ${
-                  comment.resolved
-                    ? 'border-border text-text-muted hover:bg-surface-raised'
-                    : 'border-success text-success-text hover:bg-success-subtle'
-                }`}
-                onClick={() =>
-                  resolveComment.mutate({ commentId: comment.id, resolved: !comment.resolved })
-                }
-              >
-                {comment.resolved ? 'Reopen' : 'Resolve'}
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  className={`rounded-md border px-2 py-0.5 text-small ${
+                    comment.resolved
+                      ? 'border-border text-text-muted hover:bg-surface-raised'
+                      : 'border-success text-success-text hover:bg-success-subtle'
+                  }`}
+                  onClick={() =>
+                    resolveComment.mutate({ commentId: comment.id, resolved: !comment.resolved })
+                  }
+                >
+                  {comment.resolved ? 'Reopen' : 'Resolve'}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Delete comment"
+                  title="Delete comment"
+                  className="rounded-md p-1 text-text-muted hover:bg-danger-subtle hover:text-danger-text"
+                  onClick={() => setDeletingId(comment.id)}
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             <p className="mt-1 text-text">{comment.text}</p>
@@ -150,6 +171,33 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
           </div>
         )
       })}
+
+      <Dialog open={deletingId !== null} onOpenChange={(open) => !open && setDeletingId(null)}>
+        <DialogContent
+          title="Delete this comment?"
+          description={
+            deletingComment && deletingComment.replies.length > 0
+              ? `This also deletes ${deletingComment.replies.length} ${deletingComment.replies.length === 1 ? 'reply' : 'replies'}. This cannot be undone.`
+              : 'This cannot be undone.'
+          }
+        >
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (deletingId) deleteComment.mutate(deletingId)
+                setDeletingId(null)
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

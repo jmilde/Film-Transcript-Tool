@@ -51,6 +51,7 @@ Semantic color mapping (established across the editing workspace in Phase 11 —
 - **warning** (solid) — the current search match; **warning-subtle** — other matches; also the unresolved-comment underline and the Comment button's `highlight` variant.
 - **success** — the resolved-comment underline and the Resolve action.
 - **danger** — destructive actions and error states.
+- **highlight** — the user-applied text highlighter (transcript tokens' `is_highlighted` flag, the document's `textHighlight` mark). Deliberately a different hue from **warning** even though both read as "orange" — warning is reserved for search/comment meaning, highlight is a persisted user annotation.
 
 `Card`/`Badge` take a `variant`/`tint` prop rather than hardcoded classes at the call site — airy pastel tint on browsing pages (`Projects`, the search overlay, `Chat`), dense/neutral on the editing workspace (`VideoWorkspace` and everything docked in it). Color is reserved for meaning in the dense variant; the airy variant's pastel cards are the one place decoration is allowed, and even there it's limited to the brand hue + the semantic set (no invented decorative hues).
 

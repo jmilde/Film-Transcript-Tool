@@ -54,6 +54,11 @@ class TranscriptSegment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     transcript_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("transcripts.id", ondelete="CASCADE"), index=True
     )
+    # Denormalized owning project for O(1) authorization on segment-level
+    # writes (reassigning a speaker) — see backend/CLAUDE.md's authorization rule.
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
     speaker_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("speakers.id", ondelete="SET NULL"), index=True
     )
@@ -96,6 +101,9 @@ class TranscriptToken(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     start_time: Mapped[float]
     end_time: Mapped[float]
     is_deleted: Mapped[bool] = mapped_column(default=False)
+    # Highlighting is purely a display flag — unlike edited_text/is_deleted it
+    # carries no editorial meaning and never affects search_vector or export.
+    is_highlighted: Mapped[bool] = mapped_column(default=False, server_default="false")
     # Optimistic-locking counter, bumped on every edit/delete/merge/split;
     # writers must supply the version they last saw or the write is rejected
     # with a 409 CONFLICT rather than silently overwriting a concurrent edit.

@@ -78,6 +78,7 @@ def create_transcript_from_normalized(
         speaker = _get_or_create_speaker(session, video, normalized_segment.speaker, speaker_cache)
         segment = TranscriptSegment(
             transcript_id=transcript.id,
+            project_id=video.project_id,
             speaker_id=speaker.id if speaker is not None else None,
             position=Decimal(segment_index + 1),
         )

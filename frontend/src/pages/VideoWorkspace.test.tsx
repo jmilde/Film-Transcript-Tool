@@ -158,7 +158,7 @@ describe('VideoWorkspace', () => {
       expect(src).toContain(`/videos/${VIDEO_ID}/proxy?token=signed.123.sig`)
     })
 
-    expect(await screen.findByText('Jordan')).toBeInTheDocument()
+    expect((await screen.findAllByText('Jordan')).length).toBeGreaterThan(0)
     expect(await screen.findByText('Hello', { exact: false })).toBeInTheDocument()
   })
 
@@ -223,8 +223,9 @@ describe('VideoWorkspace', () => {
     renderWorkspace()
 
     const worldToken = await screen.findByText('world', { exact: false })
-    fireEvent.dblClick(worldToken)
-    const input = screen.getByDisplayValue('world')
+    fireEvent.mouseDown(worldToken)
+    fireEvent.mouseUp(document)
+    const input = await screen.findByDisplayValue('world')
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -454,8 +455,9 @@ describe('VideoWorkspace', () => {
       // Editing a token's text needs the space bar for word-splitting, so the
       // global player shortcut must not fire while an editable field is focused.
       const worldToken = await screen.findByText('world', { exact: false })
-      fireEvent.dblClick(worldToken)
-      const input = screen.getByDisplayValue('world')
+      fireEvent.mouseDown(worldToken)
+      fireEvent.mouseUp(document)
+      const input = await screen.findByDisplayValue('world')
       fireEvent.keyDown(input, { code: 'Space' })
       expect(play).toHaveBeenCalledTimes(1)
       expect(pause).not.toHaveBeenCalled()
@@ -470,8 +472,12 @@ describe('VideoWorkspace', () => {
     renderWorkspace()
 
     const worldToken = await screen.findByText('world', { exact: false })
-    fireEvent.dblClick(worldToken)
+    fireEvent.mouseDown(worldToken)
+    fireEvent.mouseUp(document)
 
+    // Give the deferred click action a chance to fire — a viewer's click
+    // should only seek, never open an edit box.
+    await new Promise((r) => setTimeout(r, 300))
     expect(screen.queryByDisplayValue('world')).not.toBeInTheDocument()
   })
 })

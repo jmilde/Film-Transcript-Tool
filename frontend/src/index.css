@@ -37,6 +37,13 @@
   --raw-info: oklch(62% 0.14 240);
   --raw-info-subtle: oklch(94% 0.03 240);
   --raw-info-text: oklch(46% 0.14 240);
+
+  /* A distinct hue from --raw-warning (yellow-80): warning is reserved for
+     search matches/unresolved comments, this is the user-applied text
+     highlighter (transcript tokens + document text), pastel orange (hue 55). */
+  --raw-highlight: oklch(78% 0.16 55);
+  --raw-highlight-subtle: oklch(92% 0.08 55);
+  --raw-highlight-text: oklch(45% 0.15 55);
 }
 
 .dark {
@@ -69,6 +76,10 @@
   --raw-info: oklch(72% 0.13 240);
   --raw-info-subtle: oklch(32% 0.05 240);
   --raw-info-text: oklch(82% 0.1 240);
+
+  --raw-highlight: oklch(75% 0.15 55);
+  --raw-highlight-subtle: oklch(38% 0.09 55);
+  --raw-highlight-text: oklch(85% 0.12 55);
 }
 
 /* Map the runtime-overridable raw values into Tailwind v4 theme keys, so
@@ -103,6 +114,9 @@
   --color-info: var(--raw-info);
   --color-info-subtle: var(--raw-info-subtle);
   --color-info-text: var(--raw-info-text);
+  --color-highlight: var(--raw-highlight);
+  --color-highlight-subtle: var(--raw-highlight-subtle);
+  --color-highlight-text: var(--raw-highlight-text);
 
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;

@@ -66,7 +66,9 @@ def test_answer_question_end_to_end(db_session: Session, user: User) -> None:
     )
     db_session.add(transcript)
     db_session.flush()
-    segment = TranscriptSegment(transcript_id=transcript.id, position=Decimal(1))
+    segment = TranscriptSegment(
+        transcript_id=transcript.id, project_id=project.id, position=Decimal(1)
+    )
     db_session.add(segment)
     db_session.flush()
     token = TranscriptToken(

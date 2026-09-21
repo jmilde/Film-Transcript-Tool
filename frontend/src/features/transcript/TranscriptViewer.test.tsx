@@ -20,6 +20,14 @@ const SPEAKER: Speaker = {
   color: null,
 }
 
+const OTHER_SPEAKER: Speaker = {
+  id: 'spk-2',
+  video_id: 'vid-1',
+  provider_identifier: 'spk_1',
+  name: 'Alex',
+  color: null,
+}
+
 const TRANSCRIPT: Transcript = {
   id: 't-1',
   video_id: 'vid-1',
@@ -40,6 +48,7 @@ const TRANSCRIPT: Transcript = {
           start_time: 0,
           end_time: 1,
           version: 1,
+          is_highlighted: false,
         },
         {
           id: 'tok-b',
@@ -50,6 +59,7 @@ const TRANSCRIPT: Transcript = {
           start_time: 1,
           end_time: 2,
           version: 1,
+          is_highlighted: false,
         },
         {
           id: 'tok-c',
@@ -60,6 +70,7 @@ const TRANSCRIPT: Transcript = {
           start_time: 2,
           end_time: 3,
           version: 1,
+          is_highlighted: false,
         },
       ],
     },
@@ -79,6 +90,25 @@ afterEach(() => {
   delete (navigator.clipboard as { write?: unknown }).write
 })
 
+/** Fires the mousedown/mouseup pair a plain click produces. The resulting
+ * edit/seek is deferred (see TranscriptViewer's click-vs-double-click
+ * handling), so callers await the result with `findBy*`/`waitFor` rather
+ * than asserting synchronously right after. */
+function clickToken(el: HTMLElement) {
+  fireEvent.mouseDown(el)
+  fireEvent.mouseUp(document)
+}
+
+/** Fires a realistic double-click sequence — two full click cycles plus the
+ * browser's own `dblclick` event — so the first click's deferred single-click
+ * action is actually exercised and cancelled, instead of only dispatching a
+ * bare `dblclick` event with no preceding clicks. */
+function doubleClickToken(el: HTMLElement) {
+  clickToken(el)
+  clickToken(el)
+  fireEvent.dblClick(el)
+}
+
 function renderViewer(onPlaySelection = vi.fn(), canEdit = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -89,6 +119,7 @@ function renderViewer(onPlaySelection = vi.fn(), canEdit = true) {
         isLoading={false}
         onSeekToken={vi.fn()}
         onPlaySelection={onPlaySelection}
+        onPlayFrom={vi.fn()}
         canEdit={canEdit}
         videoId="vid-1"
       />
@@ -101,12 +132,12 @@ describe('TranscriptViewer', () => {
     usePlaybackStore.setState({ currentTime: 1.5 })
     renderViewer()
 
-    expect(screen.getByText('Jordan')).toBeInTheDocument()
+    expect(screen.getAllByText('Jordan').length).toBeGreaterThan(0)
     expect(screen.getByText('world')).toHaveClass('bg-info-subtle')
     expect(screen.getByText('Hello')).not.toHaveClass('bg-info-subtle')
   })
 
-  it('seeks the video on a plain click', () => {
+  it('seeks the video on a plain click for a viewer', async () => {
     const onSeekToken = vi.fn()
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
@@ -117,15 +148,48 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={onSeekToken}
           onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
+          canEdit={false}
+          videoId="vid-1"
+        />
+      </QueryClientProvider>,
+    )
+
+    clickToken(screen.getByText('world'))
+    await waitFor(() => expect(onSeekToken).toHaveBeenCalledWith(1))
+  })
+
+  it('plays from a token on double-click', () => {
+    const onPlayFrom = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={TRANSCRIPT}
+          speakers={[SPEAKER]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+          onPlayFrom={onPlayFrom}
           canEdit={true}
           videoId="vid-1"
         />
       </QueryClientProvider>,
     )
 
-    fireEvent.mouseDown(screen.getByText('world'))
-    fireEvent.mouseUp(document)
-    expect(onSeekToken).toHaveBeenCalledWith(1)
+    doubleClickToken(screen.getByText('world'))
+    expect(onPlayFrom).toHaveBeenCalledWith(1)
+  })
+
+  it('does not also open an inline edit after a double-click', async () => {
+    renderViewer()
+
+    doubleClickToken(screen.getByText('world'))
+
+    // Give the first click's deferred edit action a chance to fire if it
+    // weren't properly cancelled by the second click/dblclick.
+    await new Promise((r) => setTimeout(r, 300))
+    expect(screen.queryByDisplayValue('world')).not.toBeInTheDocument()
   })
 
   it('toggles auto-follow', async () => {
@@ -147,6 +211,7 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
           canEdit={true}
           videoId="vid-1"
         />
@@ -236,7 +301,7 @@ describe('TranscriptViewer', () => {
     expect(screen.queryByText('"Hello world"')).not.toBeInTheDocument()
   })
 
-  it('edits a token via double-click', async () => {
+  it('edits a token via a plain click (editor)', async () => {
     let body: unknown
     server.use(
       http.patch('http://localhost:8000/tokens/tok-b', async ({ request }) => {
@@ -254,15 +319,15 @@ describe('TranscriptViewer', () => {
     )
     renderViewer()
 
-    fireEvent.dblClick(screen.getByText('world'))
-    const input = screen.getByDisplayValue('world')
+    clickToken(screen.getByText('world'))
+    const input = await screen.findByDisplayValue('world')
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
     await waitFor(() => expect(body).toEqual({ edited_text: 'earth', expected_version: 1 }))
   })
 
-  it('escape cancels an in-progress edit without sending a request', () => {
+  it('escape cancels an in-progress edit without sending a request', async () => {
     let called = false
     server.use(
       http.patch('http://localhost:8000/tokens/tok-b', () => {
@@ -272,8 +337,8 @@ describe('TranscriptViewer', () => {
     )
     renderViewer()
 
-    fireEvent.dblClick(screen.getByText('world'))
-    const input = screen.getByDisplayValue('world')
+    clickToken(screen.getByText('world'))
+    const input = await screen.findByDisplayValue('world')
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(input, { key: 'Escape' })
 
@@ -299,8 +364,8 @@ describe('TranscriptViewer', () => {
     )
     renderViewer()
 
-    fireEvent.dblClick(screen.getByText('world'))
-    const input = screen.getByDisplayValue('world')
+    clickToken(screen.getByText('world'))
+    const input = await screen.findByDisplayValue('world')
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(document, { key: 's', metaKey: true })
 
@@ -325,8 +390,8 @@ describe('TranscriptViewer', () => {
     )
     renderViewer()
 
-    fireEvent.dblClick(screen.getByText('again'))
-    const input = screen.getByDisplayValue('again')
+    clickToken(screen.getByText('again'))
+    const input = await screen.findByDisplayValue('again')
     fireEvent.change(input, { target: { value: '' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -362,8 +427,8 @@ describe('TranscriptViewer', () => {
     )
     renderViewer()
 
-    fireEvent.dblClick(screen.getByText('Hello'))
-    const input = screen.getByDisplayValue('Hello')
+    clickToken(screen.getByText('Hello'))
+    const input = await screen.findByDisplayValue('Hello')
     fireEvent.change(input, { target: { value: 'He llo' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -468,6 +533,7 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
           canEdit
           videoId="vid-1"
         />
@@ -525,6 +591,81 @@ describe('TranscriptViewer', () => {
         text: "don't",
       }),
     )
+  })
+
+  it('sends a highlight request for each selected token via the toolbar', async () => {
+    const requests: { tokenId: string; body: unknown }[] = []
+    server.use(
+      http.patch('http://localhost:8000/tokens/:tokenId/highlight', async ({ request, params }) => {
+        const body = await request.json()
+        requests.push({ tokenId: params.tokenId as string, body })
+        return HttpResponse.json({
+          id: params.tokenId,
+          segment_id: 'seg-1',
+          original_text: 'x',
+          edited_text: null,
+          text: 'x',
+          start_time: 0,
+          end_time: 1,
+          version: 2,
+          is_highlighted: (body as { is_highlighted: boolean }).is_highlighted,
+        })
+      }),
+    )
+    renderViewer()
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Highlight' }))
+
+    await waitFor(() =>
+      expect(requests).toEqual([
+        { tokenId: 'tok-a', body: { is_highlighted: true, expected_version: 1 } },
+        { tokenId: 'tok-b', body: { is_highlighted: true, expected_version: 1 } },
+      ]),
+    )
+  })
+
+  it('shows a pastel-orange background for already-highlighted tokens, and offers to remove it', async () => {
+    // Past every token's range so none is the "active/playing" token — that
+    // state outranks highlight in the bg cascade and would otherwise mask it.
+    usePlaybackStore.setState({ currentTime: 10 })
+    const highlightedTranscript: Transcript = {
+      ...TRANSCRIPT,
+      segments: [
+        {
+          ...TRANSCRIPT.segments[0],
+          tokens: TRANSCRIPT.segments[0].tokens.map((t) =>
+            t.id === 'tok-a' || t.id === 'tok-b' ? { ...t, is_highlighted: true } : t,
+          ),
+        },
+      ],
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={highlightedTranscript}
+          speakers={[SPEAKER]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
+          canEdit={true}
+          videoId="vid-1"
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('Hello')).toHaveClass('bg-highlight-subtle')
+    expect(screen.getByText('again')).not.toHaveClass('bg-highlight-subtle')
+
+    fireEvent.mouseDown(screen.getByText('Hello'))
+    fireEvent.mouseEnter(screen.getByText('world'))
+    fireEvent.mouseUp(document)
+    expect(screen.getByRole('button', { name: 'Remove highlight' })).toBeInTheDocument()
   })
 
   it('creates a comment for the selection via the Comment button', async () => {
@@ -626,6 +767,7 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
           canEdit={true}
           videoId="vid-1"
         />
@@ -637,7 +779,7 @@ describe('TranscriptViewer', () => {
     expect(screen.getByText('world')).not.toHaveClass('decoration-warning')
   })
 
-  it('selects the comment covering a clicked token, and clears it for a plain token', () => {
+  it('selects the comment covering a clicked token, and clears it for a plain token', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
@@ -665,29 +807,21 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
           canEdit={true}
           videoId="vid-1"
         />
       </QueryClientProvider>,
     )
 
-    fireEvent.mouseDown(screen.getByText('Hello'))
-    fireEvent.mouseUp(document)
-    expect(useCommentsStore.getState().selectedId).toBe('c-1')
+    clickToken(screen.getByText('Hello'))
+    await waitFor(() => expect(useCommentsStore.getState().selectedId).toBe('c-1'))
 
-    fireEvent.mouseDown(screen.getByText('world'))
-    fireEvent.mouseUp(document)
-    expect(useCommentsStore.getState().selectedId).toBeNull()
+    clickToken(screen.getByText('world'))
+    await waitFor(() => expect(useCommentsStore.getState().selectedId).toBeNull())
   })
 
   it('groups consecutive same-speaker segments under a single header', () => {
-    const OTHER_SPEAKER: Speaker = {
-      id: 'spk-2',
-      video_id: 'vid-1',
-      provider_identifier: 'spk_1',
-      name: 'Alex',
-      color: null,
-    }
     const transcript: Transcript = {
       ...TRANSCRIPT,
       segments: [
@@ -717,17 +851,58 @@ describe('TranscriptViewer', () => {
           isLoading={false}
           onSeekToken={vi.fn()}
           onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
           canEdit={true}
           videoId="vid-1"
         />
       </QueryClientProvider>,
     )
 
-    expect(screen.getAllByText('Jordan')).toHaveLength(1)
-    expect(screen.getAllByText('Alex')).toHaveLength(1)
+    // One speaker picker per group (not per segment) proves the grouping
+    // logic combined the two consecutive Jordan segments under one header.
+    const speakerPickers = screen.getAllByRole('combobox', { name: 'Speaker' })
+    expect(speakerPickers).toHaveLength(2)
+    expect(speakerPickers[0]).toHaveTextContent('Jordan')
+    expect(speakerPickers[1]).toHaveTextContent('Alex')
     expect(screen.getByText('Hello')).toBeInTheDocument()
     expect(screen.getByText('world')).toBeInTheDocument()
     expect(screen.getByText('again')).toBeInTheDocument()
+  })
+
+  it('reassigns a segment group to a different speaker via the picker', async () => {
+    const requests: { segmentId: string; body: unknown }[] = []
+    server.use(
+      http.patch('http://localhost:8000/segments/:segmentId', async ({ request, params }) => {
+        const body = await request.json()
+        requests.push({ segmentId: params.segmentId as string, body })
+        return HttpResponse.json({
+          id: params.segmentId,
+          speaker_id: (body as { speaker_id: string }).speaker_id,
+        })
+      }),
+    )
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={TRANSCRIPT}
+          speakers={[SPEAKER, OTHER_SPEAKER]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
+          canEdit={true}
+          videoId="vid-1"
+        />
+      </QueryClientProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Speaker' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Alex' }))
+
+    await waitFor(() =>
+      expect(requests).toEqual([{ segmentId: 'seg-1', body: { speaker_id: 'spk-2' } }]),
+    )
   })
 
   it('searches within the transcript and steps through matches', async () => {
@@ -748,11 +923,28 @@ describe('TranscriptViewer', () => {
   })
 
   describe('viewer role (canEdit=false)', () => {
-    it('does not start an inline edit on double-click', () => {
-      renderViewer(vi.fn(), false)
+    it('double-click plays from that point rather than editing', async () => {
+      const onPlayFrom = vi.fn()
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      render(
+        <QueryClientProvider client={client}>
+          <TranscriptViewer
+            transcript={TRANSCRIPT}
+            speakers={[SPEAKER]}
+            isLoading={false}
+            onSeekToken={vi.fn()}
+            onPlaySelection={vi.fn()}
+            onPlayFrom={onPlayFrom}
+            canEdit={false}
+            videoId="vid-1"
+          />
+        </QueryClientProvider>,
+      )
 
-      fireEvent.dblClick(screen.getByText('world'))
+      doubleClickToken(screen.getByText('world'))
 
+      expect(onPlayFrom).toHaveBeenCalledWith(1)
+      await new Promise((r) => setTimeout(r, 300))
       expect(screen.queryByDisplayValue('world')).not.toBeInTheDocument()
     })
 
@@ -785,8 +977,8 @@ describe('TranscriptViewer', () => {
       )
       renderViewer()
 
-      fireEvent.dblClick(screen.getByText('world'))
-      const input = screen.getByDisplayValue('world')
+      clickToken(screen.getByText('world'))
+      const input = await screen.findByDisplayValue('world')
       fireEvent.change(input, { target: { value: 'earth' } })
       fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -801,8 +993,8 @@ describe('TranscriptViewer', () => {
       )
       renderViewer()
 
-      fireEvent.dblClick(screen.getByText('world'))
-      const input = screen.getByDisplayValue('world')
+      clickToken(screen.getByText('world'))
+      const input = await screen.findByDisplayValue('world')
       fireEvent.change(input, { target: { value: 'earth' } })
       fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -821,8 +1013,8 @@ describe('TranscriptViewer', () => {
       )
       renderViewer()
 
-      fireEvent.dblClick(screen.getByText('again'))
-      const input = screen.getByDisplayValue('again')
+      clickToken(screen.getByText('again'))
+      const input = await screen.findByDisplayValue('again')
       fireEvent.change(input, { target: { value: '' } })
       fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -856,8 +1048,8 @@ describe('TranscriptViewer', () => {
       )
       renderViewer()
 
-      fireEvent.dblClick(screen.getByText('Hello'))
-      const input = screen.getByDisplayValue('Hello')
+      clickToken(screen.getByText('Hello'))
+      const input = await screen.findByDisplayValue('Hello')
       fireEvent.change(input, { target: { value: 'He llo' } })
       fireEvent.keyDown(input, { key: 'Enter' })
 

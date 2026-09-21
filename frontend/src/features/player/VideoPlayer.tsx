@@ -1,6 +1,9 @@
-import { useState, type RefObject } from 'react'
+import type { RefObject } from 'react'
 import { usePlaybackStore } from '../../store/playback'
 import { PlayerControls } from './PlayerControls'
+import { usePlaybackSpeed } from './usePlaybackSpeed'
+import { useFullscreen } from './useFullscreen'
+import { Maximize as MaximizeIcon, Minimize as MinimizeIcon } from 'lucide-react'
 
 interface PlayerProps {
   src: string
@@ -21,7 +24,8 @@ export function VideoPlayer({ src, videoRef }: PlayerProps) {
   const setCurrentTime = usePlaybackStore((s) => s.setCurrentTime)
   const setDuration = usePlaybackStore((s) => s.setDuration)
   const setPlaying = usePlaybackStore((s) => s.setPlaying)
-  const [speed, setSpeed] = useState(1)
+  const { speed, changeSpeed } = usePlaybackSpeed(videoRef)
+  const { isFullscreen, toggleFullscreen } = useFullscreen(videoRef)
 
   function togglePlay() {
     const el = videoRef.current
@@ -37,23 +41,32 @@ export function VideoPlayer({ src, videoRef }: PlayerProps) {
     el.currentTime = Math.min(Math.max(el.currentTime + seconds, 0), max)
   }
 
-  function toggleSpeed() {
-    const next = speed === 1 ? 2 : 1
-    setSpeed(next)
-    if (videoRef.current) videoRef.current.playbackRate = next
-  }
-
   return (
     <div className="space-y-2">
-      <video
-        ref={videoRef}
-        src={src}
-        className="w-full rounded bg-black"
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-      />
+      <div className="group relative">
+        <video
+          ref={videoRef}
+          src={src}
+          className="w-full rounded bg-black"
+          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+        />
+        <button
+          type="button"
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          title={isFullscreen ? 'Exit fullscreen (f)' : 'Fullscreen (f)'}
+          onClick={toggleFullscreen}
+          className="absolute top-2 right-2 rounded-md bg-black/60 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+        >
+          {isFullscreen ? (
+            <MinimizeIcon className="h-4 w-4" />
+          ) : (
+            <MaximizeIcon className="h-4 w-4" />
+          )}
+        </button>
+      </div>
       <PlayerControls
         currentTime={currentTime}
         duration={duration}
@@ -61,7 +74,7 @@ export function VideoPlayer({ src, videoRef }: PlayerProps) {
         speed={speed}
         onTogglePlay={togglePlay}
         onSkip={skip}
-        onToggleSpeed={toggleSpeed}
+        onSpeedChange={changeSpeed}
       />
     </div>
   )

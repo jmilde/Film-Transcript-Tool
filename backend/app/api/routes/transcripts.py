@@ -4,15 +4,24 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_min_role, require_transcript_access, require_video_access
+from app.api.deps import (
+    require_min_role,
+    require_segment_access,
+    require_transcript_access,
+    require_video_access,
+)
+from app.core.errors import BadRequestError
 from app.db.session import get_db
 from app.models.job import JobStatus, JobType, ProcessingJob
 from app.models.membership import MembershipRole
+from app.models.speaker import Speaker
 from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.video import Video
 from app.schemas.transcript import (
     ReindexResponse,
     SegmentRead,
+    SegmentSpeakerUpdate,
+    SegmentSummary,
     TokenRead,
     TranscriptRead,
     TranscriptSummary,
@@ -92,6 +101,7 @@ def get_transcript(
                         start_time=token.start_time,
                         end_time=token.end_time,
                         version=token.version,
+                        is_highlighted=token.is_highlighted,
                     )
                     for token in tokens_by_segment.get(segment.id, [])
                 ],
@@ -156,3 +166,24 @@ def reindex_transcript(
     db.flush()
     db.commit()
     return ReindexResponse(job_id=job.id)
+
+
+@router.patch("/segments/{segment_id}", response_model=SegmentSummary)
+def update_segment_speaker(
+    payload: SegmentSpeakerUpdate,
+    segment: TranscriptSegment = Depends(require_segment_access),
+    db: Session = Depends(get_db),
+) -> TranscriptSegment:
+    """Reassign which speaker is credited for a segment — distinct from
+    renaming a speaker (``PATCH /speakers/{id}``), which changes that
+    speaker's display name everywhere they're credited instead."""
+    if payload.speaker_id is not None:
+        speaker = db.get(Speaker, payload.speaker_id)
+        transcript = db.get(Transcript, segment.transcript_id)
+        assert transcript is not None
+        if speaker is None or speaker.video_id != transcript.video_id:
+            raise BadRequestError("speaker_id does not belong to this video")
+    segment.speaker_id = payload.speaker_id
+    db.commit()
+    db.refresh(segment)
+    return segment

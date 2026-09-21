@@ -26,6 +26,7 @@ class TokenRead(BaseModel):
     start_time: float
     end_time: float
     version: int
+    is_highlighted: bool
 
 
 class SegmentRead(BaseModel):
@@ -34,6 +35,19 @@ class SegmentRead(BaseModel):
     # against GET /videos/{id}/speakers so a speaker rename propagates for free.
     speaker_id: uuid.UUID | None
     tokens: list[TokenRead]
+
+
+class SegmentSpeakerUpdate(BaseModel):
+    # Which speaker is credited for this segment — distinct from renaming a
+    # speaker (PATCH /speakers/{id}). Null clears attribution.
+    speaker_id: uuid.UUID | None
+
+
+class SegmentSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    speaker_id: uuid.UUID | None
 
 
 class TranscriptRead(BaseModel):

@@ -10,10 +10,16 @@ from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.models.transcript import TranscriptToken
 from app.models.user import User
-from app.schemas.token import TokenEdit, TokenSplitRequest
+from app.schemas.token import TokenEdit, TokenHighlightUpdate, TokenSplitRequest
 from app.schemas.transcript import TokenRead
 from app.services.reembed import schedule_reembed
-from app.services.tokens import delete_token, edit_token, merge_tokens, split_token
+from app.services.tokens import (
+    delete_token,
+    edit_token,
+    merge_tokens,
+    set_token_highlight,
+    split_token,
+)
 
 router = APIRouter(tags=["tokens"])
 
@@ -28,6 +34,7 @@ def _token_read(token: TranscriptToken) -> TokenRead:
         start_time=token.start_time,
         end_time=token.end_time,
         version=token.version,
+        is_highlighted=token.is_highlighted,
     )
 
 
@@ -42,6 +49,25 @@ def update_token(
         db, token, payload.edited_text, user_id=user.id, expected_version=payload.expected_version
     )
     schedule_reembed(db, token.transcript_id)
+    db.commit()
+    db.refresh(token)
+    return _token_read(token)
+
+
+@router.patch("/tokens/{token_id}/highlight", response_model=TokenRead)
+def update_token_highlight(
+    payload: TokenHighlightUpdate,
+    token: TranscriptToken = Depends(require_token_access),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> TokenRead:
+    set_token_highlight(
+        db,
+        token,
+        payload.is_highlighted,
+        user_id=user.id,
+        expected_version=payload.expected_version,
+    )
     db.commit()
     db.refresh(token)
     return _token_read(token)

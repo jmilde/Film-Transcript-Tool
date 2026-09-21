@@ -114,6 +114,15 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     void videoRef.current.play()
   }
 
+  // Seeks and plays with no stop time — a double-clicked transcript token's
+  // action, distinct from `playSelection`'s bounded range.
+  function playFrom(seconds: number) {
+    if (!videoRef.current) return
+    videoRef.current.currentTime = seconds
+    selectionEndRef.current = null
+    void videoRef.current.play()
+  }
+
   // Lets the document panel reuse this page's own player for a clip from
   // this video, instead of spawning a second one (see store/playback.ts).
   // `playSelection` only closes over refs, so capturing it once per video
@@ -212,6 +221,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     isLoading={transcriptId !== null && transcriptLoading}
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
+                    onPlayFrom={playFrom}
                     canEdit={canEdit}
                     videoId={videoId}
                   />
@@ -239,6 +249,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     isLoading={secondTranscriptLoading}
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
+                    onPlayFrom={playFrom}
                     canEdit={canEdit}
                     videoId={videoId}
                   />
@@ -253,6 +264,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               isLoading={transcriptId !== null && transcriptLoading}
               onSeekToken={seek}
               onPlaySelection={playSelection}
+              onPlayFrom={playFrom}
               canEdit={canEdit}
               videoId={videoId}
             />

@@ -57,7 +57,9 @@ def _seed_chunk(db: Session, user: User) -> tuple[Project, TranscriptChunk]:
     )
     db.add(transcript)
     db.flush()
-    segment = TranscriptSegment(transcript_id=transcript.id, position=Decimal(1))
+    segment = TranscriptSegment(
+        transcript_id=transcript.id, project_id=project.id, position=Decimal(1)
+    )
     db.add(segment)
     db.flush()
     token = TranscriptToken(

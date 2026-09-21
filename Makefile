@@ -20,7 +20,7 @@ DEV_DB_URL := postgresql+psycopg://postgres:postgres@localhost:5442/postgres
 TEST_DB_URL := postgresql+psycopg://postgres:postgres@localhost:5443/postgres
 
 .DEFAULT_GOAL := help
-.PHONY: help install db-up db-down db-wipe db-test-up db-test-down db-migrate \
+.PHONY: help install db-up db-down db-wipe db-test-up db-test-down db-migrate dev-down \
 	test test-all test-integration lint lint-fix format format-check typecheck check check-all \
 	run-backend run-worker openapi fe-install run-frontend fe-build fe-lint fe-test fe-check
 
@@ -47,6 +47,8 @@ db-test-up: ## Start the local test Postgres container (Docker, port 5443, ephem
 
 db-test-down: ## Stop the local test Postgres container
 	docker compose stop db-test
+
+dev-down: db-down db-test-down ## Stop both local Postgres containers (run when done for the day — Docker's background VM is the main drain of a `run-backend`/`run-worker`/`run-frontend` dev session left running)
 
 db-migrate: ## Run Alembic migrations against the local dev Postgres container
 	cd $(BACKEND) && DATABASE_URL_WORKER=$(DEV_DB_URL) uv run alembic upgrade head

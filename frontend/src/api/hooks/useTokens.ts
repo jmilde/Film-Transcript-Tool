@@ -104,6 +104,41 @@ export function useDeleteTokens(transcriptId: string) {
   )
 }
 
+/** Toggle highlight on one or more tokens (`PATCH /tokens/{id}/highlight`) —
+ * a display-only flag, so unlike delete/merge/split it never touches text,
+ * timing, or the search vector. */
+export function useHighlightTokens(transcriptId: string) {
+  return useOptimisticTranscriptMutation<
+    { tokens: { tokenId: string; expectedVersion: number }[]; isHighlighted: boolean },
+    Token[]
+  >(
+    transcriptId,
+    async (input) =>
+      Promise.all(
+        input.tokens.map(async ({ tokenId, expectedVersion }) =>
+          unwrap(
+            await api.PATCH('/tokens/{token_id}/highlight', {
+              params: { path: { token_id: tokenId } },
+              body: { is_highlighted: input.isHighlighted, expected_version: expectedVersion },
+            }),
+          ),
+        ),
+      ),
+    (transcript, input) => {
+      const ids = new Set(input.tokens.map((t) => t.tokenId))
+      return {
+        ...transcript,
+        segments: transcript.segments.map((segment) => ({
+          ...segment,
+          tokens: segment.tokens.map((token) =>
+            ids.has(token.id) ? { ...token, is_highlighted: input.isHighlighted } : token,
+          ),
+        })),
+      }
+    },
+  )
+}
+
 /** Merge contiguous same-segment tokens into one (`POST /tokens/merge`). */
 export function useMergeTokens(transcriptId: string) {
   return useOptimisticTranscriptMutation<
@@ -141,6 +176,7 @@ export function useMergeTokens(transcriptId: string) {
             start_time: merged[0].start_time,
             end_time: merged[merged.length - 1].end_time,
             version: 1,
+            is_highlighted: false,
           }
           const tokens = [...kept]
           tokens.splice(index, 0, placeholder)
@@ -185,6 +221,7 @@ export function useSplitToken(transcriptId: string) {
           start_time: token.start_time + (span * i) / count,
           end_time: token.start_time + (span * (i + 1)) / count,
           version: 1,
+          is_highlighted: false,
         }))
         const tokens = [...segment.tokens]
         tokens.splice(index, 1, ...placeholders)

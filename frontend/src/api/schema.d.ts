@@ -345,6 +345,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/segments/{segment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Segment Speaker
+         * @description Reassign which speaker is credited for a segment — distinct from
+         *     renaming a speaker (``PATCH /speakers/{id}``), which changes that
+         *     speaker's display name everywhere they're credited instead.
+         */
+        patch: operations["update_segment_speaker_segments__segment_id__patch"];
+        trace?: never;
+    };
     "/videos/{video_id}/speakers": {
         parameters: {
             query?: never;
@@ -395,6 +417,23 @@ export interface paths {
         head?: never;
         /** Update Token */
         patch: operations["update_token_tokens__token_id__patch"];
+        trace?: never;
+    };
+    "/tokens/{token_id}/highlight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Token Highlight */
+        patch: operations["update_token_highlight_tokens__token_id__highlight_patch"];
         trace?: never;
     };
     "/tokens/merge": {
@@ -1397,6 +1436,21 @@ export interface components {
             /** Tokens */
             tokens: components["schemas"]["TokenRead"][];
         };
+        /** SegmentSpeakerUpdate */
+        SegmentSpeakerUpdate: {
+            /** Speaker Id */
+            speaker_id: string | null;
+        };
+        /** SegmentSummary */
+        SegmentSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Speaker Id */
+            speaker_id: string | null;
+        };
         /** SpeakerRead */
         SpeakerRead: {
             /**
@@ -1427,6 +1481,13 @@ export interface components {
         TokenEdit: {
             /** Edited Text */
             edited_text: string | null;
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** TokenHighlightUpdate */
+        TokenHighlightUpdate: {
+            /** Is Highlighted */
+            is_highlighted: boolean;
             /** Expected Version */
             expected_version: number;
         };
@@ -1471,6 +1532,8 @@ export interface components {
             end_time: number;
             /** Version */
             version: number;
+            /** Is Highlighted */
+            is_highlighted: boolean;
         };
         /** TokenSplitPiece */
         TokenSplitPiece: {
@@ -2438,6 +2501,41 @@ export interface operations {
             };
         };
     };
+    update_segment_speaker_segments__segment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                segment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SegmentSpeakerUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SegmentSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_speakers_videos__video_id__speakers_get: {
         parameters: {
             query?: never;
@@ -2549,6 +2647,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TokenEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_token_highlight_tokens__token_id__highlight_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenHighlightUpdate"];
             };
         };
         responses: {

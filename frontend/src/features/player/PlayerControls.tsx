@@ -1,4 +1,6 @@
 import { formatTime } from './format'
+import { SPEED_OPTIONS } from './usePlaybackSpeed'
+import { Select } from '../../components/ui/Select'
 import {
   Pause as PauseIcon,
   Play as PlayIcon,
@@ -8,6 +10,8 @@ import {
 
 export const SKIP_SECONDS = 5
 
+const SPEED_SELECT_OPTIONS = SPEED_OPTIONS.map((s) => ({ value: String(s), label: `${s}x` }))
+
 interface PlayerControlsProps {
   currentTime: number
   duration: number
@@ -16,7 +20,7 @@ interface PlayerControlsProps {
   onTogglePlay: () => void
   /** Called with a signed delta in seconds (±`SKIP_SECONDS`). */
   onSkip: (seconds: number) => void
-  onToggleSpeed: () => void
+  onSpeedChange: (speed: number) => void
 }
 
 /**
@@ -33,7 +37,7 @@ export function PlayerControls({
   speed,
   onTogglePlay,
   onSkip,
-  onToggleSpeed,
+  onSpeedChange,
 }: PlayerControlsProps) {
   return (
     <div className="space-y-2">
@@ -65,19 +69,13 @@ export function PlayerControls({
         >
           <SkipForwardIcon className="h-5 w-5" />
         </button>
-        <button
-          type="button"
-          aria-label="Toggle 2x speed"
-          title="2x speed"
-          onClick={onToggleSpeed}
-          className={`rounded-md border px-2 py-1 text-small font-semibold ${
-            speed === 2
-              ? 'border-brand bg-brand text-text-inverted'
-              : 'border-border text-text-muted hover:bg-surface-raised'
-          }`}
-        >
-          2x
-        </button>
+        <Select
+          aria-label="Playback speed"
+          value={String(speed)}
+          onValueChange={(value) => onSpeedChange(Number(value))}
+          options={SPEED_SELECT_OPTIONS}
+          className="px-2 py-1 text-small font-semibold"
+        />
       </div>
       <div className="flex justify-between font-mono text-small text-text-muted">
         <span>{formatTime(currentTime)}</span>
