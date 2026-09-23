@@ -117,6 +117,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/videos/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Videos Status
+         * @description Batch job-status poll for the upload tray, replacing N per-video polls.
+         *
+         *     Declared ahead of ``/videos/{video_id}`` so the literal ``status`` path
+         *     segment isn't swallowed by that route's UUID path param. Unknown,
+         *     malformed, and foreign-project IDs are silently omitted from the
+         *     response rather than erroring the whole batch — the caller can't tell
+         *     them apart from an ID that hasn't been created yet, which is normal
+         *     tray churn, not something to be flagged as an error.
+         */
+        get: operations["get_videos_status_videos_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/folders/{folder_id}/videos/duplicate-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Duplicate Video
+         * @description Look for a video already in this folder with matching filename+size.
+         *
+         *     Called by the frontend before transferring a file's bytes so an
+         *     already-uploaded file (or a same-batch re-drop) can be skipped without
+         *     the upload. Filename alone isn't enough — camera-default filenames like
+         *     ``MVI_0001.MP4`` routinely collide across unrelated clips — so size must
+         *     match too.
+         */
+        get: operations["check_duplicate_video_folders__folder_id__videos_duplicate_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/videos/{video_id}": {
         parameters: {
             query?: never;
@@ -1123,6 +1176,13 @@ export interface components {
             /** Expected Version */
             expected_version: number;
         };
+        /** DuplicateCheckRead */
+        DuplicateCheckRead: {
+            /** Is Duplicate */
+            is_duplicate: boolean;
+            /** Video Id */
+            video_id: string | null;
+        };
         /** ExportCreate */
         ExportCreate: {
             format: components["schemas"]["ExportType"];
@@ -1714,6 +1774,28 @@ export interface components {
             /** Folder Path */
             folder_path: components["schemas"]["FolderBreadcrumbRead"][];
         };
+        /**
+         * VideoStatusRead
+         * @description One video's aggregate processing status, for the batch status poll.
+         *
+         *     ``status`` mirrors the derivation the frontend's per-video processing
+         *     badge already does client-side (failed > ready > processing), computed
+         *     once here so every poller (tray, badge) agrees.
+         */
+        VideoStatusRead: {
+            /**
+             * Video Id
+             * Format: uuid
+             */
+            video_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "processing" | "ready" | "failed";
+            /** Jobs */
+            jobs: components["schemas"]["VideoJobRead"][];
+        };
         /** VideoSummary */
         VideoSummary: {
             /**
@@ -2075,6 +2157,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_videos_status_videos_status_get: {
+        parameters: {
+            query?: {
+                ids?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoStatusRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_duplicate_video_folders__folder_id__videos_duplicate_check_get: {
+        parameters: {
+            query: {
+                filename: string;
+                size: number;
+            };
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateCheckRead"];
                 };
             };
             /** @description Validation Error */

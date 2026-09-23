@@ -109,7 +109,7 @@ export function FolderTree({ projectId, selectedFolderId, onSelect }: TreeProps)
 
   return (
     <div
-      className={`min-h-16 rounded-md text-body ${rootDragOver ? 'bg-brand-subtle ring-1 ring-inset ring-brand' : ''}`}
+      className={`min-h-16 rounded-lg text-body ${rootDragOver ? 'bg-brand-subtle ring-1 ring-inset ring-brand' : ''}`}
       onClick={() => onSelect(null)}
       onDragOver={handleRootDragOver}
       onDragLeave={() => setRootDragOver(false)}
@@ -275,12 +275,12 @@ function FolderTreeNode({
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         onClick={(e) => e.stopPropagation()}
-        className={`group flex items-center rounded-md ${
+        className={`group flex items-center rounded-lg ${
           isSelected
             ? 'bg-brand-subtle'
             : dragOver
-              ? 'bg-surface-raised ring-1 ring-inset ring-brand'
-              : 'hover:bg-surface-raised'
+              ? 'bg-glass ring-1 ring-inset ring-brand'
+              : 'hover:bg-glass'
         }`}
         style={{ paddingLeft: depth * 14 }}
       >
@@ -328,7 +328,7 @@ function FolderTreeNode({
             aria-label={`${folder.name} options`}
             title="Options"
             onClick={(e) => e.stopPropagation()}
-            className="mr-1 shrink-0 rounded p-0.5 text-text-muted opacity-0 hover:bg-surface hover:text-text focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+            className="mr-1 shrink-0 rounded p-0.5 text-text-muted opacity-0 hover:bg-glass hover:text-text focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
           >
             <OptionsIcon className="h-3.5 w-3.5" aria-hidden="true" />
           </DropdownMenuTrigger>

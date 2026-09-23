@@ -695,7 +695,7 @@ export function TranscriptViewer({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2">
+      <div className="flex items-center gap-2 border-b border-glass-line px-4 py-2">
         {searchOpen ? (
           <div className="flex flex-1 items-center gap-1">
             <SearchIcon className="h-4 w-4 shrink-0 text-text-muted" />
@@ -708,7 +708,7 @@ export function TranscriptViewer({
                 if (e.key === 'Escape') closeSearch()
               }}
               placeholder="Find in transcript…"
-              className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-small text-text"
+              className="min-w-0 flex-1 rounded-lg border border-glass-line bg-glass px-2 py-1 text-small text-text backdrop-blur-sm"
             />
             <span className="shrink-0 font-mono text-small text-text-muted">
               {searchQuery
@@ -721,7 +721,7 @@ export function TranscriptViewer({
               title="Previous match"
               disabled={searchMatches.length === 0}
               onClick={() => stepMatch(-1)}
-              className="rounded-md p-1 text-text-muted hover:bg-surface-raised disabled:opacity-40"
+              className="rounded-lg p-1 text-text-muted hover:bg-glass disabled:opacity-40"
             >
               <ChevronUpIcon className="h-4 w-4" />
             </button>
@@ -731,7 +731,7 @@ export function TranscriptViewer({
               title="Next match"
               disabled={searchMatches.length === 0}
               onClick={() => stepMatch(1)}
-              className="rounded-md p-1 text-text-muted hover:bg-surface-raised disabled:opacity-40"
+              className="rounded-lg p-1 text-text-muted hover:bg-glass disabled:opacity-40"
             >
               <ChevronDownIcon className="h-4 w-4" />
             </button>
@@ -740,7 +740,7 @@ export function TranscriptViewer({
               aria-label="Close search"
               title="Close search"
               onClick={closeSearch}
-              className="rounded-md p-1 text-text-muted hover:bg-surface-raised"
+              className="rounded-lg p-1 text-text-muted hover:bg-glass"
             >
               <CloseIcon className="h-4 w-4" />
             </button>
@@ -751,7 +751,7 @@ export function TranscriptViewer({
             aria-label="Search transcript"
             title="Search transcript"
             onClick={() => setSearchOpen(true)}
-            className="rounded-md p-1 text-text-muted hover:bg-surface-raised"
+            className="rounded-lg p-1 text-text-muted hover:bg-glass"
           >
             <SearchIcon className="h-4 w-4" />
           </button>
@@ -775,7 +775,7 @@ export function TranscriptViewer({
           <button
             type="button"
             onClick={reloadAfterConflict}
-            className="ml-auto rounded-md bg-danger px-2 py-1 font-medium text-text-inverted hover:opacity-90"
+            className="ml-auto rounded-lg bg-danger px-2 py-1 font-medium text-text-inverted hover:opacity-90"
           >
             Reload
           </button>
@@ -785,9 +785,13 @@ export function TranscriptViewer({
       {selectionInfo &&
         popupPos &&
         createPortal(
+          // Solid, not glass: this floats over arbitrary transcript text, so
+          // legibility wins over the frosted look used for the surrounding
+          // chrome — same call as the other floating overlay shells
+          // (Popover/DropdownMenu/Select/Dialog content).
           <div
             ref={popupRef}
-            className="fixed z-50 w-max max-w-[90vw] overflow-hidden rounded-md border border-border bg-surface shadow-lg"
+            className="fixed z-50 w-max max-w-[90vw] overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
             style={{
               top: popupPos.top,
               left: popupPos.left,
@@ -906,7 +910,7 @@ export function TranscriptViewer({
                             ? 'bg-highlight-subtle'
                             : isMatch
                               ? 'bg-warning-subtle'
-                              : 'hover:bg-surface-raised'
+                              : 'hover:bg-glass'
                     const comment = commentedTokenInfo.get(token.id)
                     const decoration = comment
                       ? comment.resolved

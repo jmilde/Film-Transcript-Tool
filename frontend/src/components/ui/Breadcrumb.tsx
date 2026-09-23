@@ -33,7 +33,9 @@ export function Breadcrumb({ items, className = '' }: BreadcrumbProps) {
                 {item.label}
               </Link>
             ) : (
-              <span className={isCurrent ? 'font-medium text-text' : 'text-text-muted'}>
+              <span
+                className={isCurrent ? 'font-display font-medium text-text' : 'text-text-muted'}
+              >
                 {item.label}
               </span>
             )}

@@ -74,20 +74,20 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
             if (e.key === 'Enter') draft.onConfirm()
             if (e.key === 'Escape') draft.onCancel()
           }}
-          className={`min-w-48 flex-1 rounded-md border bg-surface px-1 py-0.5 text-text ${
+          className={`min-w-48 flex-1 rounded-lg border bg-surface px-1 py-0.5 text-text ${
             draft.inputAccentClass ?? 'border-brand'
           }`}
         />
         <button
           type="button"
-          className="rounded-md bg-brand px-2 py-1 text-text-inverted hover:bg-brand-hover"
+          className="rounded-lg bg-brand px-2 py-1 text-text-inverted hover:bg-brand-hover"
           onClick={draft.onConfirm}
         >
           Confirm
         </button>
         <button
           type="button"
-          className="rounded-md border border-border px-2 py-1 text-text hover:bg-surface-raised"
+          className="rounded-lg border border-border px-2 py-1 text-text hover:bg-surface-raised"
           onClick={draft.onCancel}
         >
           Cancel
@@ -110,7 +110,7 @@ export function SelectionToolbar(props: SelectionToolbarProps) {
             aria-label={action.label}
             title={action.label}
             aria-pressed={action.active}
-            className={`rounded-md p-1.5 ${VARIANT_CLASSES[action.variant ?? 'default']} ${
+            className={`rounded-lg p-1.5 ${VARIANT_CLASSES[action.variant ?? 'default']} ${
               action.active ? 'ring-1 ring-brand' : ''
             }`}
             onClick={action.onClick}

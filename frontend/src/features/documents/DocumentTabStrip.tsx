@@ -55,7 +55,7 @@ export function DocumentTabStrip({
   const otherDocs = (documents ?? []).filter((doc) => !openDocumentIds.includes(doc.id))
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-surface-raised px-2 pt-1.5">
+    <div className="flex items-center gap-1 overflow-x-auto border-b border-glass-line bg-glass px-2 pt-1.5">
       {openDocs.map((doc) => (
         <DocumentTab
           key={doc.id}
@@ -134,8 +134,8 @@ function DocumentTab({
     <div
       className={`group relative -mb-px flex shrink-0 items-center gap-0.5 rounded-t-md border py-1 pr-0.5 pl-2 text-small ${
         isActive
-          ? 'border-border border-b-surface bg-surface text-text'
-          : 'border-transparent text-text-muted hover:bg-surface'
+          ? 'border-glass-line border-b-glass-strong bg-glass-strong text-text'
+          : 'border-transparent text-text-muted hover:bg-glass'
       }`}
     >
       {renaming ? (
@@ -152,7 +152,7 @@ function DocumentTab({
               setRenaming(false)
             }
           }}
-          className="w-24 rounded-sm border border-brand bg-surface px-1 text-text"
+          className="w-24 rounded-sm border border-brand bg-glass px-1 text-text"
         />
       ) : (
         <button type="button" onClick={onActivate} className="max-w-28 truncate py-0.5">
@@ -163,7 +163,7 @@ function DocumentTab({
         <DropdownMenuTrigger
           aria-label={`${doc.title} options`}
           title="Options"
-          className="rounded p-0.5 opacity-0 hover:bg-surface-raised group-hover:opacity-100 data-[state=open]:opacity-100"
+          className="rounded p-0.5 opacity-0 hover:bg-glass group-hover:opacity-100 data-[state=open]:opacity-100"
         >
           <OptionsIcon className="h-3 w-3" aria-hidden="true" />
         </DropdownMenuTrigger>
@@ -194,7 +194,7 @@ function DocumentTab({
         aria-label={`Close ${doc.title}`}
         title="Close"
         onClick={onClose}
-        className="rounded p-0.5 opacity-0 hover:bg-surface-raised group-hover:opacity-100"
+        className="rounded p-0.5 opacity-0 hover:bg-glass group-hover:opacity-100"
       >
         <CloseIcon className="h-3 w-3" aria-hidden="true" />
       </button>
@@ -222,7 +222,7 @@ function ExistingDocumentPicker({
           type="button"
           aria-label="Open existing document"
           title="Open existing document"
-          className="-mb-px flex shrink-0 items-center justify-center rounded-t-md border border-border border-b-transparent bg-surface px-2 py-1.5 text-text-muted hover:text-text"
+          className="-mb-px flex shrink-0 items-center justify-center rounded-t-md border border-glass-line border-b-transparent bg-glass px-2 py-1.5 text-text-muted hover:text-text"
         >
           <PlusIcon className="h-4 w-4" aria-hidden="true" />
         </button>

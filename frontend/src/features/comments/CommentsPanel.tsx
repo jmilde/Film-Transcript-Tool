@@ -71,7 +71,9 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
 
   return (
     <div className="space-y-2">
-      <h3 className="text-small font-semibold tracking-wide text-text-muted uppercase">Comments</h3>
+      <h3 className="font-display text-small font-semibold tracking-wide text-text-muted uppercase">
+        Comments
+      </h3>
 
       {isLoading && <div className="text-body text-text-muted">Loading comments…</div>}
 
@@ -87,86 +89,102 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
         return (
           <div
             key={comment.id}
-            className={`rounded-md border px-3 py-2 text-body ${
+            className={`flex gap-2 rounded-lg border px-3 py-2 text-body ${
               comment.id === selectedId
                 ? 'border-brand bg-brand-subtle'
-                : 'border-border bg-surface'
+                : 'border-glass-line bg-glass'
             } ${comment.resolved ? 'opacity-60' : ''}`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                className="font-mono text-small text-text-muted hover:underline"
-                onClick={() => locate(comment)}
-                disabled={!anchor}
-              >
-                {anchor ? `${formatTime(anchor.in_time)} – ${formatTime(anchor.out_time)}` : null}
-              </button>
-              <div className="flex shrink-0 items-center gap-1">
+            {/* Decorative only — the initial carries identity, the neutral
+                fill carries none, so it doesn't collide with the brand tint
+                that already means "selected/located comment" in this panel. */}
+            <span
+              aria-hidden="true"
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-glass-strong text-[10px] font-semibold text-text-muted"
+            >
+              {authorLabel(comment.created_by, currentUserId).slice(0, 1).toUpperCase()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  className={`rounded-md border px-2 py-0.5 text-small ${
-                    comment.resolved
-                      ? 'border-border text-text-muted hover:bg-surface-raised'
-                      : 'border-success text-success-text hover:bg-success-subtle'
-                  }`}
-                  onClick={() =>
-                    resolveComment.mutate({ commentId: comment.id, resolved: !comment.resolved })
-                  }
+                  className="font-mono text-small text-text-muted hover:underline"
+                  onClick={() => locate(comment)}
+                  disabled={!anchor}
                 >
-                  {comment.resolved ? 'Reopen' : 'Resolve'}
+                  {anchor
+                    ? `${formatTime(anchor.in_time)} – ${formatTime(anchor.out_time)}`
+                    : null}
                 </button>
-                <button
-                  type="button"
-                  aria-label="Delete comment"
-                  title="Delete comment"
-                  className="rounded-md p-1 text-text-muted hover:bg-danger-subtle hover:text-danger-text"
-                  onClick={() => setDeletingId(comment.id)}
-                >
-                  <TrashIcon className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <p className="mt-1 text-text">{comment.text}</p>
-            <div className="mt-1 text-small text-text-muted">
-              {authorLabel(comment.created_by, currentUserId)}
-            </div>
-
-            {comment.replies.length > 0 && (
-              <button
-                type="button"
-                className="mt-1 text-small text-brand-text hover:underline"
-                onClick={() => toggleOpen(comment.id)}
-              >
-                {isOpen ? 'Hide' : 'Show'} {comment.replies.length}{' '}
-                {comment.replies.length === 1 ? 'reply' : 'replies'}
-              </button>
-            )}
-
-            {isOpen &&
-              comment.replies.map((reply) => (
-                <div key={reply.id} className="mt-1 ml-3 border-l border-border pl-2 text-small">
-                  <span className="text-text-muted">
-                    {authorLabel(reply.created_by, currentUserId)}:
-                  </span>{' '}
-                  <span className="text-text">{reply.text}</span>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    className={`rounded-lg border px-2 py-0.5 text-small ${
+                      comment.resolved
+                        ? 'border-glass-line text-text-muted hover:bg-glass'
+                        : 'border-success text-success-text hover:bg-success-subtle'
+                    }`}
+                    onClick={() =>
+                      resolveComment.mutate({ commentId: comment.id, resolved: !comment.resolved })
+                    }
+                  >
+                    {comment.resolved ? 'Reopen' : 'Resolve'}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete comment"
+                    title="Delete comment"
+                    className="rounded-md p-1 text-text-muted hover:bg-danger-subtle hover:text-danger-text"
+                    onClick={() => setDeletingId(comment.id)}
+                  >
+                    <TrashIcon className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              ))}
+              </div>
 
-            <div className="mt-2 flex gap-1">
-              <Input
-                value={replyDrafts[comment.id] ?? ''}
-                onChange={(e) => setReplyDrafts((d) => ({ ...d, [comment.id]: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitReply(comment.id)
-                }}
-                placeholder="Reply…"
-                className="flex-1 text-small"
-              />
-              <Button size="sm" onClick={() => submitReply(comment.id)}>
-                Reply
-              </Button>
+              <p className="mt-1 text-text">{comment.text}</p>
+              <div className="mt-1 text-small text-text-muted">
+                {authorLabel(comment.created_by, currentUserId)}
+              </div>
+
+              {comment.replies.length > 0 && (
+                <button
+                  type="button"
+                  className="mt-1 text-small text-brand-text hover:underline"
+                  onClick={() => toggleOpen(comment.id)}
+                >
+                  {isOpen ? 'Hide' : 'Show'} {comment.replies.length}{' '}
+                  {comment.replies.length === 1 ? 'reply' : 'replies'}
+                </button>
+              )}
+
+              {isOpen &&
+                comment.replies.map((reply) => (
+                  <div
+                    key={reply.id}
+                    className="mt-1 ml-3 border-l border-glass-line pl-2 text-small"
+                  >
+                    <span className="text-text-muted">
+                      {authorLabel(reply.created_by, currentUserId)}:
+                    </span>{' '}
+                    <span className="text-text">{reply.text}</span>
+                  </div>
+                ))}
+
+              <div className="mt-2 flex gap-1">
+                <Input
+                  value={replyDrafts[comment.id] ?? ''}
+                  onChange={(e) => setReplyDrafts((d) => ({ ...d, [comment.id]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitReply(comment.id)
+                  }}
+                  placeholder="Reply…"
+                  className="flex-1 text-small"
+                />
+                <Button size="sm" onClick={() => submitReply(comment.id)}>
+                  Reply
+                </Button>
+              </div>
             </div>
           </div>
         )

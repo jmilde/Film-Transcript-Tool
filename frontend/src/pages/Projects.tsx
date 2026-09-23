@@ -7,7 +7,9 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Dialog, DialogContent, DialogTrigger } from '../components/ui/Dialog'
 import {
+  Clapperboard as ProjectIcon,
   FileText as DocumentIcon,
+  FolderOpen as EmptyIcon,
   Plus as PlusIcon,
   Users as UsersIcon,
   Video as VideoIcon,
@@ -19,14 +21,19 @@ export function Projects() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-h2 text-text">Projects</h2>
+        <h2 className="font-display text-h2 text-text">Projects</h2>
         <NewProjectDialog />
       </div>
 
       {isPending && <p className="text-text-muted">Loading projects…</p>}
       {isError && <p className="text-danger-text">Could not load projects.</p>}
       {projects && projects.length === 0 && (
-        <p className="text-text-muted">No projects yet. Create your first one above.</p>
+        <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-glass-line px-8 py-14 text-center">
+          <EmptyIcon className="h-8 w-8 text-text-muted/50" aria-hidden="true" />
+          <p className="text-body text-text-muted">
+            No projects yet. Create your first one above.
+          </p>
+        </div>
       )}
       {projects && projects.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -37,12 +44,19 @@ export function Projects() {
                 tint="brand"
                 className="h-full cursor-pointer transition-shadow hover:shadow-md"
               >
-                <h3 className="text-h3 text-text">{project.name}</h3>
-                {project.description && (
-                  <p className="mt-1 line-clamp-2 text-small text-text-muted">
-                    {project.description}
-                  </p>
-                )}
+                <div className="flex items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand text-text-inverted shadow-sm">
+                    <ProjectIcon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="font-display text-h3 text-text">{project.name}</h3>
+                    {project.description && (
+                      <p className="mt-1 line-clamp-2 text-small text-text-muted">
+                        {project.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
                 <div className="mt-3 flex items-center gap-4 text-small text-text-muted">
                   <span className="flex items-center gap-1.5">
                     <VideoIcon className="h-3.5 w-3.5" aria-hidden="true" />

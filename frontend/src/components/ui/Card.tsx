@@ -11,19 +11,23 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   tint?: CardTint
 }
 
+// Airy cards are glass panels, so every tint (including `neutral`, which
+// reuses the same glass-strong fill as the dense variant) needs to stay
+// translucent for `backdrop-blur` to have anything to blur — a fully opaque
+// tint would render as a flat color, not frosted glass.
 const TINT_CLASSES: Record<CardTint, string> = {
-  brand: 'bg-brand-subtle',
-  success: 'bg-success-subtle',
-  warning: 'bg-warning-subtle',
-  danger: 'bg-danger-subtle',
-  info: 'bg-info-subtle',
-  neutral: 'bg-surface',
+  brand: 'bg-brand-subtle/70',
+  success: 'bg-success-subtle/70',
+  warning: 'bg-warning-subtle/70',
+  danger: 'bg-danger-subtle/70',
+  info: 'bg-info-subtle/70',
+  neutral: 'bg-glass-strong',
 }
 
 export function Card({ variant = 'dense', tint = 'neutral', className = '', ...props }: CardProps) {
   const base =
     variant === 'airy'
-      ? `rounded-lg p-4 shadow-sm ${TINT_CLASSES[tint]}`
-      : 'rounded-md border border-border bg-surface p-3'
+      ? `rounded-2xl border border-glass-line p-4 shadow-sm backdrop-blur-md ${TINT_CLASSES[tint]}`
+      : 'rounded-xl border border-glass-line bg-glass-strong p-3 backdrop-blur-md'
   return <div className={`${base} ${className}`} {...props} />
 }
