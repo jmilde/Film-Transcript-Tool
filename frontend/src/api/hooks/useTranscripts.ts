@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap } from '../client'
 import type { components } from '../schema'
 
@@ -31,5 +31,29 @@ export function useTranscript(transcriptId: string | null) {
           params: { path: { transcript_id: transcriptId as string } },
         }),
       ),
+  })
+}
+
+/** Reassign which speaker is credited for one or more segments
+ * (`PATCH /segments/{id}`) — distinct from renaming a speaker
+ * (`useUpdateSpeaker`), which changes that speaker's name everywhere they're
+ * credited instead. Accepts several segment ids since the transcript view
+ * groups consecutive same-speaker segments under one header; reassigning
+ * that header's speaker reassigns every segment it visually spans. */
+export function useReassignSegmentSpeaker(transcriptId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { segmentIds: string[]; speakerId: string | null }) =>
+      Promise.all(
+        input.segmentIds.map(async (segmentId) =>
+          unwrap(
+            await api.PATCH('/segments/{segment_id}', {
+              params: { path: { segment_id: segmentId } },
+              body: { speaker_id: input.speakerId },
+            }),
+          ),
+        ),
+      ),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ['transcript', transcriptId] }),
   })
 }

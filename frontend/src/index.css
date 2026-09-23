@@ -39,6 +39,13 @@
   --raw-info-subtle: oklch(94% 0.03 240);
   --raw-info-text: oklch(46% 0.14 240);
 
+  /* A distinct hue from --raw-warning (yellow-80): warning is reserved for
+     search matches/unresolved comments, this is the user-applied text
+     highlighter (transcript tokens + document text), pastel orange (hue 55). */
+  --raw-highlight: oklch(78% 0.16 55);
+  --raw-highlight-subtle: oklch(92% 0.08 55);
+  --raw-highlight-text: oklch(45% 0.15 55);
+
   /* Frosted-glass surfaces — translucent white, sits on top of `--raw-page`
      (light) or lightens it slightly (dark); not a semantic color, so it's
      exempt from the brand/success/warning/danger/info set.
@@ -84,6 +91,10 @@
   --raw-info-subtle: oklch(32% 0.05 240);
   --raw-info-text: oklch(82% 0.1 240);
 
+  --raw-highlight: oklch(75% 0.15 55);
+  --raw-highlight-subtle: oklch(38% 0.09 55);
+  --raw-highlight-text: oklch(85% 0.12 55);
+
   --raw-glass: oklch(100% 0 0 / 6%);
   --raw-glass-strong: oklch(100% 0 0 / 10%);
   --raw-glass-line: oklch(100% 0 0 / 12%);
@@ -122,6 +133,9 @@
   --color-info: var(--raw-info);
   --color-info-subtle: var(--raw-info-subtle);
   --color-info-text: var(--raw-info-text);
+  --color-highlight: var(--raw-highlight);
+  --color-highlight-subtle: var(--raw-highlight-subtle);
+  --color-highlight-text: var(--raw-highlight-text);
 
   --color-glass: var(--raw-glass);
   --color-glass-strong: var(--raw-glass-strong);

@@ -28,6 +28,7 @@ import type { ClipBlockNodeAttrs } from './clipBlockNode'
 import { writeClipToClipboard } from './clipClipboard'
 import { findOrphanedCommentIds } from './orphanedComments'
 import { CommentMark } from './commentMark'
+import { TextHighlightMark } from './textHighlightMark'
 import { CommentResolvedDecoration, commentResolvedPluginKey } from './commentResolvedDecoration'
 import { CommentHighlightDecoration, commentHighlightPluginKey } from './commentHighlightDecoration'
 import { InsertMarker, insertMarkerPluginKey } from './insertMarker'
@@ -43,6 +44,7 @@ import {
   Heading1 as Heading1Icon,
   Heading2 as Heading2Icon,
   Heading3 as Heading3Icon,
+  Highlighter as HighlighterIcon,
   Italic as ItalicIcon,
   Play as PlayIcon,
   Strikethrough as StrikeIcon,
@@ -76,6 +78,7 @@ interface FormattingState {
   italic: boolean
   underline: boolean
   strike: boolean
+  highlight: boolean
   h1: boolean
   h2: boolean
   h3: boolean
@@ -175,6 +178,7 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
         Underline,
         ClipBlock,
         CommentMark,
+        TextHighlightMark,
         CommentResolvedDecoration,
         CommentHighlightDecoration,
         InsertMarker,
@@ -301,6 +305,7 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
       italic: editor?.isActive('italic') ?? false,
       underline: editor?.isActive('underline') ?? false,
       strike: editor?.isActive('strike') ?? false,
+      highlight: editor?.isActive('textHighlight') ?? false,
       h1: editor?.isActive('heading', { level: 1 }) ?? false,
       h2: editor?.isActive('heading', { level: 2 }) ?? false,
       h3: editor?.isActive('heading', { level: 3 }) ?? false,
@@ -599,6 +604,13 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
       label: 'Strikethrough',
       active: formattingState.strike,
       onClick: () => editor?.chain().focus().toggleStrike().run(),
+    },
+    {
+      id: 'highlight',
+      icon: HighlighterIcon,
+      label: 'Highlight',
+      active: formattingState.highlight,
+      onClick: () => editor?.chain().focus().toggleTextHighlight().run(),
     },
     {
       id: 'h1',

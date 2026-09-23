@@ -5,7 +5,8 @@ from app.models.folder import Folder
 from app.models.job import JobStatus, JobType, ProcessingJob
 from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
-from app.models.transcript import Transcript, TranscriptToken
+from app.models.speaker import Speaker
+from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
 from app.models.video import Video
 from app.services.transcripts import create_transcript_from_normalized
@@ -244,6 +245,118 @@ def test_reindex_transcript_viewer_forbidden(
 
     other = app_client(other_user)
     resp = other.post(f"/transcripts/{transcript.id}/reindex")
+    assert resp.status_code == 403
+
+
+def test_reassign_segment_speaker(auth_client: TestClient, db_session: Session, user: User) -> None:
+    video, transcript = _seed_transcript(db_session, user)
+    segment = (
+        db_session.execute(
+            select(TranscriptSegment)
+            .where(TranscriptSegment.transcript_id == transcript.id)
+            .order_by(TranscriptSegment.position)
+        )
+        .scalars()
+        .first()
+    )
+    assert segment is not None
+    speakers = list(
+        db_session.execute(
+            select(Speaker)
+            .where(Speaker.video_id == video.id)
+            .order_by(Speaker.provider_identifier)
+        )
+        .scalars()
+        .all()
+    )
+    other_speaker = next(s for s in speakers if s.id != segment.speaker_id)
+
+    resp = auth_client.patch(f"/segments/{segment.id}", json={"speaker_id": str(other_speaker.id)})
+
+    assert resp.status_code == 200
+    assert resp.json()["speaker_id"] == str(other_speaker.id)
+    persisted = db_session.get(TranscriptSegment, segment.id)
+    assert persisted is not None
+    assert persisted.speaker_id == other_speaker.id
+
+
+def test_reassign_segment_speaker_to_unattributed(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    _video, transcript = _seed_transcript(db_session, user)
+    segment = (
+        db_session.execute(
+            select(TranscriptSegment)
+            .where(TranscriptSegment.transcript_id == transcript.id)
+            .order_by(TranscriptSegment.position)
+        )
+        .scalars()
+        .first()
+    )
+    assert segment is not None
+
+    resp = auth_client.patch(f"/segments/{segment.id}", json={"speaker_id": None})
+
+    assert resp.status_code == 200
+    assert resp.json()["speaker_id"] is None
+
+
+def test_reassign_segment_speaker_from_another_video_rejected(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    video, transcript = _seed_transcript(db_session, user)
+    other_video, _other_transcript = _seed_transcript(db_session, user)
+    segment = (
+        db_session.execute(
+            select(TranscriptSegment)
+            .where(TranscriptSegment.transcript_id == transcript.id)
+            .order_by(TranscriptSegment.position)
+        )
+        .scalars()
+        .first()
+    )
+    assert segment is not None
+    foreign_speaker = (
+        db_session.execute(select(Speaker).where(Speaker.video_id == other_video.id))
+        .scalars()
+        .first()
+    )
+    assert foreign_speaker is not None
+
+    resp = auth_client.patch(
+        f"/segments/{segment.id}", json={"speaker_id": str(foreign_speaker.id)}
+    )
+
+    assert resp.status_code == 400
+    assert video.id != other_video.id
+
+
+def test_reassign_segment_speaker_viewer_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    video, transcript = _seed_transcript(db_session, user)
+    db_session.add(
+        ProjectMembership(
+            project_id=video.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
+    segment = (
+        db_session.execute(
+            select(TranscriptSegment)
+            .where(TranscriptSegment.transcript_id == transcript.id)
+            .order_by(TranscriptSegment.position)
+        )
+        .scalars()
+        .first()
+    )
+    assert segment is not None
+
+    other = app_client(other_user)
+    resp = other.patch(f"/segments/{segment.id}", json={"speaker_id": None})
     assert resp.status_code == 403
 
 

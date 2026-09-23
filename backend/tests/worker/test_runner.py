@@ -1,3 +1,6 @@
+import time
+from collections.abc import Iterator
+from types import TracebackType
 from typing import Any
 
 import pytest
@@ -7,6 +10,7 @@ from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.user import User
 from app.models.video import Video
+from app.worker import runner
 from app.worker.runner import run_once
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -148,3 +152,45 @@ def test_completing_final_stage_enqueues_nothing(isolated_queue: Session, user: 
         .all()
     )
     assert remaining == []
+
+
+class _FakeSessionContext:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        return None
+
+
+def test_run_forever_backs_off_while_idle_and_resets_on_a_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The idle sleep should double (capped) each empty poll, and drop back
+    to the base interval the moment a job is found — see `run_forever`'s
+    docstring for why (cutting idle CPU/battery use without adding latency
+    right after work shows up)."""
+    sleeps: list[float] = []
+    # idle, idle, idle (would cap here), a job (resets), idle again, then stop.
+    results: Iterator[ProcessingJob | None] = iter(
+        [None, None, None, ProcessingJob(type=JobType.NOOP), None]
+    )
+
+    def fake_run_once(session: Session) -> ProcessingJob | None:
+        try:
+            return next(results)
+        except StopIteration as exc:
+            raise KeyboardInterrupt from exc
+
+    monkeypatch.setattr(runner, "run_once", fake_run_once)
+    monkeypatch.setattr(time, "sleep", sleeps.append)
+    monkeypatch.setattr(runner, "WorkerSessionLocal", lambda: _FakeSessionContext())
+
+    with pytest.raises(KeyboardInterrupt):
+        runner.run_forever(poll_interval=1.0, max_poll_interval=4.0)
+
+    assert sleeps == [1.0, 2.0, 4.0, 1.0]

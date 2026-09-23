@@ -109,6 +109,64 @@ def test_edit_token_stale_version_conflict(
     assert body["error"]["current_tokens"][0]["version"] == 1
 
 
+def test_highlight_token(auth_client: TestClient, db_session: Session, user: User) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+
+    resp = auth_client.patch(
+        f"/tokens/{token.id}/highlight", json={"is_highlighted": True, "expected_version": 1}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_highlighted"] is True
+    assert body["version"] == 2
+    # A display-only flag — the transcript's displayed text is unaffected.
+    assert "Hello" in _transcript_texts(auth_client, transcript)
+
+    unhighlight = auth_client.patch(
+        f"/tokens/{token.id}/highlight", json={"is_highlighted": False, "expected_version": 2}
+    )
+    assert unhighlight.status_code == 200
+    assert unhighlight.json()["is_highlighted"] is False
+
+
+def test_highlight_token_stale_version_conflict(
+    auth_client: TestClient, db_session: Session, user: User
+) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+
+    resp = auth_client.patch(
+        f"/tokens/{token.id}/highlight", json={"is_highlighted": True, "expected_version": 99}
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "CONFLICT"
+
+
+def test_highlight_token_viewer_forbidden(
+    app_client: Callable[[User], TestClient],
+    db_session: Session,
+    user: User,
+    other_user: User,
+) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+    db_session.add(
+        ProjectMembership(
+            project_id=transcript.project_id, user_id=other_user.id, role=MembershipRole.VIEWER
+        )
+    )
+    db_session.flush()
+
+    other = app_client(other_user)
+    resp = other.patch(
+        f"/tokens/{token.id}/highlight", json={"is_highlighted": True, "expected_version": 1}
+    )
+    assert resp.status_code == 403
+
+
 def test_delete_token_excluded_from_transcript(
     auth_client: TestClient, db_session: Session, user: User
 ) -> None:

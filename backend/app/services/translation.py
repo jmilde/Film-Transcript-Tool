@@ -144,6 +144,7 @@ def create_translation_transcript(
             continue
         segment = TranscriptSegment(
             transcript_id=translation.id,
+            project_id=source.project_id,
             speaker_id=segment_source.speaker_id,
             position=Decimal(segment_index + 1),
         )

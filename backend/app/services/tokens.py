@@ -109,6 +109,26 @@ def delete_token(
     return locked
 
 
+def set_token_highlight(
+    session: Session,
+    token: TranscriptToken,
+    is_highlighted: bool,
+    *,
+    user_id: uuid.UUID,
+    expected_version: int,
+) -> TranscriptToken:
+    """Toggle a token's highlight — a display-only flag, unlike edit/delete it
+    carries no editorial meaning but still goes through the same optimistic
+    lock so a highlight action can't silently clobber a concurrent edit."""
+    locked = _lock(session, token.id)
+    _check_version([locked], {locked.id: expected_version})
+    locked.is_highlighted = is_highlighted
+    locked.updated_by = user_id
+    locked.version += 1
+    session.flush()
+    return locked
+
+
 def merge_tokens(
     session: Session,
     tokens: Sequence[TranscriptToken],

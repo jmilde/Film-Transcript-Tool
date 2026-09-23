@@ -450,6 +450,27 @@ Response:
 
 ---
 
+## Reassign Segment Speaker
+
+```
+PATCH /segments/{segment_id}
+```
+
+Changes which speaker is credited for a segment — distinct from renaming a
+speaker (`PATCH /speakers/{speaker_id}`, §8), which changes that speaker's
+display name everywhere they're credited instead. `speaker_id` may be `null`
+to clear attribution; a non-null id MUST belong to the segment's own video.
+
+Request:
+
+```json
+{
+	"speaker_id": "uuid-or-null"
+}
+```
+
+---
+
 # 10. Transcript Tokens
 
 Every token response includes `version`. Every mutating request below MUST
@@ -483,6 +504,27 @@ DELETE /tokens/{token_id}?expected_version=3
 ```
 
 Marks token as deleted.
+
+---
+
+## Highlight Token
+
+```
+PATCH /tokens/{token_id}/highlight
+```
+
+Toggles the pastel-orange text highlighter — a display-only flag; unlike
+`edited_text`/deletion it carries no editorial meaning and never affects
+search or export.
+
+Request:
+
+```json
+{
+	"is_highlighted": true,
+	"expected_version": 3
+}
+```
 
 ---
 

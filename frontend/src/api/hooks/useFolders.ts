@@ -18,17 +18,26 @@ export function useRootFolders(projectId: string) {
   })
 }
 
-/** Contents (child folders + videos) of a single folder. */
-export function useFolderContents(folderId: string | null) {
-  return useQuery({
+/** Query options for a single folder's contents — shared between the
+ * `useFolderContents` hook and one-off `queryClient.fetchQuery` calls (e.g.
+ * walking up a folder's ancestor chain), so both hit the same cache entry. */
+export function folderContentsQuery(folderId: string) {
+  return {
     queryKey: ['folder', folderId],
-    enabled: folderId !== null,
     queryFn: async () =>
       unwrap(
         await api.GET('/folders/{folder_id}', {
-          params: { path: { folder_id: folderId as string } },
+          params: { path: { folder_id: folderId } },
         }),
       ),
+  }
+}
+
+/** Contents (child folders + videos) of a single folder. */
+export function useFolderContents(folderId: string | null) {
+  return useQuery({
+    ...folderContentsQuery(folderId as string),
+    enabled: folderId !== null,
   })
 }
 
@@ -52,6 +61,51 @@ export function useCreateFolder(projectId: string) {
       } else {
         void client.invalidateQueries({ queryKey: ['folder', input.parentFolderId] })
       }
+    },
+  })
+}
+
+/** Rename a folder (`PATCH /folders/{id}`). */
+export function useRenameFolder(projectId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { folderId: string; parentFolderId: string | null; name: string }) =>
+      unwrap(
+        await api.PATCH('/folders/{folder_id}', {
+          params: { path: { folder_id: input.folderId } },
+          body: { name: input.name },
+        }),
+      ),
+    onSuccess: (_data, input) => {
+      void client.invalidateQueries({ queryKey: ['folder', input.folderId] })
+      void client.invalidateQueries(
+        input.parentFolderId === null
+          ? { queryKey: ['folders', projectId, 'root'] }
+          : { queryKey: ['folder', input.parentFolderId] },
+      )
+    },
+  })
+}
+
+/** Delete a folder (`DELETE /folders/{id}`) — cascades to its subfolders and
+ * videos in the database, so callers must confirm destructively before
+ * calling this. */
+export function useDeleteFolder(projectId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { folderId: string; parentFolderId: string | null }) =>
+      unwrap(
+        await api.DELETE('/folders/{folder_id}', {
+          params: { path: { folder_id: input.folderId } },
+        }),
+      ),
+    onSuccess: (_data, input) => {
+      client.removeQueries({ queryKey: ['folder', input.folderId] })
+      void client.invalidateQueries(
+        input.parentFolderId === null
+          ? { queryKey: ['folders', projectId, 'root'] }
+          : { queryKey: ['folder', input.parentFolderId] },
+      )
     },
   })
 }

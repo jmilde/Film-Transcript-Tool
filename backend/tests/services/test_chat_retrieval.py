@@ -73,7 +73,9 @@ def _chunk(
 ) -> TranscriptChunk:
     # Each chunk gets its own segment/token pair — content doesn't matter for
     # retrieval, only the chunk row's own fields do.
-    segment = TranscriptSegment(transcript_id=transcript.id, position=Decimal(1))
+    segment = TranscriptSegment(
+        transcript_id=transcript.id, project_id=video.project_id, position=Decimal(1)
+    )
     db.add(segment)
     db.flush()
     token = TranscriptToken(

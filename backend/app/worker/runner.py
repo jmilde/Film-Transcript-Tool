@@ -101,13 +101,26 @@ def run_once(
     return job
 
 
-def run_forever(poll_interval: float = 2.0) -> None:
-    """Poll the queue forever, sleeping when idle."""
+def run_forever(poll_interval: float = 2.0, max_poll_interval: float = 30.0) -> None:
+    """Poll the queue forever, sleeping when idle.
+
+    The idle sleep backs off exponentially (doubling, capped at
+    ``max_poll_interval``) the longer the queue stays empty, and resets to
+    ``poll_interval`` the moment a job is found. A dev machine sitting idle
+    for hours would otherwise poll Postgres every ``poll_interval`` seconds
+    all day for no reason; backing off keeps latency low right after work
+    shows up while cutting idle wakeups (and battery/CPU use) the rest of
+    the time.
+    """
+    current_interval = poll_interval
     while True:
         with WorkerSessionLocal() as session:
             job = run_once(session)
         if job is None:
-            time.sleep(poll_interval)
+            time.sleep(current_interval)
+            current_interval = min(current_interval * 2, max_poll_interval)
+        else:
+            current_interval = poll_interval
 
 
 if __name__ == "__main__":

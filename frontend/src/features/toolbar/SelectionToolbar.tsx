@@ -5,7 +5,7 @@ export interface ToolbarAction {
   id: string
   icon: ComponentType<{ className?: string }>
   label: string
-  variant?: 'primary' | 'default' | 'highlight' | 'danger'
+  variant?: 'primary' | 'default' | 'highlight' | 'highlighted' | 'danger'
   active?: boolean
   onClick: () => void
 }
@@ -40,6 +40,9 @@ const VARIANT_CLASSES: Record<NonNullable<ToolbarAction['variant']>, string> = {
   primary: 'bg-brand text-text-inverted hover:bg-brand-hover',
   default: 'border border-border text-text-muted hover:bg-surface-raised',
   highlight: 'border border-warning text-warning-text hover:bg-warning-subtle',
+  // The text-highlighter action's own variant — named distinctly from
+  // `highlight` above (that one styles the Comment button; unrelated).
+  highlighted: 'border border-highlight text-highlight-text hover:bg-highlight-subtle',
   danger: 'border border-danger text-danger-text hover:bg-danger-subtle',
 }
 

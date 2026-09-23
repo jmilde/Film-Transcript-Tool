@@ -506,6 +506,41 @@ describe('DocumentEditor', () => {
       expect(screen.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true')
     })
 
+    it('toggles a pastel-orange highlight mark on selected text', async () => {
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
+      )
+      server.use(
+        http.patch('http://localhost:8000/documents/d-1', () =>
+          HttpResponse.json({ ...PROSE_DOC, version: 2 }),
+        ),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
+      )
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 0, 5) // "Hello"
+
+      const highlightButton = screen.getByRole('button', { name: 'Highlight' })
+      expect(highlightButton).toHaveAttribute('aria-pressed', 'false')
+
+      await userEvent.click(highlightButton)
+      await waitFor(() => {
+        expect(container.querySelector('mark[data-text-highlight]')).toHaveTextContent('Hello')
+      })
+      expect(screen.getByRole('button', { name: 'Highlight' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+
+      await userEvent.click(highlightButton)
+      await waitFor(() => {
+        expect(container.querySelector('mark[data-text-highlight]')).not.toBeInTheDocument()
+      })
+    })
+
     it('shows only Copy/Comment (not formatting) in the floating bubble for a text selection', async () => {
       server.use(
         http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),

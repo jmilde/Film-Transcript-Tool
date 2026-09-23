@@ -23,6 +23,7 @@ from app.services.tokens import (
     delete_token,
     edit_token,
     merge_tokens,
+    set_token_highlight,
     split_token,
 )
 from app.services.transcripts import create_transcript_from_normalized
@@ -162,6 +163,36 @@ def test_delete_token_stale_version_rejected(db_session: Session, user: User) ->
         delete_token(db_session, token, user_id=user.id, expected_version=99)
 
     assert token.is_deleted is False
+
+
+def test_set_token_highlight_only_changes_flag(db_session: Session, user: User) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+    original_text = token.original_text
+
+    set_token_highlight(db_session, token, True, user_id=user.id, expected_version=1)
+
+    assert token.is_highlighted is True
+    # A display-only flag — text/timing/deletion untouched.
+    assert token.original_text == original_text
+    assert token.edited_text is None
+    assert token.is_deleted is False
+    assert token.updated_by == user.id
+    assert token.version == 2
+
+    set_token_highlight(db_session, token, False, user_id=user.id, expected_version=2)
+    assert token.is_highlighted is False
+
+
+def test_set_token_highlight_stale_version_rejected(db_session: Session, user: User) -> None:
+    transcript = _seed(db_session, user)
+    token = _segment_tokens(db_session, transcript, 0)[0]
+
+    with pytest.raises(ConflictError):
+        set_token_highlight(db_session, token, True, user_id=user.id, expected_version=99)
+
+    assert token.is_highlighted is False
+    assert token.version == 1
 
 
 def test_merge_tokens_same_segment(db_session: Session, user: User) -> None:
@@ -349,7 +380,9 @@ def committed_token(engine: Engine) -> Iterator[uuid.UUID]:
         )
         session.add(transcript)
         session.flush()
-        segment = TranscriptSegment(transcript_id=transcript.id, position=Decimal(1))
+        segment = TranscriptSegment(
+            transcript_id=transcript.id, project_id=project_id, position=Decimal(1)
+        )
         session.add(segment)
         session.flush()
         session.add(

@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePlaybackStore } from '../../store/playback'
@@ -8,6 +15,7 @@ import {
   isTokenConflict,
   useDeleteTokens,
   useEditToken,
+  useHighlightTokens,
   useMergeTokens,
   useSplitToken,
 } from '../../api/hooks/useTokens'
@@ -15,8 +23,11 @@ import { transcriptAnchor, useCreateComment } from '../../api/hooks/useComments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { clipBlockMarkerHtml, writeClipToClipboard } from '../documents/clipClipboard'
 import { findActiveTokenId } from './activeToken'
+import { chunkTokens } from './chunkTokens'
+import { SpeakerBar } from './SpeakerBar'
 import { formatTime } from '../player/format'
 import { SelectionToolbar } from '../toolbar/SelectionToolbar'
+import { Select } from '../../components/ui/Select'
 import {
   ChevronDown as ChevronDownIcon,
   ChevronUp as ChevronUpIcon,
@@ -25,13 +36,19 @@ import {
   Copy as CopyIcon,
   FileText as DocumentIcon,
   Pencil as EditIcon,
+  Highlighter as HighlighterIcon,
   Play as PlayIcon,
   Search as SearchIcon,
 } from 'lucide-react'
 import type { ToolbarAction } from '../toolbar/SelectionToolbar'
 import type { Speaker } from '../../api/hooks/useSpeakers'
+import { useReassignSegmentSpeaker } from '../../api/hooks/useTranscripts'
 import type { Token, Transcript } from '../../api/hooks/useTranscripts'
 import type { Comment } from '../../api/hooks/useComments'
+
+// Select's value is always a string, so an unattributed segment (speakerId
+// null) needs a sentinel that can't collide with a real speaker uuid.
+const SPEAKER_UNATTRIBUTED = '__unattributed__'
 
 interface TranscriptViewerProps {
   transcript: Transcript | undefined
@@ -40,6 +57,10 @@ interface TranscriptViewerProps {
   isLoading: boolean
   onSeekToken: (seconds: number) => void
   onPlaySelection: (startTime: number, endTime: number) => void
+  /** Seeks to and plays from a point with no stop time — a double-clicked
+   * token's action, distinct from `onSeekToken` (seek only, no play) and
+   * `onPlaySelection` (plays a bounded range then pauses). */
+  onPlayFrom: (seconds: number) => void
   /** Whether the caller's project role allows editing (editor/owner) — a
    * viewer can still watch, select, and copy, but not edit/delete/merge/split
    * tokens or comment. */
@@ -52,6 +73,7 @@ interface TranscriptViewerProps {
 interface SpeakerGroup {
   key: string
   speakerId: string | null
+  segmentIds: string[]
   tokens: Token[]
 }
 
@@ -60,16 +82,16 @@ interface SpeakerGroup {
  * matching the current playback time and (when auto-follow is on) scrolling
  * it into view. Consecutive segments spoken by the same speaker are grouped
  * under a single speaker header, matching how the transcript reads out loud.
- * Clicking a token seeks the video there; dragging across tokens selects a
+ * A plain click on a token edits its text inline for an editor (clearing it
+ * deletes the token, typing a space splits it into multiple tokens) or seeks
+ * the video there for a viewer; double-clicking always seeks and plays from
+ * that point instead, for both roles. Dragging across tokens selects a
  * range, showing its text/timecodes and play/copy/edit/comment actions —
  * there is no separate delete action; clearing the Edit draft to empty text
- * deletes the whole selection, the same "clear it to delete it" rule
- * double-clicking a single token already uses. Double-clicking a token edits
- * its text inline — clearing it deletes the token, typing a space splits it
- * into multiple tokens. Ranges
- * covered by a comment are underlined (violet while unresolved, gray once
- * resolved). An inline search finds and steps through matches in this
- * transcript.
+ * deletes the whole selection, the same "clear it to delete it" rule the
+ * single-token edit already uses. Ranges covered by a comment are underlined
+ * (violet while unresolved, gray once resolved). An inline search finds and
+ * steps through matches in this transcript.
  */
 export function TranscriptViewer({
   transcript,
@@ -78,6 +100,7 @@ export function TranscriptViewer({
   isLoading,
   onSeekToken,
   onPlaySelection,
+  onPlayFrom,
   canEdit,
   videoId,
 }: TranscriptViewerProps) {
@@ -90,6 +113,7 @@ export function TranscriptViewer({
   const extendSelection = useSelectionStore((s) => s.extend)
   const finishSelection = useSelectionStore((s) => s.finish)
   const clearSelection = useSelectionStore((s) => s.clear)
+  const setSelectionRange = useSelectionStore((s) => s.setRange)
   const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
   const selectComment = useCommentsStore((s) => s.select)
 
@@ -98,13 +122,15 @@ export function TranscriptViewer({
   const deleteTokens = useDeleteTokens(transcriptId)
   const mergeTokens = useMergeTokens(transcriptId)
   const splitToken = useSplitToken(transcriptId)
+  const highlightTokens = useHighlightTokens(transcriptId)
+  const reassignSegmentSpeaker = useReassignSegmentSpeaker(transcriptId)
   const createComment = useCreateComment(transcriptId)
 
   // A 409 from any token mutation means someone else edited it first; the
   // optimistic attempt is left on screen (see useTokens.ts) and a banner asks
   // the user to reload rather than silently refetching out from under them.
   const client = useQueryClient()
-  const tokenMutations = [editToken, deleteTokens, mergeTokens, splitToken]
+  const tokenMutations = [editToken, deleteTokens, mergeTokens, splitToken, highlightTokens]
   const conflict = tokenMutations.find((m) => isTokenConflict(m.error))
   function reloadAfterConflict() {
     for (const mutation of tokenMutations) mutation.reset()
@@ -152,8 +178,14 @@ export function TranscriptViewer({
       const last = groups[groups.length - 1]
       if (last && last.speakerId === segment.speaker_id) {
         last.tokens.push(...segment.tokens)
+        last.segmentIds.push(segment.id)
       } else {
-        groups.push({ key: segment.id, speakerId: segment.speaker_id, tokens: [...segment.tokens] })
+        groups.push({
+          key: segment.id,
+          speakerId: segment.speaker_id,
+          segmentIds: [segment.id],
+          tokens: [...segment.tokens],
+        })
       }
     }
     return groups
@@ -244,11 +276,17 @@ export function TranscriptViewer({
 
   const tokenRefs = useRef(new Map<string, HTMLSpanElement>())
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-  const [popupPos, setPopupPos] = useState<{
+  const popupRef = useRef<HTMLDivElement | null>(null)
+  const POPUP_EDGE = 8
+  const [popupAnchor, setPopupAnchor] = useState<{
     top: number
-    left: number
+    anchorX: number
     placement: 'above' | 'below' | 'top'
   } | null>(null)
+  // The popup's real rendered width, measured below — starts at a rough
+  // guess so the very first paint of a brand new popup has something to
+  // clamp against before it has actually mounted.
+  const [popupWidth, setPopupWidth] = useState(320)
 
   useEffect(() => {
     if (!currentMatch) return
@@ -266,7 +304,7 @@ export function TranscriptViewer({
   useLayoutEffect(() => {
     const container = scrollContainerRef.current
     if (!container || selectedTokens.length === 0) {
-      setPopupPos(null)
+      setPopupAnchor(null)
       return
     }
 
@@ -274,34 +312,28 @@ export function TranscriptViewer({
       const firstEl = tokenRefs.current.get(selectedTokens[0].id)
       const lastEl = tokenRefs.current.get(selectedTokens[selectedTokens.length - 1].id)
       if (!firstEl || !lastEl) {
-        setPopupPos(null)
+        setPopupAnchor(null)
         return
       }
       const firstRect = firstEl.getBoundingClientRect()
       const lastRect = lastEl.getBoundingClientRect()
       const top = Math.min(firstRect.top, lastRect.top)
       const bottom = Math.max(firstRect.bottom, lastRect.bottom)
-      const midX = (firstRect.left + lastRect.right) / 2
+      const anchorX = (firstRect.left + lastRect.right) / 2
 
-      const EDGE = 8
       const GAP = 8
-      // Rough estimates — only used to decide placement/clamping, not the
-      // popup's actual rendered size.
+      // Rough estimate — only used to decide above/below placement, not the
+      // popup's actual rendered size (that's measured separately below).
       const ESTIMATED_HEIGHT = 48
-      const ESTIMATED_HALF_WIDTH = 160
-      const left = Math.min(
-        Math.max(midX, EDGE + ESTIMATED_HALF_WIDTH),
-        window.innerWidth - EDGE - ESTIMATED_HALF_WIDTH,
-      )
 
-      if (top - ESTIMATED_HEIGHT - GAP >= EDGE) {
-        setPopupPos({ top: top - GAP, left, placement: 'above' })
-      } else if (bottom + ESTIMATED_HEIGHT + GAP <= window.innerHeight - EDGE) {
-        setPopupPos({ top: bottom + GAP, left, placement: 'below' })
+      if (top - ESTIMATED_HEIGHT - GAP >= POPUP_EDGE) {
+        setPopupAnchor({ top: top - GAP, anchorX, placement: 'above' })
+      } else if (bottom + ESTIMATED_HEIGHT + GAP <= window.innerHeight - POPUP_EDGE) {
+        setPopupAnchor({ top: bottom + GAP, anchorX, placement: 'below' })
       } else {
         // No room above or below (a huge selection filling the viewport) —
         // pin to the top of the viewport rather than hiding.
-        setPopupPos({ top: EDGE, left, placement: 'top' })
+        setPopupAnchor({ top: POPUP_EDGE, anchorX, placement: 'top' })
       }
     }
 
@@ -314,6 +346,29 @@ export function TranscriptViewer({
     }
   }, [selectedTokens, mergeDraft, commentDraft])
 
+  // Measures the popup's real width once it (re)renders — a long selection
+  // summary or the draft mode's input can render wider than the `popupWidth`
+  // guess above, which used to push the popup's clamped-by-estimate position
+  // partly off the left edge of the viewport. Runs as its own layout effect
+  // (after the DOM reflects the current anchor/mode) so the corrected width
+  // is applied before the browser paints, not as a visible post-paint jump.
+  useLayoutEffect(() => {
+    if (!popupAnchor) return
+    const width = popupRef.current?.getBoundingClientRect().width
+    if (width) setPopupWidth(width)
+  }, [popupAnchor, mergeDraft, commentDraft])
+
+  const popupPos = popupAnchor
+    ? {
+        top: popupAnchor.top,
+        left: Math.min(
+          Math.max(popupAnchor.anchorX, POPUP_EDGE + popupWidth / 2),
+          window.innerWidth - POPUP_EDGE - popupWidth / 2,
+        ),
+        placement: popupAnchor.placement,
+      }
+    : null
+
   function stepMatch(direction: 1 | -1) {
     if (searchMatches.length === 0) return
     setMatchIndex((i) => (i + direction + searchMatches.length) % searchMatches.length)
@@ -325,25 +380,47 @@ export function TranscriptViewer({
   }
 
   // Tracks the drag gesture: a plain click (no movement onto another token)
-  // seeks; movement onto a second token starts a range selection instead.
+  // edits/seeks; movement onto a second token starts a range selection
+  // instead.
   const dragAnchorRef = useRef<Token | null>(null)
   const draggingRef = useRef(false)
+
+  // A plain click's edit/seek action is deferred ~250ms so a following
+  // double-click (play-from-here) can cancel it first — without this, the
+  // double-click's own first click would already have opened an edit box or
+  // seeked before the "dblclick" event even fires. Any new mousedown or a
+  // dblclick clears whatever's pending, so at most one deferred action is
+  // ever in flight.
+  const SINGLE_CLICK_DELAY_MS = 250
+  const pendingClickTimerRef = useRef<number | null>(null)
+  function clearPendingClick() {
+    if (pendingClickTimerRef.current !== null) {
+      window.clearTimeout(pendingClickTimerRef.current)
+      pendingClickTimerRef.current = null
+    }
+  }
 
   useEffect(() => {
     function handleMouseUp() {
       if (draggingRef.current) {
         finishSelection()
       } else if (dragAnchorRef.current) {
-        onSeekToken(dragAnchorRef.current.start_time)
-        clearSelection()
-        selectComment(commentIdByTokenId.get(dragAnchorRef.current.id) ?? null)
+        const token = dragAnchorRef.current
+        clearPendingClick()
+        pendingClickTimerRef.current = window.setTimeout(() => {
+          pendingClickTimerRef.current = null
+          if (canEdit) beginEdit(token)
+          else onSeekToken(token.start_time)
+          clearSelection()
+          selectComment(commentIdByTokenId.get(token.id) ?? null)
+        }, SINGLE_CLICK_DELAY_MS)
       }
       dragAnchorRef.current = null
       draggingRef.current = false
     }
     document.addEventListener('mouseup', handleMouseUp)
     return () => document.removeEventListener('mouseup', handleMouseUp)
-  }, [onSeekToken, finishSelection, clearSelection, selectComment, commentIdByTokenId])
+  }, [canEdit, onSeekToken, finishSelection, clearSelection, selectComment, commentIdByTokenId])
 
   function commitEdit() {
     if (!editingTokenId) return
@@ -431,6 +508,35 @@ export function TranscriptViewer({
   function handleTokenMouseDown(token: Token) {
     dragAnchorRef.current = token
     draggingRef.current = false
+    // A new mousedown means a fresh click sequence — cancel whatever the
+    // previous click's mouseup deferred, so a real double-click never lets
+    // the first click's edit/seek slip through before the second click lands.
+    clearPendingClick()
+    // Gives the scroll container keyboard focus so a subsequent Cmd/Ctrl+A
+    // is scoped to this transcript (see the container's onKeyDown below)
+    // instead of the browser's page-wide select-all.
+    scrollContainerRef.current?.focus()
+  }
+
+  // Double-click seeks and plays from this token, for viewers and editors
+  // alike — takes over the single click's deferred edit/seek before it can
+  // fire (see the mouseup handler above).
+  function handleTokenDoubleClick(token: Token) {
+    clearPendingClick()
+    onPlayFrom(token.start_time)
+  }
+
+  // Scopes Cmd/Ctrl+A to this transcript's tokens rather than the whole page
+  // — plain spans aren't natively selectable text, so without this the
+  // browser falls back to selecting all page content. Only acts once this
+  // container has keyboard focus (set on token mousedown above), so it never
+  // fires while typing in an unrelated input/textarea elsewhere on the page.
+  function handleContainerKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+      if (!transcript || flatTokens.length === 0) return
+      e.preventDefault()
+      setSelectionRange(transcript.id, flatTokens[0].id, flatTokens[flatTokens.length - 1].id)
+    }
   }
 
   function handleTokenMouseEnter(token: Token) {
@@ -528,6 +634,17 @@ export function TranscriptViewer({
     clearSelection()
   }
 
+  const allSelectedHighlighted =
+    selectedTokens.length > 0 && selectedTokens.every((t) => t.is_highlighted)
+
+  function toggleHighlightSelection() {
+    highlightTokens.mutate({
+      tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
+      isHighlighted: !allSelectedHighlighted,
+    })
+    clearSelection()
+  }
+
   const toolbarActions: ToolbarAction[] = []
   if (selectionInfo) {
     toolbarActions.push(
@@ -546,6 +663,14 @@ export function TranscriptViewer({
       },
     )
     if (canEdit) {
+      toolbarActions.push({
+        id: 'highlight',
+        icon: HighlighterIcon,
+        label: allSelectedHighlighted ? 'Remove highlight' : 'Highlight',
+        variant: 'highlighted',
+        active: allSelectedHighlighted,
+        onClick: toggleHighlightSelection,
+      })
       toolbarActions.push({
         id: 'edit',
         icon: EditIcon,
@@ -642,6 +767,8 @@ export function TranscriptViewer({
         </label>
       </div>
 
+      <SpeakerBar videoId={videoId} speakers={speakers ?? []} canEdit={canEdit} />
+
       {conflict && (
         <div className="flex items-center gap-3 border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
           <span>This was edited by someone else. Your change was not saved.</span>
@@ -663,6 +790,7 @@ export function TranscriptViewer({
           // chrome — same call as the other floating overlay shells
           // (Popover/DropdownMenu/Select/Dialog content).
           <div
+            ref={popupRef}
             className="fixed z-50 w-max max-w-[90vw] overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
             style={{
               top: popupPos.top,
@@ -710,72 +838,105 @@ export function TranscriptViewer({
           document.body,
         )}
 
-      <div ref={scrollContainerRef} className="flex-1 space-y-4 overflow-y-auto p-4 select-none">
+      <div
+        ref={scrollContainerRef}
+        tabIndex={0}
+        onKeyDown={handleContainerKeyDown}
+        className="flex-1 space-y-4 overflow-y-auto p-4 select-none focus:outline-none"
+      >
         {speakerGroups.map((group) => (
           <div key={group.key}>
             <div className="mb-1 text-small font-semibold text-text-muted">
-              {group.speakerId
-                ? (speakerNames.get(group.speakerId) ?? 'Unknown speaker')
-                : 'Unknown speaker'}
+              {canEdit && speakers && speakers.length > 0 ? (
+                <Select
+                  aria-label="Speaker"
+                  value={group.speakerId ?? SPEAKER_UNATTRIBUTED}
+                  onValueChange={(value) =>
+                    reassignSegmentSpeaker.mutate({
+                      segmentIds: group.segmentIds,
+                      speakerId: value === SPEAKER_UNATTRIBUTED ? null : value,
+                    })
+                  }
+                  options={[
+                    { value: SPEAKER_UNATTRIBUTED, label: 'Unknown speaker' },
+                    ...speakers.map((s) => ({ value: s.id, label: s.name ?? 'Unnamed speaker' })),
+                  ]}
+                  className="h-auto min-w-0 border-none bg-transparent p-0 text-small font-semibold text-text-muted hover:text-text"
+                />
+              ) : group.speakerId ? (
+                (speakerNames.get(group.speakerId) ?? 'Unknown speaker')
+              ) : (
+                'Unknown speaker'
+              )}
             </div>
-            <p className="leading-relaxed text-text">
-              {group.tokens.map((token) => {
-                if (token.id === editingTokenId) {
-                  return (
-                    <input
-                      key={token.id}
-                      autoFocus
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      onBlur={commitEdit}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitEdit()
-                        if (e.key === 'Escape') setEditingTokenId(null)
-                      }}
-                      style={{ width: `${Math.max(editingText.length, 3)}ch` }}
-                      className="rounded-sm border border-brand bg-surface px-0.5 text-text"
-                    />
-                  )
-                }
-                const isCurrentMatch = currentMatch?.id === token.id
-                const isMatch = matchIds.has(token.id)
-                // Selection (brand) > current search match (warning, vivid) >
-                // active/playing token (info) > other matches (warning-subtle)
-                // > plain hover — each state means something different, per
-                // the workspace's "color reserved for meaning" rule.
-                const bg = selectedIds.has(token.id)
-                  ? 'bg-brand-subtle'
-                  : isCurrentMatch
-                    ? 'bg-warning'
-                    : token.id === activeTokenId
-                      ? 'bg-info-subtle'
-                      : isMatch
-                        ? 'bg-warning-subtle'
-                        : 'hover:bg-glass'
-                const comment = commentedTokenInfo.get(token.id)
-                const decoration = comment
-                  ? comment.resolved
-                    ? 'underline decoration-success decoration-2 underline-offset-2'
-                    : 'underline decoration-warning decoration-2 underline-offset-2'
-                  : ''
-                return (
-                  <span
-                    key={token.id}
-                    ref={(el) => {
-                      if (el) tokenRefs.current.set(token.id, el)
-                      else tokenRefs.current.delete(token.id)
-                      if (token.id === activeTokenId) activeRef.current = el
-                    }}
-                    onMouseDown={() => handleTokenMouseDown(token)}
-                    onMouseEnter={() => handleTokenMouseEnter(token)}
-                    onDoubleClick={canEdit ? () => beginEdit(token) : undefined}
-                    className={`${canEdit ? 'cursor-text' : 'cursor-default'} rounded px-0.5 ${bg} ${decoration}`}
-                  >
-                    {token.text}{' '}
-                  </span>
-                )
-              })}
-            </p>
+            {chunkTokens(group.tokens).map((chunk) => (
+              <div key={chunk[0].id} className="mb-2 last:mb-0">
+                <div className="mb-0.5 font-mono text-small text-text-muted">
+                  {formatTime(chunk[0].start_time)}
+                </div>
+                <p className="leading-relaxed text-text">
+                  {chunk.map((token) => {
+                    if (token.id === editingTokenId) {
+                      return (
+                        <input
+                          key={token.id}
+                          autoFocus
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          onBlur={commitEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') commitEdit()
+                            if (e.key === 'Escape') setEditingTokenId(null)
+                          }}
+                          style={{ width: `${Math.max(editingText.length, 3)}ch` }}
+                          className="rounded-sm border border-brand bg-surface px-0.5 text-text"
+                        />
+                      )
+                    }
+                    const isCurrentMatch = currentMatch?.id === token.id
+                    const isMatch = matchIds.has(token.id)
+                    // Selection (brand) > current search match (warning, vivid) >
+                    // active/playing token (info) > user-applied highlight
+                    // (highlight-subtle) > other matches (warning-subtle) > plain
+                    // hover — each state means something different, per the
+                    // workspace's "color reserved for meaning" rule.
+                    const bg = selectedIds.has(token.id)
+                      ? 'bg-brand-subtle'
+                      : isCurrentMatch
+                        ? 'bg-warning'
+                        : token.id === activeTokenId
+                          ? 'bg-info-subtle'
+                          : token.is_highlighted
+                            ? 'bg-highlight-subtle'
+                            : isMatch
+                              ? 'bg-warning-subtle'
+                              : 'hover:bg-glass'
+                    const comment = commentedTokenInfo.get(token.id)
+                    const decoration = comment
+                      ? comment.resolved
+                        ? 'underline decoration-success decoration-2 underline-offset-2'
+                        : 'underline decoration-warning decoration-2 underline-offset-2'
+                      : ''
+                    return (
+                      <span
+                        key={token.id}
+                        ref={(el) => {
+                          if (el) tokenRefs.current.set(token.id, el)
+                          else tokenRefs.current.delete(token.id)
+                          if (token.id === activeTokenId) activeRef.current = el
+                        }}
+                        onMouseDown={() => handleTokenMouseDown(token)}
+                        onMouseEnter={() => handleTokenMouseEnter(token)}
+                        onDoubleClick={() => handleTokenDoubleClick(token)}
+                        className={`${canEdit ? 'cursor-text' : 'cursor-default'} rounded px-0.5 ${bg} ${decoration}`}
+                      >
+                        {token.text}{' '}
+                      </span>
+                    )
+                  })}
+                </p>
+              </div>
+            ))}
           </div>
         ))}
       </div>

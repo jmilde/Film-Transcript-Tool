@@ -19,7 +19,7 @@ from app.models.job import ProcessingJob
 from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
 from app.models.speaker import Speaker
-from app.models.transcript import Transcript, TranscriptToken
+from app.models.transcript import Transcript, TranscriptSegment, TranscriptToken
 from app.models.user import User
 from app.models.video import Video
 from app.schemas.token import TokenMergeRequest
@@ -199,6 +199,20 @@ def require_speaker_access(
         raise NotFoundError("Speaker not found")
     _require_membership(db, speaker.project_id, user.id, min_role=MembershipRole.EDITOR)
     return speaker
+
+
+def require_segment_access(
+    segment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> TranscriptSegment:
+    # Every current caller is a write route (reassign speaker); EDITOR floor
+    # applies unconditionally rather than through the `require_min_role` wrapper.
+    segment = db.get(TranscriptSegment, segment_id)
+    if segment is None:
+        raise NotFoundError("Segment not found")
+    _require_membership(db, segment.project_id, user.id, min_role=MembershipRole.EDITOR)
+    return segment
 
 
 def require_token_access(

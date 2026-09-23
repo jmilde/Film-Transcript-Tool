@@ -47,7 +47,7 @@ describe('ClipPreviewPlayer', () => {
       expect(screen.getByRole('button', { name: 'Skip back 5 seconds' })).toBeInTheDocument(),
     )
     expect(screen.getByRole('button', { name: 'Skip forward 5 seconds' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Toggle 2x speed' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Playback speed' })).toBeInTheDocument()
     expect(document.querySelector('video')).not.toHaveAttribute('controls')
   })
 
