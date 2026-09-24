@@ -20,7 +20,7 @@ DEV_DB_URL := postgresql+psycopg://postgres:postgres@localhost:5442/postgres
 TEST_DB_URL := postgresql+psycopg://postgres:postgres@localhost:5443/postgres
 
 .DEFAULT_GOAL := help
-.PHONY: help install db-up db-down db-wipe db-test-up db-test-down db-migrate dev-down \
+.PHONY: help install db-up db-down db-wipe db-test-up db-test-down db-migrate migrate dev-down \
 	test test-all test-integration lint lint-fix format format-check typecheck check check-all \
 	run run-backend run-worker openapi fe-install run-frontend fe-build fe-lint fe-test fe-check
 
@@ -52,6 +52,14 @@ dev-down: db-down db-test-down ## Stop both local Postgres containers (run when 
 
 db-migrate: ## Run Alembic migrations against the local dev Postgres container
 	cd $(BACKEND) && DATABASE_URL_WORKER=$(DEV_DB_URL) uv run alembic upgrade head
+
+# No DATABASE_URL_WORKER override here, unlike db-migrate above — pydantic-settings
+# resolves it from whatever's already configured: an exported shell env var if
+# set, else backend/.env. Use this (instead of db-migrate) when your .env points
+# at something other than the local Docker container, e.g. a hosted Supabase
+# instance — running db-migrate would silently target the wrong database.
+migrate: ## Run Alembic migrations against whatever DATABASE_URL_WORKER is configured (shell env or backend/.env), not necessarily the local container
+	$(UV) run alembic upgrade head
 
 test: db-test-up ## Run the test suite WITHOUT integration tests (no network/credentials needed)
 	cd $(BACKEND) && DATABASE_URL_WORKER=$(TEST_DB_URL) uv run alembic upgrade head
