@@ -1,4 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRef } from 'react'
+import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import { api, ApiError, unwrap } from '../client'
 import type { Transcript, Token } from './useTranscripts'
 
@@ -29,17 +30,25 @@ function replaceTokens(transcript: Transcript, tokens: Token[]): Transcript {
 }
 
 /**
- * Applies an edit/delete/merge/split to the cached transcript immediately
- * (optimistic update). On success, `resultTokens` (when given) folds the
- * server's authoritative token(s) — including their bumped `version` — back
- * into the cache right away; `onSettled` still runs a full invalidation
- * afterwards to reconcile any other fields. On an ordinary error it rolls
- * back. On a 409 version conflict it neither rolls back nor refetches: the
- * optimistic attempt is left as-is so an in-progress edit is never silently
- * overwritten — the caller renders a conflict banner (see `isTokenConflict`)
- * with a manual "Reload" action that resets the mutation and refetches —
- * unless `alwaysInvalidateOnSettle` opts a mutation out of that banner flow
- * because it has nothing unsaved to protect (see `useHighlightTokens`).
+ * Applies an edit/delete/merge/split/highlight to the cached transcript
+ * immediately (optimistic update). On success, `resultTokens` (when given)
+ * folds the server's authoritative token(s) — including their bumped
+ * `version` — back into the cache right away; `onSettled` still runs a full
+ * invalidation afterwards to reconcile any other fields. On an ordinary error
+ * it rolls back the optimistic change.
+ *
+ * On a 409 version conflict it does neither: the optimistic attempt is left
+ * on screen (nothing to roll back to that's more correct than "a refetch is
+ * already in flight"), and the caller may render a conflict banner (see
+ * `isTokenConflict`) telling the user their change didn't save. But a version
+ * conflict means the cached copy was stale *by definition* — so as soon as
+ * the background refetch below lands fresh data, the conflict is resolved,
+ * and this mutation's error is reset so the banner clears itself. Without
+ * this, the error stayed on this mutation object until a manual "Reload"
+ * click, which meant one stale conflict kept a banner showing indefinitely
+ * across every later, unrelated action for the rest of the session (e.g.
+ * still showing "someone else edited" while the user was just adding an
+ * unrelated comment).
  */
 function useOptimisticTranscriptMutation<TInput, TResult>(
   transcriptId: string,
@@ -47,12 +56,12 @@ function useOptimisticTranscriptMutation<TInput, TResult>(
   applyOptimistic: (transcript: Transcript, input: TInput) => Transcript,
   options: {
     resultTokens?: (result: TResult) => Token[]
-    alwaysInvalidateOnSettle?: boolean
   } = {},
 ) {
   const client = useQueryClient()
   const queryKey = ['transcript', transcriptId]
-  return useMutation({
+  const mutationRef = useRef<UseMutationResult<TResult, unknown, TInput> | null>(null)
+  const mutation = useMutation({
     mutationFn,
     onMutate: async (input: TInput) => {
       await client.cancelQueries({ queryKey })
@@ -73,11 +82,12 @@ function useOptimisticTranscriptMutation<TInput, TResult>(
       }
     },
     onSettled: (_data, error) => {
-      if (!isTokenConflict(error) || options.alwaysInvalidateOnSettle) {
-        void client.invalidateQueries({ queryKey })
-      }
+      const refetched = client.invalidateQueries({ queryKey })
+      if (isTokenConflict(error)) void refetched.then(() => mutationRef.current?.reset())
     },
   })
+  mutationRef.current = mutation
+  return mutation
 }
 
 /** Edit a single token's displayed text (`PATCH /tokens/{id}`). */
@@ -144,10 +154,10 @@ export function useDeleteTokens(transcriptId: string) {
 
 /** Toggle highlight on one or more tokens (`PATCH /tokens/{id}/highlight`) —
  * a display-only flag, so unlike delete/merge/split it never touches text,
- * timing, or the search vector. Because there's no unsaved draft to protect,
- * a 409 here always triggers a background refetch (`alwaysInvalidateOnSettle`)
- * instead of the shared "someone else edited, reload" banner — the toggle
- * just silently reconciles with whatever the highlight state actually is. */
+ * timing, or the search vector. `TranscriptViewer` deliberately excludes this
+ * mutation from the shared conflict banner (see there) — a 409 still
+ * auto-resyncs (per `useOptimisticTranscriptMutation`) but never needs to
+ * announce itself, since there's no unsaved draft to warn the user about. */
 export function useHighlightTokens(transcriptId: string) {
   return useOptimisticTranscriptMutation<
     { tokens: { tokenId: string; expectedVersion: number }[]; isHighlighted: boolean },
@@ -177,7 +187,7 @@ export function useHighlightTokens(transcriptId: string) {
         })),
       }
     },
-    { resultTokens: (result) => result, alwaysInvalidateOnSettle: true },
+    { resultTokens: (result) => result },
   )
 }
 
