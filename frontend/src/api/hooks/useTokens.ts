@@ -8,19 +8,47 @@ export function isTokenConflict(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 409
 }
 
+/** Replace any cached token whose id matches one in `tokens` with the
+ * authoritative (server-returned) copy — used to fold a mutation's own
+ * response straight into the cache the instant it succeeds, instead of
+ * waiting on a separate `invalidateQueries` round-trip. Without this, the
+ * cached `version` for a just-edited token stays stale until that refetch
+ * lands; touching the same token again inside that window sends a
+ * now-outdated `expected_version` and 409s against the client's own prior
+ * request, not a real other editor. */
+function replaceTokens(transcript: Transcript, tokens: Token[]): Transcript {
+  if (tokens.length === 0) return transcript
+  const byId = new Map(tokens.map((t) => [t.id, t]))
+  return {
+    ...transcript,
+    segments: transcript.segments.map((segment) => ({
+      ...segment,
+      tokens: segment.tokens.map((token) => byId.get(token.id) ?? token),
+    })),
+  }
+}
+
 /**
  * Applies an edit/delete/merge/split to the cached transcript immediately
- * (optimistic update). On an ordinary error it rolls back and reconciles with
- * the server via an invalidation once the mutation settles. On a 409 version
- * conflict it does neither: the optimistic attempt is left as-is and no
- * background refetch runs, so an in-progress edit is never silently
+ * (optimistic update). On success, `resultTokens` (when given) folds the
+ * server's authoritative token(s) — including their bumped `version` — back
+ * into the cache right away; `onSettled` still runs a full invalidation
+ * afterwards to reconcile any other fields. On an ordinary error it rolls
+ * back. On a 409 version conflict it neither rolls back nor refetches: the
+ * optimistic attempt is left as-is so an in-progress edit is never silently
  * overwritten — the caller renders a conflict banner (see `isTokenConflict`)
- * with a manual "Reload" action that resets the mutation and refetches.
+ * with a manual "Reload" action that resets the mutation and refetches —
+ * unless `alwaysInvalidateOnSettle` opts a mutation out of that banner flow
+ * because it has nothing unsaved to protect (see `useHighlightTokens`).
  */
 function useOptimisticTranscriptMutation<TInput, TResult>(
   transcriptId: string,
   mutationFn: (input: TInput) => Promise<TResult>,
   applyOptimistic: (transcript: Transcript, input: TInput) => Transcript,
+  options: {
+    resultTokens?: (result: TResult) => Token[]
+    alwaysInvalidateOnSettle?: boolean
+  } = {},
 ) {
   const client = useQueryClient()
   const queryKey = ['transcript', transcriptId]
@@ -32,13 +60,22 @@ function useOptimisticTranscriptMutation<TInput, TResult>(
       if (previous) client.setQueryData<Transcript>(queryKey, applyOptimistic(previous, input))
       return { previous }
     },
+    onSuccess: (result) => {
+      if (!options.resultTokens) return
+      const tokens = options.resultTokens(result)
+      client.setQueryData<Transcript>(queryKey, (current) =>
+        current ? replaceTokens(current, tokens) : current,
+      )
+    },
     onError: (err, _input, context) => {
       if (!isTokenConflict(err) && context?.previous) {
         client.setQueryData(queryKey, context.previous)
       }
     },
     onSettled: (_data, error) => {
-      if (!isTokenConflict(error)) void client.invalidateQueries({ queryKey })
+      if (!isTokenConflict(error) || options.alwaysInvalidateOnSettle) {
+        void client.invalidateQueries({ queryKey })
+      }
     },
   })
 }
@@ -68,6 +105,7 @@ export function useEditToken(transcriptId: string) {
         ),
       })),
     }),
+    { resultTokens: (result) => [result] },
   )
 }
 
@@ -106,7 +144,10 @@ export function useDeleteTokens(transcriptId: string) {
 
 /** Toggle highlight on one or more tokens (`PATCH /tokens/{id}/highlight`) —
  * a display-only flag, so unlike delete/merge/split it never touches text,
- * timing, or the search vector. */
+ * timing, or the search vector. Because there's no unsaved draft to protect,
+ * a 409 here always triggers a background refetch (`alwaysInvalidateOnSettle`)
+ * instead of the shared "someone else edited, reload" banner — the toggle
+ * just silently reconciles with whatever the highlight state actually is. */
 export function useHighlightTokens(transcriptId: string) {
   return useOptimisticTranscriptMutation<
     { tokens: { tokenId: string; expectedVersion: number }[]; isHighlighted: boolean },
@@ -136,6 +177,7 @@ export function useHighlightTokens(transcriptId: string) {
         })),
       }
     },
+    { resultTokens: (result) => result, alwaysInvalidateOnSettle: true },
   )
 }
 

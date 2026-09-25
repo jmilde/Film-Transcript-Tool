@@ -129,8 +129,11 @@ export function TranscriptViewer({
   // A 409 from any token mutation means someone else edited it first; the
   // optimistic attempt is left on screen (see useTokens.ts) and a banner asks
   // the user to reload rather than silently refetching out from under them.
+  // `highlightTokens` is deliberately excluded: it's a display-only toggle
+  // with nothing unsaved to protect, so it auto-recovers from a 409 via its
+  // own `alwaysInvalidateOnSettle` refetch instead of blocking on this banner.
   const client = useQueryClient()
-  const tokenMutations = [editToken, deleteTokens, mergeTokens, splitToken, highlightTokens]
+  const tokenMutations = [editToken, deleteTokens, mergeTokens, splitToken]
   const conflict = tokenMutations.find((m) => isTokenConflict(m.error))
   function reloadAfterConflict() {
     for (const mutation of tokenMutations) mutation.reset()

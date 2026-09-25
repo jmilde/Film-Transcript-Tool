@@ -1055,5 +1055,44 @@ describe('TranscriptViewer', () => {
 
       expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
     })
+
+    it('does not show the conflict banner on a 409 highlight conflict, and recovers the token', async () => {
+      let call = 0
+      server.use(
+        http.patch('http://localhost:8000/tokens/:tokenId/highlight', ({ params }) => {
+          call += 1
+          // Both selected tokens' first PATCH conflicts; any later attempt
+          // on either succeeds — mirrors "the earlier action already landed
+          // server-side, a same-tick retry is what raced it".
+          if (call <= 2) return HttpResponse.json(CONFLICT_BODY, { status: 409 })
+          return HttpResponse.json({
+            ...TRANSCRIPT.segments[0].tokens[0],
+            id: params.tokenId,
+            version: 2,
+          })
+        }),
+        http.get('http://localhost:8000/transcripts/t-1', () => HttpResponse.json(TRANSCRIPT)),
+      )
+      renderViewer()
+
+      fireEvent.mouseDown(screen.getByText('Hello'))
+      fireEvent.mouseEnter(screen.getByText('world'))
+      fireEvent.mouseUp(document)
+      await userEvent.click(screen.getByRole('button', { name: 'Highlight' }))
+
+      await waitFor(() => expect(call).toBe(2))
+      expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument()
+
+      // A later highlight attempt on the same tokens isn't permanently
+      // blocked by the earlier conflict — unlike edit/delete/merge/split,
+      // there's no manual "Reload" needed to unstick it.
+      fireEvent.mouseDown(screen.getByText('Hello'))
+      fireEvent.mouseEnter(screen.getByText('world'))
+      fireEvent.mouseUp(document)
+      await userEvent.click(screen.getByRole('button', { name: 'Highlight' }))
+
+      await waitFor(() => expect(call).toBe(4))
+      expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument()
+    })
   })
 })
