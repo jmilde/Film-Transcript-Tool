@@ -7,11 +7,10 @@ the originals deleted while creating replacement tokens that preserve the timing
 of the original range. Fractional ``NUMERIC`` positions let replacements slot in
 between existing tokens without renumbering, so token order stays stable.
 
-Every mutating operation is optimistically locked: the caller supplies the
-``version`` it last saw, the target row(s) are re-read with ``FOR UPDATE``
-inside the same transaction (closing the gap between the request's initial
-fetch and this write), and a mismatch raises ``ConflictError`` with the
-row's current state *before* anything is mutated — never silently overwritten.
+Every mutating operation re-reads its target row(s) with ``FOR UPDATE`` inside
+the same transaction before writing, so two overlapping requests against the
+same token (e.g. a double-click firing twice) serialize instead of racing —
+not to detect a concurrent editor, just to keep each write atomic.
 """
 
 import uuid
@@ -21,7 +20,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import BadRequestError, ConflictError
+from app.core.errors import BadRequestError
 from app.models.transcript import TranscriptToken
 
 
@@ -35,18 +34,6 @@ class TokenMergeInvalidSegmentError(BadRequestError):
     code = "TOKEN_MERGE_CROSS_SEGMENT"
 
 
-def _snapshot(token: TranscriptToken) -> dict[str, object]:
-    return {
-        "id": str(token.id),
-        "version": token.version,
-        "original_text": token.original_text,
-        "edited_text": token.edited_text,
-        "is_deleted": token.is_deleted,
-        "start_time": token.start_time,
-        "end_time": token.end_time,
-    }
-
-
 def _lock(session: Session, token_id: uuid.UUID) -> TranscriptToken:
     """Re-read a token with ``FOR UPDATE``, serializing concurrent writers.
 
@@ -54,8 +41,7 @@ def _lock(session: Session, token_id: uuid.UUID) -> TranscriptToken:
     route) typically already loaded this token earlier in the same session,
     so without it SQLAlchemy's identity map would return that stale, already
     in-memory object instead of refreshing it from the row this query just
-    locked — silently defeating the ``expected_version`` conflict check for
-    a concurrent writer that committed in between.
+    locked.
     """
     return session.execute(
         select(TranscriptToken)
@@ -65,29 +51,17 @@ def _lock(session: Session, token_id: uuid.UUID) -> TranscriptToken:
     ).scalar_one()
 
 
-def _check_version(tokens: Sequence[TranscriptToken], expected: dict[uuid.UUID, int]) -> None:
-    stale = [token for token in tokens if token.version != expected[token.id]]
-    if stale:
-        raise ConflictError(
-            "This token was edited by someone else",
-            details={"current_tokens": [_snapshot(token) for token in stale]},
-        )
-
-
 def edit_token(
     session: Session,
     token: TranscriptToken,
     edited_text: str | None,
     *,
     user_id: uuid.UUID,
-    expected_version: int,
 ) -> TranscriptToken:
     """Replace a token's display text; timing and ``original_text`` are untouched."""
     locked = _lock(session, token.id)
-    _check_version([locked], {locked.id: expected_version})
     locked.edited_text = edited_text
     locked.updated_by = user_id
-    locked.version += 1
     session.flush()
     return locked
 
@@ -97,14 +71,11 @@ def delete_token(
     token: TranscriptToken,
     *,
     user_id: uuid.UUID,
-    expected_version: int,
 ) -> TranscriptToken:
     """Soft-delete a token: it disappears from the transcript but is kept for history."""
     locked = _lock(session, token.id)
-    _check_version([locked], {locked.id: expected_version})
     locked.is_deleted = True
     locked.updated_by = user_id
-    locked.version += 1
     session.flush()
     return locked
 
@@ -115,16 +86,11 @@ def set_token_highlight(
     is_highlighted: bool,
     *,
     user_id: uuid.UUID,
-    expected_version: int,
 ) -> TranscriptToken:
-    """Toggle a token's highlight — a display-only flag, unlike edit/delete it
-    carries no editorial meaning but still goes through the same optimistic
-    lock so a highlight action can't silently clobber a concurrent edit."""
+    """Toggle a token's highlight — a display-only flag with no editorial meaning."""
     locked = _lock(session, token.id)
-    _check_version([locked], {locked.id: expected_version})
     locked.is_highlighted = is_highlighted
     locked.updated_by = user_id
-    locked.version += 1
     session.flush()
     return locked
 
@@ -135,7 +101,6 @@ def merge_tokens(
     text: str,
     *,
     user_id: uuid.UUID,
-    expected_versions: dict[uuid.UUID, int],
 ) -> TranscriptToken:
     """Replace several same-segment tokens with one spanning their combined timing."""
     if len(tokens) < 2:
@@ -144,13 +109,11 @@ def merge_tokens(
         raise TokenMergeInvalidSegmentError("Tokens must belong to the same segment to merge")
 
     locked = [_lock(session, token.id) for token in tokens]
-    _check_version(locked, expected_versions)
 
     ordered = sorted(locked, key=lambda token: token.position)
     for token in ordered:
         token.is_deleted = True
         token.updated_by = user_id
-        token.version += 1
 
     template = ordered[0]
     replacement = TranscriptToken(
@@ -180,7 +143,6 @@ def split_token(
     texts: Sequence[str],
     *,
     user_id: uuid.UUID,
-    expected_version: int,
 ) -> list[TranscriptToken]:
     """Replace one token with several, interpolating timing evenly across its range."""
     count = len(texts)
@@ -188,11 +150,9 @@ def split_token(
         raise BadRequestError("A split needs at least two resulting tokens")
 
     locked = _lock(session, token.id)
-    _check_version([locked], {locked.id: expected_version})
 
     locked.is_deleted = True
     locked.updated_by = user_id
-    locked.version += 1
 
     start, end = locked.start_time, locked.end_time
     span = end - start

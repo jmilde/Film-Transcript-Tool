@@ -7,12 +7,10 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { useQueryClient } from '@tanstack/react-query'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
 import { useCommentsStore } from '../../store/comments'
 import {
-  isTokenConflict,
   useDeleteTokens,
   useEditToken,
   useHighlightTokens,
@@ -125,20 +123,6 @@ export function TranscriptViewer({
   const highlightTokens = useHighlightTokens(transcriptId)
   const reassignSegmentSpeaker = useReassignSegmentSpeaker(transcriptId)
   const createComment = useCreateComment(transcriptId)
-
-  // A 409 from any token mutation means someone else edited it first; the
-  // optimistic attempt is left on screen (see useTokens.ts) and a banner asks
-  // the user to reload rather than silently refetching out from under them.
-  // `highlightTokens` is deliberately excluded: it's a display-only toggle
-  // with nothing unsaved to protect, so it auto-recovers from a 409 via its
-  // own `alwaysInvalidateOnSettle` refetch instead of blocking on this banner.
-  const client = useQueryClient()
-  const tokenMutations = [editToken, deleteTokens, mergeTokens, splitToken]
-  const conflict = tokenMutations.find((m) => isTokenConflict(m.error))
-  function reloadAfterConflict() {
-    for (const mutation of tokenMutations) mutation.reset()
-    void client.invalidateQueries({ queryKey: ['transcript', transcriptId] })
-  }
 
   const [editingTokenId, setEditingTokenId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
@@ -433,15 +417,14 @@ export function TranscriptViewer({
     setEditingTokenId(null)
     if (!token) return
     if (trimmed === '') {
-      deleteTokens.mutate({ tokens: [{ tokenId, expectedVersion: token.version }] })
+      deleteTokens.mutate({ tokenIds: [tokenId] })
     } else if (/\s/.test(trimmed)) {
       splitToken.mutate({
         tokenId,
-        expectedVersion: token.version,
         texts: trimmed.split(/\s+/).filter(Boolean),
       })
     } else {
-      editToken.mutate({ tokenId, text: trimmed, expectedVersion: token.version })
+      editToken.mutate({ tokenId, text: trimmed })
     }
   }
 
@@ -575,7 +558,7 @@ export function TranscriptViewer({
     }
     if (!canMerge) return
     mergeTokens.mutate({
-      tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
+      tokenIds: selectedTokens.map((t) => t.id),
       text: trimmed,
     })
     setMergeDraft(null)
@@ -630,9 +613,7 @@ export function TranscriptViewer({
   }
 
   function deleteSelection() {
-    deleteTokens.mutate({
-      tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
-    })
+    deleteTokens.mutate({ tokenIds: selectedTokens.map((t) => t.id) })
     setMergeDraft(null)
     clearSelection()
   }
@@ -642,7 +623,7 @@ export function TranscriptViewer({
 
   function toggleHighlightSelection() {
     highlightTokens.mutate({
-      tokens: selectedTokens.map((t) => ({ tokenId: t.id, expectedVersion: t.version })),
+      tokenIds: selectedTokens.map((t) => t.id),
       isHighlighted: !allSelectedHighlighted,
     })
     clearSelection()
@@ -771,19 +752,6 @@ export function TranscriptViewer({
       </div>
 
       <SpeakerBar videoId={videoId} speakers={speakers ?? []} canEdit={canEdit} />
-
-      {conflict && (
-        <div className="flex items-center gap-3 border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
-          <span>This was edited by someone else. Your change was not saved.</span>
-          <button
-            type="button"
-            onClick={reloadAfterConflict}
-            className="ml-auto rounded-lg bg-danger px-2 py-1 font-medium text-text-inverted hover:opacity-90"
-          >
-            Reload
-          </button>
-        </div>
-      )}
 
       {selectionInfo &&
         popupPos &&

@@ -40,7 +40,6 @@ def _document_read(session: Session, document: Document) -> DocumentRead:
         project_id=document.project_id,
         title=document.title,
         content=resolve_document_content(session, document),
-        version=document.version,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
@@ -88,7 +87,6 @@ def update(
         user_id=user.id,
         title=payload.title,
         content=payload.content,
-        expected_version=payload.expected_version,
     )
     db.commit()
     db.refresh(updated)

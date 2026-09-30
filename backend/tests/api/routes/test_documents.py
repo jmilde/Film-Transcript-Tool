@@ -79,13 +79,11 @@ def test_create_list_and_get_document(
     assert created.status_code == 201
     body = created.json()
     assert body["title"] == "Narration"
-    assert body["version"] == 1
     assert body["content"] == {"type": "doc", "content": []}
 
     listed = auth_client.get(f"/projects/{project.id}/documents").json()
     assert len(listed) == 1
     assert listed[0]["id"] == body["id"]
-    assert listed[0]["version"] == 1
     assert "content" not in listed[0]
 
     fetched = auth_client.get(f"/documents/{body['id']}")
@@ -104,29 +102,12 @@ def test_update_document_happy_path(
         json={
             "title": "Renamed",
             "content": {"type": "doc", "content": [{"type": "paragraph"}]},
-            "expected_version": 1,
         },
     )
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["title"] == "Renamed"
-    assert body["version"] == 2
-
-
-def test_update_document_stale_version_returns_409(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    project = _seed_project(db_session, user)
-    document = auth_client.post(f"/projects/{project.id}/documents", json={"title": "Draft"}).json()
-
-    resp = auth_client.patch(
-        f"/documents/{document['id']}",
-        json={"title": "Stale", "expected_version": 999},
-    )
-
-    assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_delete_document(auth_client: TestClient, db_session: Session, user: User) -> None:

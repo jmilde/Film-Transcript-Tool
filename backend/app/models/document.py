@@ -19,11 +19,6 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     own opaque JSON blob (``ChatConversation.agent_message_history``). A clip
     block's excerpt/timecodes/etc. are never stored in ``content`` — they are
     resolved fresh from the referenced tokens on every read.
-
-    ``version`` is a whole-document optimistic-locking counter (mirrors
-    ``TranscriptToken.version``): every ``PATCH`` must supply the version it
-    last saw or the write is rejected with a 409 rather than silently
-    overwriting a concurrent edit.
     """
 
     __tablename__ = "documents"
@@ -34,4 +29,3 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnedMixin):
     )
     title: Mapped[str]
     content: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    version: Mapped[int] = mapped_column(default=1, server_default="1")

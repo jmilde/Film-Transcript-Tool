@@ -77,72 +77,33 @@ def test_edit_token(auth_client: TestClient, db_session: Session, user: User) ->
     transcript = _seed(db_session, user)
     token = _segment_tokens(db_session, transcript, 0)[0]
 
-    resp = auth_client.patch(
-        f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 1}
-    )
+    resp = auth_client.patch(f"/tokens/{token.id}", json={"edited_text": "Hi"})
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["edited_text"] == "Hi"
     assert body["original_text"] == "Hello"
     assert body["text"] == "Hi"
-    assert body["version"] == 2
     # Display in the full transcript reflects the edit.
     assert "Hi" in _transcript_texts(auth_client, transcript)
     assert "Hello" not in _transcript_texts(auth_client, transcript)
-
-
-def test_edit_token_stale_version_conflict(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 0)[0]
-
-    resp = auth_client.patch(
-        f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 99}
-    )
-
-    assert resp.status_code == 409
-    body = resp.json()
-    assert body["error"]["code"] == "CONFLICT"
-    assert body["error"]["current_tokens"][0]["id"] == str(token.id)
-    assert body["error"]["current_tokens"][0]["version"] == 1
 
 
 def test_highlight_token(auth_client: TestClient, db_session: Session, user: User) -> None:
     transcript = _seed(db_session, user)
     token = _segment_tokens(db_session, transcript, 0)[0]
 
-    resp = auth_client.patch(
-        f"/tokens/{token.id}/highlight", json={"is_highlighted": True, "expected_version": 1}
-    )
+    resp = auth_client.patch(f"/tokens/{token.id}/highlight", json={"is_highlighted": True})
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["is_highlighted"] is True
-    assert body["version"] == 2
     # A display-only flag — the transcript's displayed text is unaffected.
     assert "Hello" in _transcript_texts(auth_client, transcript)
 
-    unhighlight = auth_client.patch(
-        f"/tokens/{token.id}/highlight", json={"is_highlighted": False, "expected_version": 2}
-    )
+    unhighlight = auth_client.patch(f"/tokens/{token.id}/highlight", json={"is_highlighted": False})
     assert unhighlight.status_code == 200
     assert unhighlight.json()["is_highlighted"] is False
-
-
-def test_highlight_token_stale_version_conflict(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 0)[0]
-
-    resp = auth_client.patch(
-        f"/tokens/{token.id}/highlight", json={"is_highlighted": True, "expected_version": 99}
-    )
-
-    assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_highlight_token_viewer_forbidden(
@@ -161,9 +122,7 @@ def test_highlight_token_viewer_forbidden(
     db_session.flush()
 
     other = app_client(other_user)
-    resp = other.patch(
-        f"/tokens/{token.id}/highlight", json={"is_highlighted": True, "expected_version": 1}
-    )
+    resp = other.patch(f"/tokens/{token.id}/highlight", json={"is_highlighted": True})
     assert resp.status_code == 403
 
 
@@ -173,7 +132,7 @@ def test_delete_token_excluded_from_transcript(
     transcript = _seed(db_session, user)
     token = _segment_tokens(db_session, transcript, 0)[0]
 
-    resp = auth_client.delete(f"/tokens/{token.id}", params={"expected_version": 1})
+    resp = auth_client.delete(f"/tokens/{token.id}")
 
     assert resp.status_code == 200
     assert "Hello" not in _transcript_texts(auth_client, transcript)
@@ -181,19 +140,6 @@ def test_delete_token_excluded_from_transcript(
     persisted = db_session.get(TranscriptToken, token.id)
     assert persisted is not None
     assert persisted.is_deleted is True
-    assert persisted.version == 2
-
-
-def test_delete_token_stale_version_conflict(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 0)[0]
-
-    resp = auth_client.delete(f"/tokens/{token.id}", params={"expected_version": 99})
-
-    assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_merge_tokens(auth_client: TestClient, db_session: Session, user: User) -> None:
@@ -204,8 +150,8 @@ def test_merge_tokens(auth_client: TestClient, db_session: Session, user: User) 
         "/tokens/merge",
         json={
             "tokens": [
-                {"token_id": str(tokens[0].id), "expected_version": 1},
-                {"token_id": str(tokens[1].id), "expected_version": 1},
+                {"token_id": str(tokens[0].id)},
+                {"token_id": str(tokens[1].id)},
             ],
             "text": "How are",
         },
@@ -216,31 +162,9 @@ def test_merge_tokens(auth_client: TestClient, db_session: Session, user: User) 
     assert body["text"] == "How are"
     assert body["start_time"] == 1.2
     assert body["end_time"] == 1.6
-    assert body["version"] == 1
     texts = _transcript_texts(auth_client, transcript)
     assert "How are" in texts
     assert texts == ["Hello", "there.", "How are", "you?"]
-
-
-def test_merge_tokens_stale_version_conflict(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    transcript = _seed(db_session, user)
-    tokens = _segment_tokens(db_session, transcript, 1)
-
-    resp = auth_client.post(
-        "/tokens/merge",
-        json={
-            "tokens": [
-                {"token_id": str(tokens[0].id), "expected_version": 1},
-                {"token_id": str(tokens[1].id), "expected_version": 99},
-            ],
-            "text": "How are",
-        },
-    )
-
-    assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_merge_tokens_across_segments_rejected(
@@ -254,8 +178,8 @@ def test_merge_tokens_across_segments_rejected(
         "/tokens/merge",
         json={
             "tokens": [
-                {"token_id": str(seg0.id), "expected_version": 1},
-                {"token_id": str(seg1.id), "expected_version": 1},
+                {"token_id": str(seg0.id)},
+                {"token_id": str(seg1.id)},
             ],
             "text": "there. How",
         },
@@ -271,7 +195,7 @@ def test_split_token(auth_client: TestClient, db_session: Session, user: User) -
 
     resp = auth_client.post(
         f"/tokens/{token.id}/split",
-        json={"tokens": [{"text": "you"}, {"text": "?"}], "expected_version": 1},
+        json={"tokens": [{"text": "you"}, {"text": "?"}]},
     )
 
     assert resp.status_code == 200
@@ -279,24 +203,8 @@ def test_split_token(auth_client: TestClient, db_session: Session, user: User) -
     assert [t["text"] for t in body] == ["you", "?"]
     assert body[0]["start_time"] == 1.6
     assert body[1]["end_time"] == 1.9
-    assert all(t["version"] == 1 for t in body)
     texts = _transcript_texts(auth_client, transcript)
     assert texts == ["Hello", "there.", "How", "are", "you", "?"]
-
-
-def test_split_token_stale_version_conflict(
-    auth_client: TestClient, db_session: Session, user: User
-) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 1)[2]
-
-    resp = auth_client.post(
-        f"/tokens/{token.id}/split",
-        json={"tokens": [{"text": "you"}, {"text": "?"}], "expected_version": 99},
-    )
-
-    assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "CONFLICT"
 
 
 def test_edit_token_non_member_forbidden(
@@ -309,7 +217,7 @@ def test_edit_token_non_member_forbidden(
     token = _segment_tokens(db_session, transcript, 0)[0]
 
     other = app_client(other_user)
-    resp = other.patch(f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 1})
+    resp = other.patch(f"/tokens/{token.id}", json={"edited_text": "Hi"})
     assert resp.status_code == 403
 
 
@@ -329,7 +237,7 @@ def test_edit_token_viewer_forbidden(
     db_session.flush()
 
     other = app_client(other_user)
-    resp = other.patch(f"/tokens/{token.id}", json={"edited_text": "Hi", "expected_version": 1})
+    resp = other.patch(f"/tokens/{token.id}", json={"edited_text": "Hi"})
     assert resp.status_code == 403
 
 
@@ -347,8 +255,8 @@ def test_merge_tokens_non_member_forbidden(
         "/tokens/merge",
         json={
             "tokens": [
-                {"token_id": str(tokens[0].id), "expected_version": 1},
-                {"token_id": str(tokens[1].id), "expected_version": 1},
+                {"token_id": str(tokens[0].id)},
+                {"token_id": str(tokens[1].id)},
             ],
             "text": "How are",
         },

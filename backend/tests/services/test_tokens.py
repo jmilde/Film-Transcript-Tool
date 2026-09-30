@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 from app.config import get_settings
-from app.core.errors import BadRequestError, ConflictError
+from app.core.errors import BadRequestError
 from app.models.folder import Folder
 from app.models.membership import MembershipRole, ProjectMembership
 from app.models.project import Project
@@ -93,7 +93,7 @@ def test_edit_token_only_changes_text(db_session: Session, user: User) -> None:
     original_start, original_end = token.start_time, token.end_time
     original_text = token.original_text
 
-    edit_token(db_session, token, "Hi", user_id=user.id, expected_version=1)
+    edit_token(db_session, token, "Hi", user_id=user.id)
 
     assert token.edited_text == "Hi"
     # Original transcription and timing are untouched (non-destructive).
@@ -102,42 +102,16 @@ def test_edit_token_only_changes_text(db_session: Session, user: User) -> None:
     assert token.end_time == original_end
     assert token.is_deleted is False
     assert token.updated_by == user.id
-    # Version bumped so the next writer must supply the new value.
-    assert token.version == 2
 
 
 def test_edit_token_can_clear_edit(db_session: Session, user: User) -> None:
     transcript = _seed(db_session, user)
     token = _segment_tokens(db_session, transcript, 0)[0]
-    edit_token(db_session, token, "Hi", user_id=user.id, expected_version=1)
+    edit_token(db_session, token, "Hi", user_id=user.id)
 
-    edit_token(db_session, token, None, user_id=user.id, expected_version=2)
+    edit_token(db_session, token, None, user_id=user.id)
 
     assert token.edited_text is None
-
-
-def test_edit_token_stale_version_rejected(db_session: Session, user: User) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 0)[0]
-
-    with pytest.raises(ConflictError) as excinfo:
-        edit_token(db_session, token, "Hi", user_id=user.id, expected_version=99)
-
-    assert excinfo.value.details is not None
-    assert excinfo.value.details["current_tokens"] == [
-        {
-            "id": str(token.id),
-            "version": 1,
-            "original_text": token.original_text,
-            "edited_text": None,
-            "is_deleted": False,
-            "start_time": token.start_time,
-            "end_time": token.end_time,
-        }
-    ]
-    # Nothing was mutated on a rejected write.
-    assert token.edited_text is None
-    assert token.version == 1
 
 
 def test_delete_token_is_soft(db_session: Session, user: User) -> None:
@@ -145,24 +119,13 @@ def test_delete_token_is_soft(db_session: Session, user: User) -> None:
     token = _segment_tokens(db_session, transcript, 0)[0]
     token_id = token.id
 
-    delete_token(db_session, token, user_id=user.id, expected_version=1)
+    delete_token(db_session, token, user_id=user.id)
 
     # Marked deleted but still physically present in the table.
     persisted = db_session.get(TranscriptToken, token_id)
     assert persisted is not None
     assert persisted.is_deleted is True
     assert persisted.updated_by == user.id
-    assert persisted.version == 2
-
-
-def test_delete_token_stale_version_rejected(db_session: Session, user: User) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 0)[0]
-
-    with pytest.raises(ConflictError):
-        delete_token(db_session, token, user_id=user.id, expected_version=99)
-
-    assert token.is_deleted is False
 
 
 def test_set_token_highlight_only_changes_flag(db_session: Session, user: User) -> None:
@@ -170,7 +133,7 @@ def test_set_token_highlight_only_changes_flag(db_session: Session, user: User) 
     token = _segment_tokens(db_session, transcript, 0)[0]
     original_text = token.original_text
 
-    set_token_highlight(db_session, token, True, user_id=user.id, expected_version=1)
+    set_token_highlight(db_session, token, True, user_id=user.id)
 
     assert token.is_highlighted is True
     # A display-only flag — text/timing/deletion untouched.
@@ -178,21 +141,9 @@ def test_set_token_highlight_only_changes_flag(db_session: Session, user: User) 
     assert token.edited_text is None
     assert token.is_deleted is False
     assert token.updated_by == user.id
-    assert token.version == 2
 
-    set_token_highlight(db_session, token, False, user_id=user.id, expected_version=2)
+    set_token_highlight(db_session, token, False, user_id=user.id)
     assert token.is_highlighted is False
-
-
-def test_set_token_highlight_stale_version_rejected(db_session: Session, user: User) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 0)[0]
-
-    with pytest.raises(ConflictError):
-        set_token_highlight(db_session, token, True, user_id=user.id, expected_version=99)
-
-    assert token.is_highlighted is False
-    assert token.version == 1
 
 
 def test_merge_tokens_same_segment(db_session: Session, user: User) -> None:
@@ -200,13 +151,7 @@ def test_merge_tokens_same_segment(db_session: Session, user: User) -> None:
     tokens = _segment_tokens(db_session, transcript, 1)  # How / are / you?
     first, second = tokens[0], tokens[1]
 
-    merged = merge_tokens(
-        db_session,
-        [first, second],
-        "How are",
-        user_id=user.id,
-        expected_versions={first.id: 1, second.id: 1},
-    )
+    merged = merge_tokens(db_session, [first, second], "How are", user_id=user.id)
 
     # Replacement spans the timing of the merged range.
     assert merged.start_time == first.start_time
@@ -216,33 +161,12 @@ def test_merge_tokens_same_segment(db_session: Session, user: User) -> None:
     assert merged.segment_id == first.segment_id
     assert merged.is_deleted is False
     assert merged.created_by == user.id
-    assert merged.version == 1
     # Originals are soft-deleted, not removed.
     assert first.is_deleted is True
     assert second.is_deleted is True
-    assert first.version == 2
-    assert second.version == 2
     # Order stays stable: the merged token takes the first token's slot.
     remaining = _segment_tokens(db_session, transcript, 1)
     assert [t.original_text for t in remaining] == ["How are", "you?"]
-
-
-def test_merge_tokens_stale_version_rejected(db_session: Session, user: User) -> None:
-    transcript = _seed(db_session, user)
-    tokens = _segment_tokens(db_session, transcript, 1)
-    first, second = tokens[0], tokens[1]
-
-    with pytest.raises(ConflictError):
-        merge_tokens(
-            db_session,
-            [first, second],
-            "How are",
-            user_id=user.id,
-            expected_versions={first.id: 1, second.id: 99},
-        )
-
-    assert first.is_deleted is False
-    assert second.is_deleted is False
 
 
 def test_merge_tokens_across_segments_rejected(db_session: Session, user: User) -> None:
@@ -251,13 +175,7 @@ def test_merge_tokens_across_segments_rejected(db_session: Session, user: User) 
     seg1 = _segment_tokens(db_session, transcript, 1)[0]  # "How"
 
     with pytest.raises(TokenMergeInvalidSegmentError):
-        merge_tokens(
-            db_session,
-            [seg0, seg1],
-            "there. How",
-            user_id=user.id,
-            expected_versions={seg0.id: 1, seg1.id: 1},
-        )
+        merge_tokens(db_session, [seg0, seg1], "there. How", user_id=user.id)
 
     # Nothing was mutated on a rejected merge.
     assert seg0.is_deleted is False
@@ -269,7 +187,7 @@ def test_merge_tokens_requires_at_least_two(db_session: Session, user: User) -> 
     token = _segment_tokens(db_session, transcript, 1)[0]
 
     with pytest.raises(BadRequestError):
-        merge_tokens(db_session, [token], "How", user_id=user.id, expected_versions={token.id: 1})
+        merge_tokens(db_session, [token], "How", user_id=user.id)
 
 
 def test_split_token_interpolates_timestamps(db_session: Session, user: User) -> None:
@@ -277,7 +195,7 @@ def test_split_token_interpolates_timestamps(db_session: Session, user: User) ->
     token = _segment_tokens(db_session, transcript, 1)[2]  # "you?" 1.6 - 1.9
     assert (token.start_time, token.end_time) == (1.6, 1.9)
 
-    parts = split_token(db_session, token, ["you", "?"], user_id=user.id, expected_version=1)
+    parts = split_token(db_session, token, ["you", "?"], user_id=user.id)
 
     assert [p.original_text for p in parts] == ["you", "?"]
     # Even interpolation across the original [1.6, 1.9] range.
@@ -287,22 +205,10 @@ def test_split_token_interpolates_timestamps(db_session: Session, user: User) ->
     assert parts[1].end_time == pytest.approx(1.9)
     assert all(p.segment_id == token.segment_id for p in parts)
     assert all(p.edited_text is None for p in parts)
-    assert all(p.version == 1 for p in parts)
     # Original is soft-deleted, replacements ordered after their neighbours.
     assert token.is_deleted is True
-    assert token.version == 2
     remaining = _segment_tokens(db_session, transcript, 1)
     assert [t.original_text for t in remaining] == ["How", "are", "you", "?"]
-
-
-def test_split_token_stale_version_rejected(db_session: Session, user: User) -> None:
-    transcript = _seed(db_session, user)
-    token = _segment_tokens(db_session, transcript, 1)[2]
-
-    with pytest.raises(ConflictError):
-        split_token(db_session, token, ["you", "?"], user_id=user.id, expected_version=99)
-
-    assert token.is_deleted is False
 
 
 def test_split_token_requires_at_least_two(db_session: Session, user: User) -> None:
@@ -310,7 +216,7 @@ def test_split_token_requires_at_least_two(db_session: Session, user: User) -> N
     token = _segment_tokens(db_session, transcript, 1)[2]
 
     with pytest.raises(BadRequestError):
-        split_token(db_session, token, ["you?"], user_id=user.id, expected_version=1)
+        split_token(db_session, token, ["you?"], user_id=user.id)
 
 
 def test_split_positions_stay_between_neighbours(db_session: Session, user: User) -> None:
@@ -319,7 +225,7 @@ def test_split_positions_stay_between_neighbours(db_session: Session, user: User
     middle = tokens[1]  # "are", between "How" and "you?"
     prev_pos, next_pos = tokens[0].position, tokens[2].position
 
-    parts = split_token(db_session, middle, ["a", "re"], user_id=user.id, expected_version=1)
+    parts = split_token(db_session, middle, ["a", "re"], user_id=user.id)
 
     assert all(isinstance(p.position, Decimal) for p in parts)
     assert all(prev_pos < p.position < next_pos for p in parts)
@@ -412,6 +318,9 @@ def committed_token(engine: Engine) -> Iterator[uuid.UUID]:
 def test_concurrent_edit_serializes_via_row_lock(
     engine: Engine, committed_token: uuid.UUID
 ) -> None:
+    """Two overlapping writers on the same token never corrupt it: the second
+    blocks on the row lock until the first commits, then applies its own edit
+    on top — last write wins, with no error surfaced to either caller."""
     barrier = threading.Barrier(2)
     outcomes: dict[str, str] = {}
 
@@ -421,7 +330,7 @@ def test_concurrent_edit_serializes_via_row_lock(
             assert token is not None
             # Acquires the row lock (flush sends the UPDATE) but does not yet
             # commit, so the lock is held while `second` tries to acquire it.
-            edit_token(session, token, "first", user_id=token.created_by, expected_version=1)
+            edit_token(session, token, "first", user_id=token.created_by)
             barrier.wait()
             time.sleep(0.3)
             session.commit()
@@ -432,15 +341,11 @@ def test_concurrent_edit_serializes_via_row_lock(
             barrier.wait()
             token = session.get(TranscriptToken, committed_token)
             assert token is not None
-            try:
-                # Blocks here until `first` commits and releases the row lock,
-                # then re-reads the now-current (version=2) row.
-                edit_token(session, token, "second", user_id=token.created_by, expected_version=1)
-                session.commit()
-                outcomes["second"] = "ok"
-            except ConflictError:
-                session.rollback()
-                outcomes["second"] = "conflict"
+            # Blocks here until `first` commits and releases the row lock,
+            # then re-reads the now-current row and overwrites it.
+            edit_token(session, token, "second", user_id=token.created_by)
+            session.commit()
+            outcomes["second"] = "ok"
 
     t1 = threading.Thread(target=first)
     t2 = threading.Thread(target=second)
@@ -449,12 +354,11 @@ def test_concurrent_edit_serializes_via_row_lock(
     t1.join()
     t2.join()
 
-    # Exactly one writer succeeded; the other was serialized behind the row
-    # lock and then rejected for a stale version — proving FOR UPDATE actually
-    # blocks the second writer rather than letting both race on version=1.
-    assert sorted(outcomes.values()) == ["conflict", "ok"]
+    # Both writers succeed — the row lock only serializes the writes, it
+    # never rejects one — and the one that committed last (second) wins.
+    assert outcomes == {"first": "ok", "second": "ok"}
 
     with Session(engine) as session:
         final = session.get(TranscriptToken, committed_token)
         assert final is not None
-        assert final.version == 2
+        assert final.edited_text == "second"
