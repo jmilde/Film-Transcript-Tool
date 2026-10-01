@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
@@ -21,7 +21,6 @@ const DOCUMENT: Document = {
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }],
   },
-  version: 1,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }
@@ -73,13 +72,13 @@ describe('DocumentEditor', () => {
     expect(await screen.findByText('Hello')).toBeInTheDocument()
   })
 
-  it('debounces edits into a PATCH with the last-known version', async () => {
+  it('debounces edits into a PATCH carrying the new content', async () => {
     server.use(http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(DOCUMENT)))
-    let body: unknown
+    let body: { content?: { content?: unknown[] } } | undefined
     server.use(
       http.patch('http://localhost:8000/documents/d-1', async ({ request }) => {
-        body = await request.json()
-        return HttpResponse.json({ ...DOCUMENT, version: 2 })
+        body = (await request.json()) as typeof body
+        return HttpResponse.json(DOCUMENT)
       }),
     )
     renderEditor()
@@ -90,35 +89,10 @@ describe('DocumentEditor', () => {
 
     await waitFor(
       () => {
-        expect(body).toMatchObject({ expected_version: 1 })
+        expect(body?.content).toBeDefined()
       },
       { timeout: 3000 },
     )
-  })
-
-  it('shows a conflict banner on a stale version and reloads on demand', async () => {
-    server.use(http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(DOCUMENT)))
-    server.use(
-      http.patch('http://localhost:8000/documents/d-1', () =>
-        HttpResponse.json({ error: { code: 'CONFLICT', message: 'stale' } }, { status: 409 }),
-      ),
-    )
-    renderEditor()
-    const paragraph = await screen.findByText('Hello')
-
-    await userEvent.click(paragraph)
-    await userEvent.type(paragraph, '!')
-
-    expect(
-      await screen.findByText(/edited by someone else/, undefined, { timeout: 3000 }),
-    ).toBeInTheDocument()
-
-    server.use(http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(DOCUMENT)))
-    await userEvent.click(screen.getByText('Reload'))
-
-    await waitFor(() => {
-      expect(screen.queryByText(/edited by someone else/)).not.toBeInTheDocument()
-    })
   })
 
   it('renders a typed "# " markdown shortcut as a visually distinct heading', async () => {
@@ -127,11 +101,7 @@ describe('DocumentEditor', () => {
       content: { type: 'doc', content: [{ type: 'paragraph', content: [] }] },
     }
     server.use(http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(emptyDoc)))
-    server.use(
-      http.patch('http://localhost:8000/documents/d-1', () =>
-        HttpResponse.json({ ...emptyDoc, version: 2 }),
-      ),
-    )
+    server.use(http.patch('http://localhost:8000/documents/d-1', () => HttpResponse.json(emptyDoc)))
     const { container } = renderEditor()
 
     const editable = await waitFor(() => {
@@ -166,9 +136,7 @@ describe('DocumentEditor', () => {
         http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
-        http.patch('http://localhost:8000/documents/d-1', () =>
-          HttpResponse.json({ ...PROSE_DOC, version: 2 }),
-        ),
+        http.patch('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
         http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
@@ -363,9 +331,7 @@ describe('DocumentEditor', () => {
         http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(markedDoc)),
       )
       server.use(
-        http.patch('http://localhost:8000/documents/d-1', () =>
-          HttpResponse.json({ ...markedDoc, version: 2 }),
-        ),
+        http.patch('http://localhost:8000/documents/d-1', () => HttpResponse.json(markedDoc)),
       )
       server.use(
         http.get('http://localhost:8000/documents/d-1/comments', () =>
@@ -411,7 +377,7 @@ describe('DocumentEditor', () => {
       )
     })
 
-    it('falls back to the normal conflict banner if the retried mark-set also conflicts, without looping', async () => {
+    it('shows the generic save-error banner if the autosave fails outright', async () => {
       mockCommentRoutes()
       server.use(
         http.post('http://localhost:8000/documents/d-1/comments', () =>
@@ -433,7 +399,7 @@ describe('DocumentEditor', () => {
       )
       server.use(
         http.patch('http://localhost:8000/documents/d-1', () =>
-          HttpResponse.json({ error: { code: 'CONFLICT', message: 'stale' } }, { status: 409 }),
+          HttpResponse.json({ error: { code: 'BAD_REQUEST', message: 'nope' } }, { status: 400 }),
         ),
       )
       const { container } = renderEditor()
@@ -446,15 +412,9 @@ describe('DocumentEditor', () => {
       await userEvent.type(screen.getByPlaceholderText('Add a comment…'), 'note')
       await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
 
-      // The save conflicts; the mark-set is auto-retried once against
-      // reloaded content (silently — no banner for this first conflict).
-      // The retry's own save conflicts too, but that is *not* auto-retried
-      // again (exactly one retry) — it surfaces the normal conflict banner
-      // instead, same as any other unresolved edit conflict. The comment
-      // row itself still exists regardless of whether the mark ever saves.
       await waitFor(
         () => {
-          expect(screen.getByText(/edited by someone else/)).toBeInTheDocument()
+          expect(screen.getByText(/could not be saved/)).toBeInTheDocument()
         },
         { timeout: 3000 },
       )
@@ -476,9 +436,7 @@ describe('DocumentEditor', () => {
         http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
-        http.patch('http://localhost:8000/documents/d-1', () =>
-          HttpResponse.json({ ...PROSE_DOC, version: 2 }),
-        ),
+        http.patch('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
         http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
@@ -506,14 +464,38 @@ describe('DocumentEditor', () => {
       expect(screen.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true')
     })
 
+    it('toggles strikethrough on selected text via the Google Docs shortcut (Mod-Shift-X)', async () => {
+      server.use(
+        http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
+      )
+      server.use(
+        http.patch('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
+      )
+      server.use(
+        http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
+      )
+      const { container } = renderEditor()
+      const paragraph = await screen.findByText('Hello there')
+      await userEvent.click(paragraph)
+      selectWithinText(container, 'Hello there', 0, 5) // "Hello"
+
+      const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+      // jsdom reports no platform, so Tiptap's `Mod` resolves to Ctrl here —
+      // real Mac browsers send Cmd instead, but the binding itself is the
+      // same `Mod-Shift-x` regardless of which physical key backs `Mod`.
+      fireEvent.keyDown(editable, { key: 'x', code: 'KeyX', ctrlKey: true, shiftKey: true })
+
+      await waitFor(() => {
+        expect(container.querySelector('s')).toHaveTextContent('Hello')
+      })
+    })
+
     it('toggles a pastel-orange highlight mark on selected text', async () => {
       server.use(
         http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
-        http.patch('http://localhost:8000/documents/d-1', () =>
-          HttpResponse.json({ ...PROSE_DOC, version: 2 }),
-        ),
+        http.patch('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
         http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),
@@ -617,9 +599,7 @@ describe('DocumentEditor', () => {
         http.get('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
-        http.patch('http://localhost:8000/documents/d-1', () =>
-          HttpResponse.json({ ...PROSE_DOC, version: 2 }),
-        ),
+        http.patch('http://localhost:8000/documents/d-1', () => HttpResponse.json(PROSE_DOC)),
       )
       server.use(
         http.get('http://localhost:8000/documents/d-1/comments', () => HttpResponse.json([])),

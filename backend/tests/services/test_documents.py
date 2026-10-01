@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import NotFoundError
 from app.models.document import Document
 from app.models.folder import Folder
 from app.models.membership import MembershipRole, ProjectMembership
@@ -105,7 +105,6 @@ def test_create_list_update_delete_document(db_session: Session, user: User) -> 
     db_session.flush()
 
     document = create_document(db_session, project.id, user.id, "Narration draft")
-    assert document.version == 1
     assert document.content == {"type": "doc", "content": []}
 
     listed = list_documents(db_session, project.id)
@@ -117,34 +116,11 @@ def test_create_list_update_delete_document(db_session: Session, user: User) -> 
         user_id=user.id,
         title="Renamed",
         content={"type": "doc", "content": [{"type": "paragraph"}]},
-        expected_version=1,
     )
     assert updated.title == "Renamed"
-    assert updated.version == 2
 
     delete_document(db_session, updated)
     assert db_session.get(Document, document.id) is None
-
-
-def test_update_document_stale_version_conflict(db_session: Session, user: User) -> None:
-    project = Project(name="P", created_by=user.id, updated_by=user.id)
-    db_session.add(project)
-    db_session.flush()
-    document = create_document(db_session, project.id, user.id, "Draft")
-
-    try:
-        update_document(
-            db_session,
-            document,
-            user_id=user.id,
-            title="Stale write",
-            content=None,
-            expected_version=999,
-        )
-        raise AssertionError("expected ConflictError")
-    except ConflictError as exc:
-        assert exc.details is not None
-        assert exc.details["current_version"] == 1
 
 
 def test_resolve_clip_block_spans_segments(db_session: Session, user: User) -> None:
@@ -302,7 +278,6 @@ def test_update_document_rejects_clip_block_outside_project(
             user_id=user.id,
             title=None,
             content=content,
-            expected_version=1,
         )
         raise AssertionError("expected DocumentContentInvalidError")
     except DocumentContentInvalidError:

@@ -8,10 +8,9 @@ read, exactly like ``ChatCitation`` (``app/api/routes/chat.py``) and
 ``SearchGroup`` (``app/services/search.py``). Document CRUD is synchronous,
 like Comments — not async like Exports.
 
-Whole-document optimistic locking mirrors ``TranscriptToken.version``
-(``app/services/tokens.py``): every write re-reads the row with ``FOR UPDATE``
-inside the same transaction and rejects a stale ``expected_version`` with
-``ConflictError`` before mutating anything.
+Every write re-reads the row with ``FOR UPDATE`` inside the same transaction
+before mutating it, mirroring ``app/services/tokens.py`` — this keeps a
+single write atomic, not to detect a concurrent editor.
 """
 
 import copy
@@ -22,7 +21,7 @@ from typing import Any
 from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
-from app.core.errors import BadRequestError, ConflictError, NotFoundError
+from app.core.errors import BadRequestError, NotFoundError
 from app.core.media_token import mint_media_token
 from app.models.asset import AssetType, VideoAsset
 from app.models.document import Document
@@ -113,23 +112,16 @@ def update_document(
     user_id: uuid.UUID,
     title: str | None,
     content: dict[str, Any] | None,
-    expected_version: int,
 ) -> Document:
     locked = session.execute(
         select(Document).where(Document.id == document.id).with_for_update()
     ).scalar_one()
-    if locked.version != expected_version:
-        raise ConflictError(
-            "This document was edited by someone else",
-            details={"current_version": locked.version},
-        )
     if title is not None:
         locked.title = title
     if content is not None:
         _validate_content_scope(session, locked.project_id, content)
         locked.content = content
     locked.updated_by = user_id
-    locked.version += 1
     session.flush()
     return locked
 

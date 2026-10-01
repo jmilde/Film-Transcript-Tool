@@ -12,19 +12,13 @@ class DocumentCreate(BaseModel):
 class DocumentUpdate(BaseModel):
     title: str | None = None
     content: dict[str, Any] | None = None
-    expected_version: int
 
 
 class DocumentSummary(BaseModel):
-    """List-view shape — no ``content``, keeping the panel's document switcher cheap.
-
-    ``version`` lets the frontend rename a document (a title-only PATCH, which
-    still requires ``expected_version``) straight from a tab-bar list entry,
-    without first loading that document's full content."""
+    """List-view shape — no ``content``, keeping the panel's document switcher cheap."""
 
     id: uuid.UUID
     title: str
-    version: int
     updated_at: datetime
 
 
@@ -35,7 +29,6 @@ class DocumentRead(BaseModel):
     # Every clipBlock node's attrs are augmented with resolved display fields
     # (see ClipBlockRead) on every read; never persisted in this shape.
     content: dict[str, Any]
-    version: int
     created_at: datetime
     updated_at: datetime
 

@@ -1,19 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useQueryClient } from '@tanstack/react-query'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { isNodeSelection } from '@tiptap/core'
 import { DOMSerializer } from '@tiptap/pm/model'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
+import Strike from '@tiptap/extension-strike'
 import { shouldShowBubble } from './shouldShowBubble'
-import {
-  isDocumentConflict,
-  useDocument,
-  useResolveClipBlock,
-  useUpdateDocument,
-} from '../../api/hooks/useDocuments'
+import { useDocument, useResolveClipBlock, useUpdateDocument } from '../../api/hooks/useDocuments'
 import {
   documentAnchor,
   useCreateDocumentComment,
@@ -55,6 +50,16 @@ import { formatTime } from '../player/format'
 import type { Document } from '../../api/hooks/useDocuments'
 
 const SAVE_DEBOUNCE_MS = 1000
+
+/** Tiptap's own default keyboard shortcut for strikethrough is `Mod-Shift-s`;
+ * every other shortcut here (bold/italic/underline/headings/bullet list)
+ * already matches Google Docs without an override, so this rebinds just
+ * this one to Google Docs' `Mod-Shift-x`. */
+const GoogleDocsStrike = Strike.extend({
+  addKeyboardShortcuts() {
+    return { 'Mod-Shift-x': () => this.editor.commands.toggleStrike() }
+  },
+})
 
 /** What the shared `BubbleMenu` popup shows: either a plain-text selection
  * (copy + comment) or a `NodeSelection` over a `clipBlock` (play/comment/
@@ -100,16 +105,9 @@ interface DocumentEditorProps {
   variant?: 'panel' | 'fullscreen'
 }
 
-interface PendingCommentMark {
-  commentId: string
-  from: number
-  to: number
-}
-
 /**
  * Loads a document and mounts a TipTap editor over its content, debouncing
- * saves and surfacing a stale-`expected_version` conflict the same way
- * `TranscriptViewer` does for token edits (see its `reloadAfterConflict`).
+ * saves.
  *
  * Also owns consuming the panel store's queued "Add to Document" insert
  * (rather than `DocumentPanel`, which doesn't have an editor instance to call
@@ -131,11 +129,7 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
   const hoverComment = useCommentsStore((s) => s.hover)
   const selectedCommentId = useCommentsStore((s) => s.selectedId)
   const hoveredCommentId = useCommentsStore((s) => s.hoveredId)
-  const client = useQueryClient()
 
-  // The version to send with the next save; kept outside React state since
-  // updating it must never itself trigger a re-render/editor reset.
-  const versionRef = useRef(1)
   const [initialized, setInitialized] = useState(false)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [commentDraft, setCommentDraft] = useState<CommentDraftTarget | null>(null)
@@ -145,14 +139,6 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
   const [hoverPreview, setHoverPreview] = useState<{ commentId: string; rect: DOMRect } | null>(
     null,
   )
-
-  // Set right after applying a comment mark; cleared once that specific save
-  // resolves. Scopes the 409-retry below to "the very next autosave" caused
-  // by *this* mark-set, not any later unrelated conflict.
-  const pendingMarkSaveRef = useRef<PendingCommentMark | null>(null)
-  // Armed by that save's conflict handler, consumed by the reload effect
-  // below — exactly one retry, per the design record.
-  const markRetryRef = useRef<PendingCommentMark | null>(null)
 
   // Mirrors the latest `comments` into a ref for `onUpdate`'s orphan-comment
   // reconciliation below — that closure is captured once per `documentId`
@@ -174,8 +160,10 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
           horizontalRule: false,
           link: false,
           underline: false,
+          strike: false,
         }),
         Underline,
+        GoogleDocsStrike,
         ClipBlock,
         CommentMark,
         TextHighlightMark,
@@ -186,34 +174,17 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
       content: { type: 'doc', content: [] },
       onUpdate: ({ editor }) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-        const savingMark = pendingMarkSaveRef.current
         saveTimeoutRef.current = setTimeout(() => {
           const content = stripResolvedClipFields(editor.getJSON()) as Document['content']
           updateDocument.mutate(
-            { content, expectedVersion: versionRef.current },
+            { content },
             {
-              onSuccess: (updated) => {
-                versionRef.current = updated.version
-                if (pendingMarkSaveRef.current === savingMark) pendingMarkSaveRef.current = null
+              onSuccess: () => {
                 // Reconcile against exactly what was just persisted, not a
                 // before/after diff — a comment whose mark/clip node isn't
                 // in it anymore lost the text/clip it was attached to.
-                // Anything still mid-flight through the mark-save/retry
-                // dance below is excluded so this can't delete a comment
-                // whose mark simply hasn't reached a saved snapshot yet.
-                const excludeIds = new Set<string>()
-                if (pendingMarkSaveRef.current) excludeIds.add(pendingMarkSaveRef.current.commentId)
-                if (markRetryRef.current) excludeIds.add(markRetryRef.current.commentId)
-                for (const id of findOrphanedCommentIds(content, commentsRef.current, excludeIds)) {
+                for (const id of findOrphanedCommentIds(content, commentsRef.current, new Set())) {
                   deleteDocumentComment.mutate(id)
-                }
-              },
-              onError: (error) => {
-                if (pendingMarkSaveRef.current !== savingMark) return
-                pendingMarkSaveRef.current = null
-                if (isDocumentConflict(error) && savingMark) {
-                  markRetryRef.current = savingMark
-                  reloadAfterConflict()
                 }
               },
             },
@@ -235,41 +206,6 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
     editor.commands.setContent(doc.content, { emitUpdate: false })
     setInitialized(true)
   }, [editor, doc, initialized])
-
-  // Keeps `versionRef` current with the latest version this client has seen
-  // for *any* field — not just this component's own saves. The document
-  // panel's tab bar can rename this same document (a title-only PATCH) while
-  // its editor is open; without this, a subsequent content autosave here
-  // would still be carrying the pre-rename version and get rejected as a
-  // stale-version conflict. Safe to run on every `doc` change since a ref
-  // write never triggers a re-render.
-  useEffect(() => {
-    if (doc) versionRef.current = doc.version
-  }, [doc])
-
-  // One-shot retry: re-apply a comment mark that was lost to a conflicting
-  // save, now that the document has reloaded fresh content. If the mapped
-  // range no longer makes sense in the reloaded doc, there's nothing left to
-  // re-mark — delete the comment rather than leaving it orphaned, same as
-  // `findOrphanedCommentIds` would once caught by a later save.
-  useEffect(() => {
-    if (!editor || !initialized) return
-    const pending = markRetryRef.current
-    if (!pending) return
-    markRetryRef.current = null
-    const size = editor.state.doc.content.size
-    const from = Math.min(pending.from, size)
-    const to = Math.min(pending.to, size)
-    if (from >= to) {
-      deleteDocumentComment.mutate(pending.commentId)
-      return
-    }
-    editor
-      .chain()
-      .setTextSelection({ from, to })
-      .setMark('comment', { commentId: pending.commentId })
-      .run()
-  }, [editor, initialized, deleteDocumentComment])
 
   // Derives what the shared BubbleMenu popup should show from the editor's
   // live selection. `useEditorState` only re-renders this component when the
@@ -479,7 +415,6 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
       const { from, to } = editor.state.selection
       if (from === to) return
       const comment = await createDocumentComment.mutateAsync({ clipNodeId: null, text })
-      pendingMarkSaveRef.current = { commentId: comment.id, from, to }
       editor
         .chain()
         .setTextSelection({ from, to })
@@ -706,12 +641,6 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
     }
   }, [])
 
-  function reloadAfterConflict() {
-    updateDocument.reset()
-    setInitialized(false)
-    void client.invalidateQueries({ queryKey: ['document', documentId] })
-  }
-
   if (isLoading || !editor) {
     return <div className="p-6 text-center text-body text-text-muted">Loading document…</div>
   }
@@ -741,19 +670,7 @@ export function DocumentEditor({ projectId, documentId, variant = 'panel' }: Doc
           )
         })}
       </div>
-      {isDocumentConflict(updateDocument.error) && (
-        <div className="flex items-center gap-3 border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
-          <span>This document was edited by someone else. Your change was not saved.</span>
-          <button
-            type="button"
-            onClick={reloadAfterConflict}
-            className="ml-auto rounded-md bg-danger px-2 py-1 font-medium text-text-inverted hover:opacity-90"
-          >
-            Reload
-          </button>
-        </div>
-      )}
-      {updateDocument.isError && !isDocumentConflict(updateDocument.error) && (
+      {updateDocument.isError && (
         <div className="border-b border-danger-subtle bg-danger-subtle px-4 py-2 text-small text-danger-text">
           Your last change could not be saved. Check your connection and permissions, then try
           again.

@@ -473,10 +473,11 @@ Request:
 
 # 10. Transcript Tokens
 
-Every token response includes `version`. Every mutating request below MUST
-include the `expected_version` the client last read for each token it is
-modifying — a stale version is rejected (see Concurrency Conflicts below)
-rather than applied.
+Editing is single-writer (see `docs/500_transcript_model.md` §8.5): every
+mutating request below locks its target row(s) for the duration of the
+write, so overlapping requests serialize rather than corrupt a token, but
+none of them are rejected for a stale client-side read — there is no version
+field on the token response or on these requests.
 
 ## Update Token
 
@@ -490,8 +491,7 @@ Request:
 
 ```json
 {
-	"edited_text": "there",
-	"expected_version": 3
+	"edited_text": "there"
 }
 ```
 
@@ -500,7 +500,7 @@ Request:
 ## Delete Token
 
 ```
-DELETE /tokens/{token_id}?expected_version=3
+DELETE /tokens/{token_id}
 ```
 
 Marks token as deleted.
@@ -521,8 +521,7 @@ Request:
 
 ```json
 {
-	"is_highlighted": true,
-	"expected_version": 3
+	"is_highlighted": true
 }
 ```
 
@@ -539,8 +538,8 @@ Request:
 ```json
 {
 	"tokens": [
-		{ "token_id": "uuid1", "expected_version": 3 },
-		{ "token_id": "uuid2", "expected_version": 1 }
+		{ "token_id": "uuid1" },
+		{ "token_id": "uuid2" }
 	],
 	"text": "don't"
 }
@@ -567,41 +566,9 @@ Request:
 		{
 			"text": "not"
 		}
-	],
-	"expected_version": 3
+	]
 }
 ```
-
----
-
-## Concurrency Conflicts
-
-Any token write above returns `409 CONFLICT` if the supplied
-`expected_version` no longer matches the token's current version:
-
-```json
-{
-	"error": {
-		"code": "CONFLICT",
-		"message": "This token was edited by someone else",
-		"current_tokens": [
-			{
-				"id": "uuid",
-				"version": 4,
-				"original_text": "...",
-				"edited_text": "...",
-				"is_deleted": false,
-				"start_time": 1.2,
-				"end_time": 1.6
-			}
-		]
-	}
-}
-```
-
-The write is rejected before anything is mutated. Clients MUST NOT silently
-retry or overwrite on a conflict — surface it and let the user reload before
-trying again.
 
 ---
 
@@ -903,15 +870,12 @@ Request:
 ```json
 {
 	"title": "Renamed",
-	"content": { "type": "doc", "content": [] },
-	"expected_version": 3
+	"content": { "type": "doc", "content": [] }
 }
 ```
 
-`title`/`content` are each optional (omit to leave unchanged);
-`expected_version` is required. Whole-document optimistic locking, same
-`409 CONFLICT` shape as Transcript Tokens (§10) — a stale version is
-rejected before anything is mutated.
+`title`/`content` are each optional (omit to leave unchanged). Single-writer,
+same locking-without-version-check semantics as Transcript Tokens (§10).
 
 ---
 

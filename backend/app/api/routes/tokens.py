@@ -33,7 +33,6 @@ def _token_read(token: TranscriptToken) -> TokenRead:
         text=token.edited_text if token.edited_text is not None else token.original_text,
         start_time=token.start_time,
         end_time=token.end_time,
-        version=token.version,
         is_highlighted=token.is_highlighted,
     )
 
@@ -45,9 +44,7 @@ def update_token(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TokenRead:
-    edit_token(
-        db, token, payload.edited_text, user_id=user.id, expected_version=payload.expected_version
-    )
+    edit_token(db, token, payload.edited_text, user_id=user.id)
     schedule_reembed(db, token.transcript_id)
     db.commit()
     db.refresh(token)
@@ -61,13 +58,7 @@ def update_token_highlight(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TokenRead:
-    set_token_highlight(
-        db,
-        token,
-        payload.is_highlighted,
-        user_id=user.id,
-        expected_version=payload.expected_version,
-    )
+    set_token_highlight(db, token, payload.is_highlighted, user_id=user.id)
     db.commit()
     db.refresh(token)
     return _token_read(token)
@@ -75,12 +66,11 @@ def update_token_highlight(
 
 @router.delete("/tokens/{token_id}", response_model=TokenRead)
 def remove_token(
-    expected_version: int,
     token: TranscriptToken = Depends(require_token_access),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TokenRead:
-    delete_token(db, token, user_id=user.id, expected_version=expected_version)
+    delete_token(db, token, user_id=user.id)
     schedule_reembed(db, token.transcript_id)
     db.commit()
     db.refresh(token)
@@ -93,13 +83,7 @@ def merge(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TokenRead:
-    replacement = merge_tokens(
-        db,
-        context.tokens,
-        context.text,
-        user_id=user.id,
-        expected_versions=context.expected_versions,
-    )
+    replacement = merge_tokens(db, context.tokens, context.text, user_id=user.id)
     schedule_reembed(db, replacement.transcript_id)
     db.commit()
     db.refresh(replacement)
@@ -118,7 +102,6 @@ def split(
         token,
         [piece.text for piece in payload.tokens],
         user_id=user.id,
-        expected_version=payload.expected_version,
     )
     schedule_reembed(db, token.transcript_id)
     db.commit()

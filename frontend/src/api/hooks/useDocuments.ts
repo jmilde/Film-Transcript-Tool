@@ -1,16 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ApiError, unwrap } from '../client'
+import { api, unwrap } from '../client'
 import type { components } from '../schema'
 
 export type Document = components['schemas']['DocumentRead']
 export type DocumentSummary = components['schemas']['DocumentSummary']
 export type ClipBlock = components['schemas']['ClipBlockRead']
-
-/** True when a document save failed because someone else edited it since this
- * client last read it (`409 CONFLICT`) — mirrors `isTokenConflict`. */
-export function isDocumentConflict(error: unknown): error is ApiError {
-  return error instanceof ApiError && error.status === 409
-}
 
 /** A project's documents, list-view only (no `content` — keeps this cheap for the panel's switcher). */
 export function useDocuments(projectId: string | null) {
@@ -55,23 +49,17 @@ export function useCreateDocument(projectId: string) {
   })
 }
 
-/** Save a document's title/content (`PATCH /documents/{id}`); a stale `expectedVersion`
- * fails with a 409 the caller can detect via `isDocumentConflict`. */
+/** Save a document's title/content (`PATCH /documents/{id}`). */
 export function useUpdateDocument(projectId: string, documentId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async (input: {
-      title?: string
-      content?: Document['content']
-      expectedVersion: number
-    }) =>
+    mutationFn: async (input: { title?: string; content?: Document['content'] }) =>
       unwrap(
         await api.PATCH('/documents/{document_id}', {
           params: { path: { document_id: documentId } },
           body: {
             title: input.title,
             content: input.content,
-            expected_version: input.expectedVersion,
           },
         }),
       ),

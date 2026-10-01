@@ -77,8 +77,8 @@ export function DocumentTabStrip({
 
 /** One tab: click to activate, hover for a rename/delete menu and a close
  * button. Renaming edits the tab's own label inline rather than opening a
- * separate dialog — `doc.version` (carried on the list-view summary) is
- * enough for the title-only PATCH without loading the document's content. */
+ * separate dialog — a title-only PATCH, no need to load the document's
+ * content first. */
 function DocumentTab({
   doc,
   projectId,
@@ -127,7 +127,7 @@ function DocumentTab({
       setTitle(doc.title)
       return
     }
-    updateDocument.mutate({ title: trimmed, expectedVersion: doc.version })
+    updateDocument.mutate({ title: trimmed })
   }
 
   return (

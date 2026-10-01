@@ -312,7 +312,6 @@ def test_document_defaults(db_session: Session, user: User) -> None:
     db_session.refresh(document)
 
     assert isinstance(document.id, uuid.UUID)
-    assert document.version == 1
     assert document.content == {"type": "doc", "content": []}
     assert isinstance(document.created_at, datetime)
 

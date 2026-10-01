@@ -10,7 +10,6 @@ import { useDocumentPanelStore } from '../../store/documentPanel'
 import { useCommentsStore } from '../../store/comments'
 import { server } from '../../test/server'
 import type { Speaker } from '../../api/hooks/useSpeakers'
-import { useTranscript } from '../../api/hooks/useTranscripts'
 import type { Transcript } from '../../api/hooks/useTranscripts'
 
 const SPEAKER: Speaker = {
@@ -48,7 +47,6 @@ const TRANSCRIPT: Transcript = {
           text: 'Hello',
           start_time: 0,
           end_time: 1,
-          version: 1,
           is_highlighted: false,
         },
         {
@@ -59,7 +57,6 @@ const TRANSCRIPT: Transcript = {
           text: 'world',
           start_time: 1,
           end_time: 2,
-          version: 1,
           is_highlighted: false,
         },
         {
@@ -70,7 +67,6 @@ const TRANSCRIPT: Transcript = {
           text: 'again',
           start_time: 2,
           end_time: 3,
-          version: 1,
           is_highlighted: false,
         },
       ],
@@ -325,7 +321,7 @@ describe('TranscriptViewer', () => {
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
-    await waitFor(() => expect(body).toEqual({ edited_text: 'earth', expected_version: 1 }))
+    await waitFor(() => expect(body).toEqual({ edited_text: 'earth' }))
   })
 
   it('escape cancels an in-progress edit without sending a request', async () => {
@@ -370,7 +366,7 @@ describe('TranscriptViewer', () => {
     fireEvent.change(input, { target: { value: 'earth' } })
     fireEvent.keyDown(document, { key: 's', metaKey: true })
 
-    await waitFor(() => expect(body).toEqual({ edited_text: 'earth', expected_version: 1 }))
+    await waitFor(() => expect(body).toEqual({ edited_text: 'earth' }))
   })
 
   it('deletes a token by clearing its text', async () => {
@@ -436,7 +432,6 @@ describe('TranscriptViewer', () => {
     await waitFor(() =>
       expect(body).toEqual({
         tokens: [{ text: 'He' }, { text: 'llo' }],
-        expected_version: 1,
       }),
     )
   })
@@ -585,10 +580,7 @@ describe('TranscriptViewer', () => {
 
     await waitFor(() =>
       expect(body).toEqual({
-        tokens: [
-          { token_id: 'tok-a', expected_version: 1 },
-          { token_id: 'tok-b', expected_version: 1 },
-        ],
+        tokens: [{ token_id: 'tok-a' }, { token_id: 'tok-b' }],
         text: "don't",
       }),
     )
@@ -608,7 +600,6 @@ describe('TranscriptViewer', () => {
           text: 'x',
           start_time: 0,
           end_time: 1,
-          version: 2,
           is_highlighted: (body as { is_highlighted: boolean }).is_highlighted,
         })
       }),
@@ -623,8 +614,8 @@ describe('TranscriptViewer', () => {
 
     await waitFor(() =>
       expect(requests).toEqual([
-        { tokenId: 'tok-a', body: { is_highlighted: true, expected_version: 1 } },
-        { tokenId: 'tok-b', body: { is_highlighted: true, expected_version: 1 } },
+        { tokenId: 'tok-a', body: { is_highlighted: true } },
+        { tokenId: 'tok-b', body: { is_highlighted: true } },
       ]),
     )
   })
@@ -961,216 +952,6 @@ describe('TranscriptViewer', () => {
       expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
-    })
-  })
-
-  describe('token version conflicts (409)', () => {
-    const CONFLICT_BODY = {
-      error: { code: 'CONFLICT', message: 'This token was edited by someone else' },
-    }
-    const BANNER_TEXT = 'This was edited by someone else. Your change was not saved.'
-
-    // Every mutation's `onSettled` now always triggers a background
-    // `invalidateQueries` (see useTokens.ts), and on a conflict resets that
-    // mutation's error once the refetch it kicked off resolves — otherwise a
-    // single stale conflict left the banner up indefinitely across every
-    // later, unrelated action. `invalidateQueries` only actually refetches
-    // when a query has an active observer, and `TranscriptViewer`'s real
-    // parent (`VideoWorkspace`) always has one via `useTranscript` — plain
-    // `renderViewer()` doesn't, so mount one here too.
-    //
-    // The resync-triggered GET is gated on a deferred the test resolves
-    // explicitly, rather than a timer, so "the banner is still up" and "the
-    // banner just cleared" are both asserted deterministically instead of
-    // racing a delay against `findByText`'s polling under CI/parallel load.
-    function renderViewerLive() {
-      let getCalls = 0
-      let resolveResync = () => {}
-      const resyncGate = new Promise<void>((resolve) => {
-        resolveResync = resolve
-      })
-      server.use(
-        http.get('http://localhost:8000/transcripts/t-1', async () => {
-          getCalls += 1
-          if (getCalls > 1) await resyncGate
-          return HttpResponse.json(TRANSCRIPT)
-        }),
-      )
-      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      function Wrapper() {
-        useTranscript('t-1')
-        return (
-          <TranscriptViewer
-            transcript={TRANSCRIPT}
-            speakers={[SPEAKER]}
-            isLoading={false}
-            onSeekToken={vi.fn()}
-            onPlaySelection={vi.fn()}
-            onPlayFrom={vi.fn()}
-            canEdit={true}
-            videoId="vid-1"
-          />
-        )
-      }
-      render(
-        <QueryClientProvider client={client}>
-          <Wrapper />
-        </QueryClientProvider>,
-      )
-      return { resolveResync }
-    }
-
-    it('shows a conflict banner instead of silently retrying on a 409 edit conflict', async () => {
-      server.use(
-        http.patch('http://localhost:8000/tokens/tok-b', () =>
-          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
-        ),
-      )
-      // Resync deliberately left unresolved: the banner must be observable
-      // while the background refetch is still in flight, not just in the
-      // instant before it starts.
-      renderViewerLive()
-
-      clickToken(screen.getByText('world'))
-      const input = await screen.findByDisplayValue('world')
-      fireEvent.change(input, { target: { value: 'earth' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
-    })
-
-    it('clears the banner on its own once the background resync completes, with no manual Reload', async () => {
-      server.use(
-        http.patch('http://localhost:8000/tokens/tok-b', () =>
-          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
-        ),
-      )
-      const { resolveResync } = renderViewerLive()
-
-      clickToken(screen.getByText('world'))
-      const input = await screen.findByDisplayValue('world')
-      fireEvent.change(input, { target: { value: 'earth' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      await screen.findByText(BANNER_TEXT)
-
-      // A version conflict means the cached copy was stale by definition, so
-      // the background resync it triggers resolves the conflict on its own —
-      // this used to require a manual "Reload" click and would otherwise keep
-      // the banner up indefinitely across every later, unrelated action.
-      resolveResync()
-      await waitFor(() => expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument())
-      expect(screen.queryByRole('button', { name: 'Reload' })).not.toBeInTheDocument()
-    })
-
-    it('dismisses the banner when "Reload" is clicked', async () => {
-      server.use(
-        http.patch('http://localhost:8000/tokens/tok-b', () =>
-          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
-        ),
-      )
-      renderViewerLive()
-
-      clickToken(screen.getByText('world'))
-      const input = await screen.findByDisplayValue('world')
-      fireEvent.change(input, { target: { value: 'earth' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      await screen.findByText(BANNER_TEXT)
-
-      await userEvent.click(screen.getByRole('button', { name: 'Reload' }))
-
-      await waitFor(() => expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument())
-    })
-
-    it('shows a conflict banner on a 409 delete conflict', async () => {
-      server.use(
-        http.delete('http://localhost:8000/tokens/tok-c', () =>
-          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
-        ),
-      )
-      renderViewerLive()
-
-      clickToken(screen.getByText('again'))
-      const input = await screen.findByDisplayValue('again')
-      fireEvent.change(input, { target: { value: '' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
-    })
-
-    it('shows a conflict banner on a 409 merge conflict', async () => {
-      server.use(
-        http.post('http://localhost:8000/tokens/merge', () =>
-          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
-        ),
-      )
-      renderViewerLive()
-
-      fireEvent.mouseDown(screen.getByText('Hello'))
-      fireEvent.mouseEnter(screen.getByText('world'))
-      fireEvent.mouseUp(document)
-      await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
-      const mergeInput = screen.getByDisplayValue('Hello world')
-      fireEvent.change(mergeInput, { target: { value: "don't" } })
-      await userEvent.click(screen.getByText('Confirm'))
-
-      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
-    })
-
-    it('shows a conflict banner on a 409 split conflict', async () => {
-      server.use(
-        http.post('http://localhost:8000/tokens/tok-a/split', () =>
-          HttpResponse.json(CONFLICT_BODY, { status: 409 }),
-        ),
-      )
-      renderViewerLive()
-
-      clickToken(screen.getByText('Hello'))
-      const input = await screen.findByDisplayValue('Hello')
-      fireEvent.change(input, { target: { value: 'He llo' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      expect(await screen.findByText(BANNER_TEXT)).toBeInTheDocument()
-    })
-
-    it('does not show the conflict banner on a 409 highlight conflict, and recovers the token', async () => {
-      let call = 0
-      server.use(
-        http.patch('http://localhost:8000/tokens/:tokenId/highlight', ({ params }) => {
-          call += 1
-          // Both selected tokens' first PATCH conflicts; any later attempt
-          // on either succeeds — mirrors "the earlier action already landed
-          // server-side, a same-tick retry is what raced it".
-          if (call <= 2) return HttpResponse.json(CONFLICT_BODY, { status: 409 })
-          return HttpResponse.json({
-            ...TRANSCRIPT.segments[0].tokens[0],
-            id: params.tokenId,
-            version: 2,
-          })
-        }),
-        http.get('http://localhost:8000/transcripts/t-1', () => HttpResponse.json(TRANSCRIPT)),
-      )
-      renderViewer()
-
-      fireEvent.mouseDown(screen.getByText('Hello'))
-      fireEvent.mouseEnter(screen.getByText('world'))
-      fireEvent.mouseUp(document)
-      await userEvent.click(screen.getByRole('button', { name: 'Highlight' }))
-
-      await waitFor(() => expect(call).toBe(2))
-      expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument()
-
-      // A later highlight attempt on the same tokens isn't permanently
-      // blocked by the earlier conflict — unlike edit/delete/merge/split,
-      // there's no manual "Reload" needed to unstick it.
-      fireEvent.mouseDown(screen.getByText('Hello'))
-      fireEvent.mouseEnter(screen.getByText('world'))
-      fireEvent.mouseUp(document)
-      await userEvent.click(screen.getByRole('button', { name: 'Highlight' }))
-
-      await waitFor(() => expect(call).toBe(4))
-      expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument()
     })
   })
 })

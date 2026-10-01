@@ -25,7 +25,6 @@ class TokenRead(BaseModel):
     text: str
     start_time: float
     end_time: float
-    version: int
     is_highlighted: bool
 
 

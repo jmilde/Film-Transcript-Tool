@@ -1128,8 +1128,6 @@ export interface components {
             content: {
                 [key: string]: unknown;
             };
-            /** Version */
-            version: number;
             /**
              * Created At
              * Format: date-time
@@ -1144,10 +1142,6 @@ export interface components {
         /**
          * DocumentSummary
          * @description List-view shape — no ``content``, keeping the panel's document switcher cheap.
-         *
-         *     ``version`` lets the frontend rename a document (a title-only PATCH, which
-         *     still requires ``expected_version``) straight from a tab-bar list entry,
-         *     without first loading that document's full content.
          */
         DocumentSummary: {
             /**
@@ -1157,8 +1151,6 @@ export interface components {
             id: string;
             /** Title */
             title: string;
-            /** Version */
-            version: number;
             /**
              * Updated At
              * Format: date-time
@@ -1173,8 +1165,6 @@ export interface components {
             content?: {
                 [key: string]: unknown;
             } | null;
-            /** Expected Version */
-            expected_version: number;
         };
         /** DuplicateCheckRead */
         DuplicateCheckRead: {
@@ -1541,15 +1531,11 @@ export interface components {
         TokenEdit: {
             /** Edited Text */
             edited_text: string | null;
-            /** Expected Version */
-            expected_version: number;
         };
         /** TokenHighlightUpdate */
         TokenHighlightUpdate: {
             /** Is Highlighted */
             is_highlighted: boolean;
-            /** Expected Version */
-            expected_version: number;
         };
         /** TokenMergeItem */
         TokenMergeItem: {
@@ -1558,8 +1544,6 @@ export interface components {
              * Format: uuid
              */
             token_id: string;
-            /** Expected Version */
-            expected_version: number;
         };
         /** TokenMergeRequest */
         TokenMergeRequest: {
@@ -1590,8 +1574,6 @@ export interface components {
             start_time: number;
             /** End Time */
             end_time: number;
-            /** Version */
-            version: number;
             /** Is Highlighted */
             is_highlighted: boolean;
         };
@@ -1604,8 +1586,6 @@ export interface components {
         TokenSplitRequest: {
             /** Tokens */
             tokens: components["schemas"]["TokenSplitPiece"][];
-            /** Expected Version */
-            expected_version: number;
         };
         /** TranscriptCommentAnchor */
         TranscriptCommentAnchor: {
@@ -2751,9 +2731,7 @@ export interface operations {
     };
     remove_token_tokens__token_id__delete: {
         parameters: {
-            query: {
-                expected_version: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 token_id: string;

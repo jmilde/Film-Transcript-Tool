@@ -100,7 +100,6 @@ def get_transcript(
                         else token.original_text,
                         start_time=token.start_time,
                         end_time=token.end_time,
-                        version=token.version,
                         is_highlighted=token.is_highlighted,
                     )
                     for token in tokens_by_segment.get(segment.id, [])

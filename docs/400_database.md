@@ -385,8 +385,6 @@ end_time
 
 is_deleted
 
-version
-
 created_by
 
 created_at
@@ -395,11 +393,6 @@ updated_by
 
 updated_at
 ```
-
-`version` is an optimistic-locking counter starting at 1, incremented on every
-edit/delete/merge/split of that row. A replacement token created by a merge
-or split starts at version 1 (it is a new row, not a continuation of the
-original's version history).
 
 ---
 
@@ -424,11 +417,10 @@ A token may be:
 
 ## Concurrency
 
-Every write (edit/delete/merge/split) requires the caller to supply the
-`version` it last read for each token it is modifying. If the current
-`version` in the database no longer matches, the write is rejected with a
-conflict rather than applied — two users editing the same token never
-silently overwrite one another.
+Every write (edit/delete/merge/split) locks its target row(s) for the
+duration of the write, so two overlapping requests against the same token
+serialize rather than corrupt it — this is a single-writer system, so there
+is no version check or conflict response; whichever write commits last wins.
 
 Deleted tokens remain stored.
 
@@ -748,8 +740,6 @@ title
 
 content
 
-version
-
 created_by
 
 created_at
@@ -774,10 +764,8 @@ never stored in `content` — like Transcript Chunk citations, they are
 resolved fresh from the referenced transcript's live tokens on every read,
 so a clip can never drift from later edits to its source.
 
-`version` is a whole-document optimistic-locking counter (same pattern as
-Transcript Token's `version`), incremented on every write; a `PATCH` must
-supply the `version` it last read or the write is rejected with a conflict
-rather than applied.
+A `PATCH` locks the row for the duration of the write, same pattern as
+Transcript Token's concurrency handling — single-writer, no version check.
 
 ---
 

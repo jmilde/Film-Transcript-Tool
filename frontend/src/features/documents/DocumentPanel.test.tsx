@@ -15,16 +15,15 @@ import type { PanelImperativeHandle } from 'react-resizable-panels'
 const PROJECT_ID = 'p-1'
 
 const SUMMARIES: DocumentSummary[] = [
-  { id: 'd-1', title: 'Narration', version: 1, updated_at: '2026-01-02T00:00:00Z' },
+  { id: 'd-1', title: 'Narration', updated_at: '2026-01-02T00:00:00Z' },
 ]
 
-function documentBody(id: string, title: string, version = 1) {
+function documentBody(id: string, title: string) {
   return {
     id,
     project_id: PROJECT_ID,
     title,
     content: { type: 'doc', content: [] },
-    version,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   }
@@ -143,7 +142,7 @@ describe('DocumentPanel', () => {
       http.get(`http://localhost:8000/projects/${PROJECT_ID}/documents`, () =>
         HttpResponse.json([
           ...SUMMARIES,
-          { id: 'd-2', title: 'B-roll notes', version: 1, updated_at: '2026-01-03T00:00:00Z' },
+          { id: 'd-2', title: 'B-roll notes', updated_at: '2026-01-03T00:00:00Z' },
         ]),
       ),
       http.get('http://localhost:8000/documents/d-2', () =>
@@ -170,7 +169,7 @@ describe('DocumentPanel', () => {
     server.use(
       http.patch('http://localhost:8000/documents/d-1', async ({ request }) => {
         patchBodies.push(await request.json())
-        return HttpResponse.json(documentBody('d-1', 'Renamed', 2))
+        return HttpResponse.json(documentBody('d-1', 'Renamed'))
       }),
     )
     renderPanel()
@@ -182,9 +181,7 @@ describe('DocumentPanel', () => {
     await userEvent.clear(input)
     await userEvent.type(input, 'Renamed{Enter}')
 
-    await waitFor(() =>
-      expect(patchBodies).toContainEqual({ title: 'Renamed', expected_version: 1 }),
-    )
+    await waitFor(() => expect(patchBodies).toContainEqual({ title: 'Renamed' }))
   })
 
   it('deletes a tab from its options menu and clears selection once none remain', async () => {

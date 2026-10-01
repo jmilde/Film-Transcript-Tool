@@ -273,7 +273,6 @@ class MergeContext:
 
     tokens: list[TranscriptToken]
     text: str
-    expected_versions: dict[uuid.UUID, int]
 
 
 def require_merge_context(
@@ -298,5 +297,4 @@ def require_merge_context(
     if len(project_ids) != 1:
         raise ForbiddenError("Tokens belong to different projects")
     _require_membership(db, next(iter(project_ids)), user.id, min_role=MembershipRole.EDITOR)
-    expected_versions = {item.token_id: item.expected_version for item in payload.tokens}
-    return MergeContext(tokens=tokens, text=payload.text, expected_versions=expected_versions)
+    return MergeContext(tokens=tokens, text=payload.text)
