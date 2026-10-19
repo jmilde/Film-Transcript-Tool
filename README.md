@@ -85,10 +85,10 @@ cp backend/.env.example backend/.env
 # 3. Migrate the database
 make db-migrate
 
-# 4. Run the app (each in its own terminal)
-make run-backend   # http://localhost:8000
-make run-worker
-make run-frontend  # http://localhost:5173
+# 4. Run the app: API, worker and frontend in one terminal (honcho + Procfile.dev);
+#    Ctrl+C stops all three. API http://localhost:8000, frontend http://localhost:5173
+make run
+# ...or each in its own terminal: make run-backend / make run-worker / make run-frontend
 ```
 
 Sign in through the frontend with your Supabase Auth project — the matching
