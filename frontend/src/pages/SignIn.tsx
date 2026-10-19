@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router'
 import { useAuth } from '../auth/context'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
+import { BigHeart, LoginHearts } from '../components/LoginHearts'
 
 export function SignIn() {
   const { session, signIn } = useAuth()
@@ -31,12 +32,14 @@ export function SignIn() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-page">
+    <div className="login-bg relative flex min-h-screen items-center justify-center overflow-hidden">
+      <LoginHearts />
       <form
         onSubmit={onSubmit}
-        className="w-80 space-y-4 rounded-lg border border-border bg-surface p-6 shadow-sm"
+        className="relative w-80 space-y-4 rounded-2xl border border-glass-line bg-glass-strong p-6 pt-14 shadow-xl backdrop-blur-md"
       >
-        <h1 className="text-h3 text-text">Film Transcript Tool</h1>
+        <BigHeart />
+        <h1 className="login-title text-center text-h3">Film Transcript Tool</h1>
         <label className="block text-body">
           <span className="text-text-muted">Email</span>
           <Input
@@ -58,8 +61,8 @@ export function SignIn() {
           />
         </label>
         {error && <p className="text-body text-danger-text">{error}</p>}
-        <Button type="submit" disabled={busy} className="w-full">
-          {busy ? 'Signing in…' : 'Sign in'}
+        <Button type="submit" disabled={busy} className="login-button w-full">
+          {busy ? 'Signing in…' : 'Sign in ♥'}
         </Button>
       </form>
     </div>
