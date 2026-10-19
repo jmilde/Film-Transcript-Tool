@@ -1,0 +1,7 @@
+# Every local process, started by scripts/run-app.sh (`make run`) through honcho:
+# one terminal, one Ctrl+C. honcho signals each process group, then SIGKILLs any
+# that are still up after its grace period, so nothing is left holding a port.
+# Settings come from backend/.env (pydantic-settings) and frontend/.env.
+api:    cd backend && exec uvicorn app.main:app --reload --port 8000
+worker: cd backend && exec python -m app.worker.runner
+web:    cd frontend && exec npm run dev

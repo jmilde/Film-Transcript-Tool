@@ -92,7 +92,7 @@ check: lint format-check typecheck test ## Full offline quality gate: lint + for
 
 check-all: lint format-check typecheck test-all ## Full quality gate INCLUDING live integration tests
 
-run: ## Run backend, worker, and frontend together; Ctrl+C stops all three (DB must already be up/migrated)
+run: ## Run backend, worker, and frontend together via honcho (Procfile.dev); Ctrl+C stops all three (DB must already be up/migrated)
 	./scripts/run-app.sh
 
 run-backend: ## Run the FastAPI dev server with autoreload (http://localhost:8000)
