@@ -58,6 +58,19 @@
   --raw-glass: oklch(100% 0 0 / 45%);
   --raw-glass-strong: oklch(100% 0 0 / 68%);
   --raw-glass-line: oklch(30% 0.02 260 / 14%);
+
+  /* Sign-in page hearts only (LoginHearts.tsx) — a deliberately kitschy
+     pink/lilac set, not part of the semantic palette; don't reuse elsewhere. */
+  --raw-love-1: oklch(66% 0.22 0);
+  --raw-love-2: oklch(76% 0.15 350);
+  --raw-love-3: oklch(82% 0.11 345);
+  --raw-love-4: oklch(60% 0.2 345);
+  --raw-love-lilac: oklch(70% 0.17 305);
+  --raw-love-deep: oklch(52% 0.2 0);
+  --raw-love-gold: oklch(86% 0.14 85);
+  --raw-love-wash-1: oklch(96% 0.025 350);
+  --raw-love-wash-2: oklch(93% 0.045 355);
+  --raw-love-wash-3: oklch(94% 0.04 315);
 }
 
 .dark {
@@ -98,6 +111,17 @@
   --raw-glass: oklch(100% 0 0 / 6%);
   --raw-glass-strong: oklch(100% 0 0 / 10%);
   --raw-glass-line: oklch(100% 0 0 / 12%);
+
+  --raw-love-1: oklch(70% 0.2 0);
+  --raw-love-2: oklch(74% 0.15 350);
+  --raw-love-3: oklch(80% 0.11 345);
+  --raw-love-4: oklch(64% 0.19 345);
+  --raw-love-lilac: oklch(72% 0.16 305);
+  --raw-love-deep: oklch(56% 0.2 0);
+  --raw-love-gold: oklch(86% 0.14 85);
+  --raw-love-wash-1: oklch(22% 0.04 350);
+  --raw-love-wash-2: oklch(24% 0.06 355);
+  --raw-love-wash-3: oklch(23% 0.06 305);
 }
 
 /* Map the runtime-overridable raw values into Tailwind v4 theme keys, so
@@ -229,6 +253,164 @@
   }
   50% {
     transform: translate(24px, -18px) scale(1.08);
+  }
+}
+
+/* Sign-in page only (SignIn.tsx + LoginHearts.tsx): a pink wash, a big
+   beating heart on the card and hearts floating up behind it. Deliberately
+   kitschy and deliberately confined to this one page. */
+.login-bg {
+  background-image:
+    radial-gradient(circle at 20% 15%, var(--raw-love-wash-2) 0, transparent 45%),
+    radial-gradient(circle at 85% 80%, var(--raw-love-wash-3) 0, transparent 45%),
+    linear-gradient(
+      160deg,
+      var(--raw-love-wash-1),
+      var(--raw-love-wash-2) 55%,
+      var(--raw-love-wash-3)
+    );
+}
+.login-hearts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.login-hearts__floater {
+  position: absolute;
+  bottom: -60px;
+  opacity: 0;
+  animation-name: heart-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  filter: drop-shadow(0 2px 4px oklch(from var(--raw-love-1) l c h / 30%));
+}
+.login-hearts__floater svg {
+  width: 100%;
+  height: 100%;
+  animation: heart-sway 3s ease-in-out infinite alternate;
+}
+.login-hearts__sparkle {
+  display: block;
+  font-size: 1.1em;
+  line-height: 1;
+  color: var(--raw-love-gold);
+  animation: sparkle-twinkle 1.6s ease-in-out infinite;
+}
+.login-big-heart {
+  position: absolute;
+  top: -64px;
+  left: 50%;
+  width: 112px;
+  height: 112px;
+  margin-left: -56px;
+  animation: heart-beat 1.4s ease-in-out infinite;
+  filter: drop-shadow(0 8px 18px oklch(from var(--raw-love-deep) l c h / 45%));
+}
+.login-big-heart svg {
+  width: 100%;
+  height: 100%;
+}
+.login-title {
+  font-weight: 700;
+  background-image: linear-gradient(
+    90deg,
+    var(--raw-love-4),
+    var(--raw-love-1),
+    var(--raw-love-lilac),
+    var(--raw-love-4)
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: title-shimmer 6s linear infinite;
+}
+
+/* Paints over Button's brand fill; still the page's primary action. */
+.login-button {
+  background-image: linear-gradient(90deg, var(--raw-love-1), var(--raw-love-lilac));
+  color: oklch(100% 0 0);
+  box-shadow: 0 6px 16px oklch(from var(--raw-love-1) l c h / 35%);
+  transition:
+    filter 150ms ease-out,
+    transform 150ms ease-out;
+}
+.login-button:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+@keyframes heart-rise {
+  0% {
+    transform: translate(0, 0) rotate(-10deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(var(--sway), -55vh) rotate(10deg);
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(calc(var(--sway) * -0.5), -115vh) rotate(-8deg);
+    opacity: 0;
+  }
+}
+@keyframes heart-sway {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+@keyframes sparkle-twinkle {
+  0%,
+  100% {
+    transform: scale(0.6) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.2) rotate(45deg);
+    opacity: 1;
+  }
+}
+@keyframes heart-beat {
+  0%,
+  40%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.14);
+  }
+  28% {
+    transform: scale(1.04);
+  }
+  34% {
+    transform: scale(1.12);
+  }
+}
+@keyframes title-shimmer {
+  to {
+    background-position: 300% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-hearts__floater,
+  .login-hearts__floater svg,
+  .login-hearts__sparkle,
+  .login-big-heart,
+  .login-title {
+    animation: none;
+  }
+  .login-hearts__floater {
+    opacity: 0.7;
+    bottom: auto;
+    top: calc(var(--sway) * 1.8);
   }
 }
 
