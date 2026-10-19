@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Enum, ForeignKey, Index
+from sqlalchemy import BigInteger, Enum, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -25,4 +25,5 @@ class VideoAsset(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     # Logical storage identifier, never an absolute filesystem path.
     storage_path: Mapped[str]
     mime_type: Mapped[str | None]
-    size: Mapped[int | None]
+    # Bytes; BIGINT because original uploads routinely exceed 2 GiB.
+    size: Mapped[int | None] = mapped_column(BigInteger)
