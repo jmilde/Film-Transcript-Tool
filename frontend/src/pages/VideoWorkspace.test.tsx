@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/server'
 import { AuthProvider } from '../auth/AuthProvider'
 import { useSelectionStore } from '../store/selection'
@@ -25,6 +25,17 @@ const SPEAKER_ID = '00000000-0000-0000-0000-0000000000s1'
 beforeEach(() => {
   useSelectionStore.getState().clear()
   useSearchOverlayStore.setState({ isOpen: false, query: '' })
+
+  // This page renders TranscriptViewer, which virtualizes its token rows via
+  // @tanstack/react-virtual — see the same stub (and its rationale) in
+  // TranscriptViewer.test.tsx. jsdom reports 0 for clientHeight/offsetHeight,
+  // which would otherwise make the virtualizer compute zero visible rows.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(40)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 function renderWorkspace(pendingSearch?: PendingSearchNav) {

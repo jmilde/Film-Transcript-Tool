@@ -40,6 +40,7 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
   const selectedId = useCommentsStore((s) => s.selectedId)
   const select = useCommentsStore((s) => s.select)
   const setSelectionRange = useSelectionStore((s) => s.setRange)
+  const revealToken = useSelectionStore((s) => s.reveal)
 
   const resolveComment = useResolveComment(transcriptId ?? '')
   const replyToComment = useReplyToComment(transcriptId ?? '')
@@ -52,7 +53,10 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
     const anchor = transcriptAnchor(comment)
     if (!anchor) return
     select(comment.id)
-    if (transcriptId) setSelectionRange(transcriptId, anchor.start_token_id, anchor.end_token_id)
+    if (transcriptId) {
+      setSelectionRange(transcriptId, anchor.start_token_id, anchor.end_token_id)
+      revealToken(transcriptId, anchor.start_token_id)
+    }
     onLocate(anchor.in_time)
   }
 
@@ -112,9 +116,7 @@ export function CommentsPanel({ transcriptId, comments, isLoading, onLocate }: C
                   onClick={() => locate(comment)}
                   disabled={!anchor}
                 >
-                  {anchor
-                    ? `${formatTime(anchor.in_time)} – ${formatTime(anchor.out_time)}`
-                    : null}
+                  {anchor ? `${formatTime(anchor.in_time)} – ${formatTime(anchor.out_time)}` : null}
                 </button>
                 <div className="flex shrink-0 items-center gap-1">
                   <button

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -7,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
 import { usePlaybackStore } from '../../store/playback'
 import { useSelectionStore } from '../../store/selection'
 import { useCommentsStore } from '../../store/comments'
@@ -21,11 +23,15 @@ import { transcriptAnchor, useCreateComment } from '../../api/hooks/useComments'
 import { useDocumentPanelStore } from '../../store/documentPanel'
 import { clipBlockMarkerHtml, writeClipToClipboard } from '../documents/clipClipboard'
 import { findActiveTokenId } from './activeToken'
-import { chunkTokens } from './chunkTokens'
+import {
+  buildTranscriptRows,
+  type SpeakerGroup,
+  type TranscriptRow as RowData,
+} from './transcriptRows'
+import { TranscriptRow } from './TranscriptRow'
 import { SpeakerBar } from './SpeakerBar'
 import { formatTime } from '../player/format'
 import { SelectionToolbar } from '../toolbar/SelectionToolbar'
-import { Select } from '../../components/ui/Select'
 import {
   ChevronDown as ChevronDownIcon,
   ChevronUp as ChevronUpIcon,
@@ -43,10 +49,6 @@ import type { Speaker } from '../../api/hooks/useSpeakers'
 import { useReassignSegmentSpeaker } from '../../api/hooks/useTranscripts'
 import type { Token, Transcript } from '../../api/hooks/useTranscripts'
 import type { Comment } from '../../api/hooks/useComments'
-
-// Select's value is always a string, so an unattributed segment (speakerId
-// null) needs a sentinel that can't collide with a real speaker uuid.
-const SPEAKER_UNATTRIBUTED = '__unattributed__'
 
 interface TranscriptViewerProps {
   transcript: Transcript | undefined
@@ -68,11 +70,16 @@ interface TranscriptViewerProps {
   videoId: string
 }
 
-interface SpeakerGroup {
-  key: string
-  speakerId: string | null
-  segmentIds: string[]
-  tokens: Token[]
+/** Initial height guess for a virtualized row, corrected after mount by the
+ * virtualizer's real `measureElement` reading — text-wrap variability means
+ * this only has to be in the right ballpark, not exact. */
+function estimateRowSize(row: RowData): number {
+  if (row.kind === 'header') return 28
+  const chars = row.tokens.reduce((n, t) => n + t.text.length + 1, 0)
+  const CHARS_PER_LINE = 90
+  const LINE_HEIGHT = 26
+  const TIMECODE_LINE = 20
+  return TIMECODE_LINE + Math.ceil(chars / CHARS_PER_LINE) * LINE_HEIGHT
 }
 
 /**
@@ -90,6 +97,18 @@ interface SpeakerGroup {
  * single-token edit already uses. Ranges covered by a comment are underlined
  * (violet while unresolved, gray once resolved). An inline search finds and
  * steps through matches in this transcript.
+ *
+ * Long transcripts (a 2-hour video can run 15k+ tokens) are virtualized at
+ * the chunk level (`transcriptRows.ts`'s ~30–45s chunks, the same unit
+ * `chunkTokens` already produced) via `@tanstack/react-virtual`, with token
+ * rendering extracted into a memoized `TranscriptRow` — otherwise every
+ * drag-select `mouseenter`, every playback tick, and every keystroke in a
+ * draft re-renders the entire transcript. A handful of rows are always kept
+ * mounted regardless of scroll position (`pinnedRowIndices`, via the
+ * virtualizer's `rangeExtractor`) — the active/playing token, the current
+ * search match, both selection endpoints, the token being edited, and a
+ * comment-panel "jump to range" target — so scroll-to-token and the
+ * selection popup's position never have to wait on a mount.
  */
 export function TranscriptViewer({
   transcript,
@@ -112,6 +131,7 @@ export function TranscriptViewer({
   const finishSelection = useSelectionStore((s) => s.finish)
   const clearSelection = useSelectionStore((s) => s.clear)
   const setSelectionRange = useSelectionStore((s) => s.setRange)
+  const revealRequest = useSelectionStore((s) => s.revealRequest)
   const queueInsert = useDocumentPanelStore((s) => s.queueInsert)
   const selectComment = useCommentsStore((s) => s.select)
 
@@ -178,20 +198,27 @@ export function TranscriptViewer({
     return groups
   }, [transcript])
 
-  const selectedIds = useMemo(() => {
+  const { rows, tokenRowIndex } = useMemo(
+    () => buildTranscriptRows(speakerGroups, tokenIndex),
+    [speakerGroups, tokenIndex],
+  )
+
+  const selectionIndexRange = useMemo(() => {
     if (!transcript || !selectionRange || selectionRange.transcriptId !== transcript.id) {
-      return new Set<string>()
+      return null
     }
     const a = tokenIndex.get(selectionRange.anchorTokenId)
     const b = tokenIndex.get(selectionRange.focusTokenId)
-    if (a === undefined || b === undefined) return new Set<string>()
-    const [lo, hi] = a <= b ? [a, b] : [b, a]
-    return new Set(flatTokens.slice(lo, hi + 1).map((t) => t.id))
-  }, [transcript, selectionRange, tokenIndex, flatTokens])
+    if (a === undefined || b === undefined) return null
+    return a <= b ? { lo: a, hi: b } : { lo: b, hi: a }
+  }, [transcript, selectionRange, tokenIndex])
 
   const selectedTokens = useMemo(
-    () => flatTokens.filter((t) => selectedIds.has(t.id)),
-    [selectedIds, flatTokens],
+    () =>
+      selectionIndexRange
+        ? flatTokens.slice(selectionIndexRange.lo, selectionIndexRange.hi + 1)
+        : [],
+    [selectionIndexRange, flatTokens],
   )
 
   const selectionInfo = useMemo(() => {
@@ -261,7 +288,6 @@ export function TranscriptViewer({
 
   useEffect(() => setMatchIndex(0), [searchQuery])
 
-  const tokenRefs = useRef(new Map<string, HTMLSpanElement>())
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
   const POPUP_EDGE = 8
@@ -275,10 +301,97 @@ export function TranscriptViewer({
   // clamp against before it has actually mounted.
   const [popupWidth, setPopupWidth] = useState(320)
 
+  // Row indices that must always be kept mounted regardless of scroll
+  // position — see the component docstring. Each is `null` when nothing
+  // currently needs that pin.
+  const activeRowIndex = activeTokenId !== null ? (tokenRowIndex.get(activeTokenId) ?? null) : null
+  const currentMatchRowIndex = currentMatch ? (tokenRowIndex.get(currentMatch.id) ?? null) : null
+  const editingTokenRowIndex =
+    editingTokenId !== null ? (tokenRowIndex.get(editingTokenId) ?? null) : null
+  const selectionStartRowIndex =
+    selectedTokens.length > 0 ? (tokenRowIndex.get(selectedTokens[0].id) ?? null) : null
+  const selectionEndRowIndex =
+    selectedTokens.length > 0
+      ? (tokenRowIndex.get(selectedTokens[selectedTokens.length - 1].id) ?? null)
+      : null
+
+  const pinnedRowIndices = useMemo(() => {
+    const pins = new Set<number>()
+    if (activeRowIndex !== null) pins.add(activeRowIndex)
+    if (currentMatchRowIndex !== null) pins.add(currentMatchRowIndex)
+    if (editingTokenRowIndex !== null) pins.add(editingTokenRowIndex)
+    if (selectionStartRowIndex !== null) pins.add(selectionStartRowIndex)
+    if (selectionEndRowIndex !== null) pins.add(selectionEndRowIndex)
+    if (revealRequest && transcript && revealRequest.transcriptId === transcript.id) {
+      const r = tokenRowIndex.get(revealRequest.tokenId)
+      if (r !== undefined) pins.add(r)
+    }
+    return pins
+  }, [
+    activeRowIndex,
+    currentMatchRowIndex,
+    editingTokenRowIndex,
+    selectionStartRowIndex,
+    selectionEndRowIndex,
+    revealRequest,
+    transcript,
+    tokenRowIndex,
+  ])
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (i) => estimateRowSize(rows[i]),
+    getItemKey: (i) => rows[i].key,
+    overscan: 3,
+    paddingStart: 16,
+    paddingEnd: 16,
+    rangeExtractor: (range) => {
+      const next = new Set(defaultRangeExtractor(range))
+      for (const i of pinnedRowIndices) next.add(i)
+      return [...next].sort((a, b) => a - b)
+    },
+  })
+
+  // A far jump (e.g. a search match or a comment an hour into a 2-hour
+  // video) can cross many never-measured rows, whose real height is only an
+  // estimate (`estimateRowSize`) until they're actually mounted — a single
+  // `scrollIntoView` from the pre-jump scroll position would drift against
+  // that estimate. `virtualizer.scrollToIndex` does the coarse jump against
+  // the virtualizer's own measured/estimated offsets (and self-corrects as
+  // rows it crosses get measured), so it's authoritative for distance;
+  // `scrollIntoView` only does the final, smooth, exact-center correction
+  // once the target is actually mounted nearby. Read through a ref (same
+  // pattern as `commitEditRef` above) so the effects below can call it
+  // without taking on its own dependencies (`tokenRowIndex`/`virtualizer`)
+  // as effect dependencies, which would re-fire them on every unrelated
+  // re-render instead of only when the token they're tracking changes.
+  const scrollToTokenRef = useRef((_tokenId: string) => {})
+  scrollToTokenRef.current = (tokenId) => {
+    const rowIndex = tokenRowIndex.get(tokenId)
+    if (rowIndex !== undefined) virtualizer.scrollToIndex(rowIndex, { align: 'center' })
+    const el = scrollContainerRef.current?.querySelector<HTMLElement>(
+      `[data-token-id="${tokenId}"]`,
+    )
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
+
   useEffect(() => {
     if (!currentMatch) return
-    tokenRefs.current.get(currentMatch.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    scrollToTokenRef.current(currentMatch.id)
   }, [currentMatch])
+
+  useEffect(() => {
+    if (autoFollow && activeTokenId) scrollToTokenRef.current(activeTokenId)
+  }, [activeTokenId, autoFollow])
+
+  // Jumps to a comment's anchored range when it's located from the comments
+  // panel (`useSelectionStore`'s `reveal`) — distinct from the selection
+  // range itself (which Cmd/Ctrl+A also writes) so this doesn't misfire.
+  useEffect(() => {
+    if (!revealRequest || !transcript || revealRequest.transcriptId !== transcript.id) return
+    scrollToTokenRef.current(revealRequest.tokenId)
+  }, [revealRequest, transcript])
 
   // Floats the selection toolbar above the selected token range (matching
   // the document editor's BubbleMenu), portaled to `document.body` and
@@ -287,7 +400,9 @@ export function TranscriptViewer({
   // clipped the popup any time it would render partly outside that panel's
   // own box. Recomputed on every selection change, on scroll, and on
   // resize; when there isn't room on either side of the selection it clamps
-  // to the top of the viewport instead of disappearing off-screen.
+  // to the top of the viewport instead of disappearing off-screen. Both
+  // selection endpoints are always pinned (mounted) above, so this never has
+  // to wait on a scroll/mount before it can measure them.
   useLayoutEffect(() => {
     const container = scrollContainerRef.current
     if (!container || selectedTokens.length === 0) {
@@ -296,8 +411,13 @@ export function TranscriptViewer({
     }
 
     function recompute() {
-      const firstEl = tokenRefs.current.get(selectedTokens[0].id)
-      const lastEl = tokenRefs.current.get(selectedTokens[selectedTokens.length - 1].id)
+      if (!container) return
+      const firstEl = container.querySelector<HTMLElement>(
+        `[data-token-id="${selectedTokens[0].id}"]`,
+      )
+      const lastEl = container.querySelector<HTMLElement>(
+        `[data-token-id="${selectedTokens[selectedTokens.length - 1].id}"]`,
+      )
       if (!firstEl || !lastEl) {
         setPopupAnchor(null)
         return
@@ -437,6 +557,14 @@ export function TranscriptViewer({
   const commitEditRef = useRef(commitEdit)
   commitEditRef.current = commitEdit
 
+  // Stable wrapper so `TranscriptRow`'s memoization isn't defeated by a
+  // fresh `onCommitEdit` identity on every render — only the (at most one)
+  // row currently being edited actually uses it, but every mounted row
+  // receives the same prop, so its identity must not change on unrelated
+  // re-renders (playback ticks, drag steps).
+  const onCommitEdit = useCallback(() => commitEditRef.current(), [])
+  const onCancelEdit = useCallback(() => setEditingTokenId(null), [])
+
   const backspaceDeleteRef = useRef<() => boolean>(() => false)
   backspaceDeleteRef.current = () => {
     if (!canEdit || editingTokenId !== null || mergeDraft !== null || commentDraft !== null) {
@@ -475,11 +603,34 @@ export function TranscriptViewer({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const activeRef = useRef<HTMLSpanElement | null>(null)
-
-  useEffect(() => {
-    if (autoFollow) activeRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [activeTokenId, autoFollow])
+  // Stable identities for the per-token handlers `TranscriptRow` receives —
+  // a fresh closure every render would defeat `React.memo` for every mounted
+  // row on every render (playback tick, drag step), not just the row whose
+  // own props actually changed. The bodies (assigned to each ref below, past
+  // the early returns) can still close over whatever's current each render.
+  const handleTokenMouseDownRef = useRef<(token: Token) => void>(() => {})
+  const handleTokenMouseDown = useCallback(
+    (token: Token) => handleTokenMouseDownRef.current(token),
+    [],
+  )
+  const handleTokenMouseEnterRef = useRef<(token: Token) => void>(() => {})
+  const handleTokenMouseEnter = useCallback(
+    (token: Token) => handleTokenMouseEnterRef.current(token),
+    [],
+  )
+  const handleTokenDoubleClickRef = useRef<(token: Token) => void>(() => {})
+  const handleTokenDoubleClick = useCallback(
+    (token: Token) => handleTokenDoubleClickRef.current(token),
+    [],
+  )
+  const onReassignSpeakerRef = useRef<(segmentIds: string[], speakerId: string | null) => void>(
+    () => {},
+  )
+  const onReassignSpeaker = useCallback(
+    (segmentIds: string[], speakerId: string | null) =>
+      onReassignSpeakerRef.current(segmentIds, speakerId),
+    [],
+  )
 
   if (isLoading) {
     return <div className="p-6 text-center text-body text-text-muted">Loading transcript…</div>
@@ -491,7 +642,7 @@ export function TranscriptViewer({
     )
   }
 
-  function handleTokenMouseDown(token: Token) {
+  handleTokenMouseDownRef.current = (token) => {
     dragAnchorRef.current = token
     draggingRef.current = false
     // A new mousedown means a fresh click sequence — cancel whatever the
@@ -507,7 +658,7 @@ export function TranscriptViewer({
   // Double-click seeks and plays from this token, for viewers and editors
   // alike — takes over the single click's deferred edit/seek before it can
   // fire (see the mouseup handler above).
-  function handleTokenDoubleClick(token: Token) {
+  handleTokenDoubleClickRef.current = (token) => {
     clearPendingClick()
     onPlayFrom(token.start_time)
   }
@@ -525,7 +676,7 @@ export function TranscriptViewer({
     }
   }
 
-  function handleTokenMouseEnter(token: Token) {
+  handleTokenMouseEnterRef.current = (token) => {
     if (!dragAnchorRef.current || !transcript) return
     if (!draggingRef.current) {
       if (token.id === dragAnchorRef.current.id) return
@@ -533,6 +684,10 @@ export function TranscriptViewer({
       startSelection(transcript.id, dragAnchorRef.current.id)
     }
     extendSelection(token.id)
+  }
+
+  onReassignSpeakerRef.current = (segmentIds, speakerId) => {
+    reassignSegmentSpeaker.mutate({ segmentIds, speakerId })
   }
 
   function beginEdit(token: Token) {
@@ -813,103 +968,61 @@ export function TranscriptViewer({
         ref={scrollContainerRef}
         tabIndex={0}
         onKeyDown={handleContainerKeyDown}
-        className="flex-1 space-y-4 overflow-y-auto p-4 select-none focus:outline-none"
+        className="flex-1 overflow-y-auto px-4 select-none focus:outline-none"
       >
-        {speakerGroups.map((group) => (
-          <div key={group.key}>
-            <div className="mb-1 text-small font-semibold text-text-muted">
-              {canEdit && speakers && speakers.length > 0 ? (
-                <Select
-                  aria-label="Speaker"
-                  value={group.speakerId ?? SPEAKER_UNATTRIBUTED}
-                  onValueChange={(value) =>
-                    reassignSegmentSpeaker.mutate({
-                      segmentIds: group.segmentIds,
-                      speakerId: value === SPEAKER_UNATTRIBUTED ? null : value,
-                    })
+        <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const row = rows[virtualRow.index]
+            const selectionClip =
+              row.kind === 'chunk' && selectionIndexRange
+                ? {
+                    start: Math.max(selectionIndexRange.lo, row.startIndex),
+                    end: Math.min(selectionIndexRange.hi, row.endIndex),
                   }
-                  options={[
-                    { value: SPEAKER_UNATTRIBUTED, label: 'Unknown speaker' },
-                    ...speakers.map((s) => ({ value: s.id, label: s.name ?? 'Unnamed speaker' })),
-                  ]}
-                  className="h-auto min-w-0 border-none bg-transparent p-0 text-small font-semibold text-text-muted hover:text-text"
+                : null
+            const hasSelection = selectionClip !== null && selectionClip.start <= selectionClip.end
+            const isEditingRow = virtualRow.index === editingTokenRowIndex
+
+            return (
+              <div
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <TranscriptRow
+                  row={row}
+                  canEdit={canEdit}
+                  speakers={speakers}
+                  speakerNames={speakerNames}
+                  onReassignSpeaker={onReassignSpeaker}
+                  selectedStart={hasSelection ? (selectionClip?.start ?? null) : null}
+                  selectedEnd={hasSelection ? (selectionClip?.end ?? null) : null}
+                  activeTokenId={virtualRow.index === activeRowIndex ? activeTokenId : null}
+                  currentMatchId={
+                    virtualRow.index === currentMatchRowIndex ? (currentMatch?.id ?? null) : null
+                  }
+                  matchIds={matchIds}
+                  commentedTokenInfo={commentedTokenInfo}
+                  editingTokenId={isEditingRow ? editingTokenId : null}
+                  editingText={isEditingRow ? editingText : ''}
+                  onEditingTextChange={setEditingText}
+                  onCommitEdit={onCommitEdit}
+                  onCancelEdit={onCancelEdit}
+                  onTokenMouseDown={handleTokenMouseDown}
+                  onTokenMouseEnter={handleTokenMouseEnter}
+                  onTokenDoubleClick={handleTokenDoubleClick}
                 />
-              ) : group.speakerId ? (
-                (speakerNames.get(group.speakerId) ?? 'Unknown speaker')
-              ) : (
-                'Unknown speaker'
-              )}
-            </div>
-            {chunkTokens(group.tokens).map((chunk) => (
-              <div key={chunk[0].id} className="mb-2 last:mb-0">
-                <div className="mb-0.5 font-mono text-small text-text-muted">
-                  {formatTime(chunk[0].start_time)}
-                </div>
-                <p className="leading-relaxed text-text">
-                  {chunk.map((token) => {
-                    if (token.id === editingTokenId) {
-                      return (
-                        <input
-                          key={token.id}
-                          autoFocus
-                          value={editingText}
-                          onChange={(e) => setEditingText(e.target.value)}
-                          onBlur={commitEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') commitEdit()
-                            if (e.key === 'Escape') setEditingTokenId(null)
-                          }}
-                          style={{ width: `${Math.max(editingText.length, 3)}ch` }}
-                          className="rounded-sm border border-brand bg-surface px-0.5 text-text"
-                        />
-                      )
-                    }
-                    const isCurrentMatch = currentMatch?.id === token.id
-                    const isMatch = matchIds.has(token.id)
-                    // Selection (brand) > current search match (warning, vivid) >
-                    // active/playing token (info) > user-applied highlight
-                    // (highlight-subtle) > other matches (warning-subtle) > plain
-                    // hover — each state means something different, per the
-                    // workspace's "color reserved for meaning" rule.
-                    const bg = selectedIds.has(token.id)
-                      ? 'bg-brand-subtle'
-                      : isCurrentMatch
-                        ? 'bg-warning'
-                        : token.id === activeTokenId
-                          ? 'bg-info-subtle'
-                          : token.is_highlighted
-                            ? 'bg-highlight-subtle'
-                            : isMatch
-                              ? 'bg-warning-subtle'
-                              : 'hover:bg-glass'
-                    const comment = commentedTokenInfo.get(token.id)
-                    const decoration = comment
-                      ? comment.resolved
-                        ? 'underline decoration-success decoration-2 underline-offset-2'
-                        : 'underline decoration-warning decoration-2 underline-offset-2'
-                      : ''
-                    return (
-                      <span
-                        key={token.id}
-                        ref={(el) => {
-                          if (el) tokenRefs.current.set(token.id, el)
-                          else tokenRefs.current.delete(token.id)
-                          if (token.id === activeTokenId) activeRef.current = el
-                        }}
-                        onMouseDown={() => handleTokenMouseDown(token)}
-                        onMouseEnter={() => handleTokenMouseEnter(token)}
-                        onDoubleClick={() => handleTokenDoubleClick(token)}
-                        className={`${canEdit ? 'cursor-text' : 'cursor-default'} rounded px-0.5 ${bg} ${decoration}`}
-                      >
-                        {token.text}{' '}
-                      </span>
-                    )
-                  })}
-                </p>
               </div>
-            ))}
-          </div>
-        ))}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
