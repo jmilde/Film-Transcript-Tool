@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
@@ -10,7 +10,7 @@ import { useDocumentPanelStore } from '../../store/documentPanel'
 import { useCommentsStore } from '../../store/comments'
 import { server } from '../../test/server'
 import type { Speaker } from '../../api/hooks/useSpeakers'
-import type { Transcript } from '../../api/hooks/useTranscripts'
+import type { Token, Transcript } from '../../api/hooks/useTranscripts'
 
 const SPEAKER: Speaker = {
   id: 'spk-1',
@@ -78,12 +78,25 @@ beforeEach(() => {
   usePlaybackStore.getState().reset()
   usePlaybackStore.setState({ autoFollow: true })
   useSelectionStore.getState().clear()
+  useSelectionStore.setState({ revealRequest: null })
   useDocumentPanelStore.setState({ isOpen: false, pendingInsert: null })
   useCommentsStore.setState({ selectedId: null, hoveredId: null })
+
+  // jsdom reports 0 for clientHeight/offsetHeight (no real layout), which
+  // makes @tanstack/react-virtual compute zero visible rows — stubbed here
+  // rather than globally in src/test/setup.ts (every shim there polyfills a
+  // *missing* API; this instead overrides an *existing* jsdom value, which
+  // could change behavior in unrelated tests — Radix popovers,
+  // react-resizable-panels, ProseMirror — if done globally). A generous
+  // viewport plus a plausible row height means every fixture in this file
+  // (a handful of tokens/chunks) renders without needing a scroll.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(40)
 })
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   delete (navigator.clipboard as { write?: unknown }).write
 })
 
@@ -953,5 +966,93 @@ describe('TranscriptViewer', () => {
       expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Add to Document' })).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('TranscriptViewer virtualization', () => {
+  // One segment, each token 31s after the previous and ending in a period —
+  // `chunkTokens` breaks at a sentence boundary once 30s have elapsed, so
+  // every token here lands in its own chunk row, giving the virtualizer
+  // 100+ rows to actually virtualize over (the other fixtures in this file
+  // are all small enough to render in full regardless of virtualization).
+  function longToken(i: number): Token {
+    return {
+      id: `long-${i}`,
+      segment_id: 'seg-1',
+      original_text: `w${i}.`,
+      edited_text: null,
+      text: `w${i}.`,
+      start_time: i * 31,
+      end_time: i * 31 + 1,
+      is_highlighted: false,
+    }
+  }
+
+  const LONG_TRANSCRIPT: Transcript = {
+    id: 't-1',
+    video_id: 'vid-1',
+    language: 'en',
+    type: 'original',
+    created_at: '2026-01-01T00:00:00Z',
+    segments: [
+      {
+        id: 'seg-1',
+        speaker_id: 'spk-1',
+        tokens: Array.from({ length: 100 }, (_, i) => longToken(i)),
+      },
+    ],
+  }
+
+  function renderLongViewer() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={LONG_TRANSCRIPT}
+          speakers={[SPEAKER]}
+          isLoading={false}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
+          canEdit={true}
+          videoId="vid-1"
+        />
+      </QueryClientProvider>,
+    )
+  }
+
+  it('does not mount tokens far outside the viewport', () => {
+    renderLongViewer()
+    expect(screen.queryByText('w99.')).not.toBeInTheDocument()
+  })
+
+  it('keeps the active/playing token mounted regardless of scroll position', () => {
+    renderLongViewer()
+    act(() => {
+      usePlaybackStore.setState({ currentTime: 99 * 31 + 0.5 })
+    })
+    expect(screen.getByText('w99.')).toHaveClass('bg-info-subtle')
+  })
+
+  it('keeps both selection endpoints mounted after Cmd/Ctrl+A selects the whole transcript', () => {
+    renderLongViewer()
+    const container = screen.getByText('w0.').closest('[tabindex="0"]')
+    if (!container) throw new Error('scroll container not found')
+
+    fireEvent.keyDown(container, { key: 'a', metaKey: true })
+
+    // Without both endpoints pinned, the far one has no live ref and the
+    // popup-positioning effect hides the toolbar entirely — the regression
+    // virtualization would otherwise introduce for a transcript-wide
+    // selection.
+    expect(screen.getByRole('button', { name: 'Play selection' })).toBeInTheDocument()
+  })
+
+  it('mounts a comment-panel "jump to range" target even when it is far down the transcript', () => {
+    renderLongViewer()
+    act(() => {
+      useSelectionStore.getState().reveal('t-1', 'long-80')
+    })
+    expect(screen.getByText('w80.')).toBeInTheDocument()
   })
 })
