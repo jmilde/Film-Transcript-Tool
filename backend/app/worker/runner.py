@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.db.session import WorkerSessionLocal, worker_engine
@@ -111,11 +112,24 @@ def run_forever(poll_interval: float = 2.0, max_poll_interval: float = 30.0) -> 
     all day for no reason; backing off keeps latency low right after work
     shows up while cutting idle wakeups (and battery/CPU use) the rest of
     the time.
+
+    Losing the database connection (Postgres restarting or not up yet) is
+    treated like an idle poll — logged and retried with the same backoff —
+    rather than crashing the worker, which under `make run` would also take
+    down the API and frontend (honcho stops everything when one process exits).
     """
     current_interval = poll_interval
     while True:
-        with WorkerSessionLocal() as session:
-            job = run_once(session)
+        try:
+            with WorkerSessionLocal() as session:
+                job = run_once(session)
+        except OperationalError as exc:
+            logger.warning(
+                "Database unavailable, retrying in %.0fs: %s",
+                current_interval,
+                str(exc.orig).splitlines()[0] if exc.orig else exc,
+            )
+            job = None
         if job is None:
             time.sleep(current_interval)
             current_interval = min(current_interval * 2, max_poll_interval)
