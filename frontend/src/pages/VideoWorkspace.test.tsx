@@ -374,6 +374,37 @@ describe('VideoWorkspace', () => {
     expect(screen.queryByRole('button', { name: 'Back to chat' })).not.toBeInTheDocument()
   })
 
+  it('shows the loading state, not "no transcript", while the transcript list is still loading', async () => {
+    handlers()
+    let releaseTranscripts: () => void = () => {}
+    const transcriptsGate = new Promise<void>((resolve) => (releaseTranscripts = resolve))
+    server.use(
+      http.get(`http://localhost:8000/videos/${VIDEO_ID}/transcripts`, async () => {
+        await transcriptsGate
+        return HttpResponse.json([
+          {
+            id: TRANSCRIPT_ID,
+            video_id: VIDEO_ID,
+            language: 'en',
+            type: 'original',
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ])
+      }),
+    )
+    renderWorkspace()
+
+    await screen.findByRole('heading', { name: 'Interview A' })
+    expect(screen.getByRole('status', { name: 'Loading transcript' })).toBeInTheDocument()
+    expect(screen.queryByText('No transcript available yet.')).not.toBeInTheDocument()
+
+    releaseTranscripts()
+    await waitFor(() =>
+      expect(screen.queryByRole('status', { name: 'Loading transcript' })).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByText('No transcript available yet.')).not.toBeInTheDocument()
+  })
+
   it('shows a dual-pane original/translation view once a translation is selected', async () => {
     handlers()
     server.use(

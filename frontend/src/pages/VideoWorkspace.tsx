@@ -36,7 +36,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
   const canEdit = project ? project.my_role !== 'viewer' : false
   const { data: media } = useMediaToken(videoId)
   const waveform = useWaveform(videoId)
-  const { data: transcripts } = useTranscripts(videoId)
+  const { data: transcripts, isLoading: transcriptsLoading } = useTranscripts(videoId)
   const { data: speakers } = useSpeakers(videoId)
   const videoRef = useRef<HTMLVideoElement>(null)
   const resetPlayback = usePlaybackStore((s) => s.reset)
@@ -74,7 +74,11 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
     if (!transcripts || transcripts.length === 0) return null
     return (transcripts.find((t) => t.type === 'original') ?? transcripts[0]).id
   }, [transcripts])
-  const { data: transcript, isLoading: transcriptLoading } = useTranscript(transcriptId)
+  const { data: transcript, isLoading: transcriptDetailLoading } = useTranscript(transcriptId)
+  // Covers both fetches: until the video's transcript list arrives there is
+  // no `transcriptId` yet, and the detail query is disabled (not loading) —
+  // without the list check, that window showed "No transcript available yet."
+  const transcriptLoading = transcriptsLoading || (transcriptId !== null && transcriptDetailLoading)
   const { data: comments, isLoading: commentsLoading } = useComments(transcriptId)
 
   // Optional right pane: a translation, chosen via TranslationControl (docs
@@ -222,7 +226,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
                     transcript={transcript}
                     speakers={speakers}
                     comments={comments}
-                    isLoading={transcriptId !== null && transcriptLoading}
+                    isLoading={transcriptLoading}
                     onSeekToken={seek}
                     onPlaySelection={playSelection}
                     onPlayFrom={playFrom}
@@ -265,7 +269,7 @@ function VideoWorkspaceInner({ videoId }: { videoId: string }) {
               transcript={transcript}
               speakers={speakers}
               comments={comments}
-              isLoading={transcriptId !== null && transcriptLoading}
+              isLoading={transcriptLoading}
               onSeekToken={seek}
               onPlaySelection={playSelection}
               onPlayFrom={playFrom}

@@ -13,6 +13,7 @@ from app.models.video import Video
 from app.worker import runner
 from app.worker.runner import run_once
 from sqlalchemy import select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 
@@ -194,3 +195,32 @@ def test_run_forever_backs_off_while_idle_and_resets_on_a_job(
         runner.run_forever(poll_interval=1.0, max_poll_interval=4.0)
 
     assert sleeps == [1.0, 2.0, 4.0, 1.0]
+
+
+def test_run_forever_survives_a_lost_database_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A connection error should be retried with the idle backoff instead of
+    crashing the worker (which, under `make run`, takes the whole dev stack
+    down with it)."""
+    sleeps: list[float] = []
+    calls = 0
+
+    def fake_run_once(session: Session) -> ProcessingJob | None:
+        nonlocal calls
+        calls += 1
+        if calls <= 2:
+            raise OperationalError("SELECT 1", {}, Exception("connection refused"))
+        if calls == 3:
+            return ProcessingJob(type=JobType.NOOP)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(runner, "run_once", fake_run_once)
+    monkeypatch.setattr(time, "sleep", sleeps.append)
+    monkeypatch.setattr(runner, "WorkerSessionLocal", lambda: _FakeSessionContext())
+
+    with pytest.raises(KeyboardInterrupt):
+        runner.run_forever(poll_interval=1.0, max_poll_interval=4.0)
+
+    assert sleeps == [1.0, 2.0]
+    assert calls == 4

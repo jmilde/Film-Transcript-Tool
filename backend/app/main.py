@@ -19,7 +19,7 @@ from app.api.routes import (
     videos,
 )
 from app.config import get_settings
-from app.core.errors import register_error_handlers
+from app.core.errors import UnhandledErrorMiddleware, register_error_handlers
 from app.db.session import engine
 
 # INFO-level `app.*` logging (chat/search retrieval diagnostics in particular —
@@ -39,6 +39,9 @@ def create_app() -> FastAPI:
     logger.info("API connecting to database: %s", engine.url.render_as_string(hide_password=True))
 
     app = FastAPI(title="Film Transcript Tool API")
+
+    # Must be added before CORSMiddleware so CORS wraps it — see its docstring.
+    app.add_middleware(UnhandledErrorMiddleware)
 
     # The browser frontend is served from a different origin (the Vite dev server
     # in development), so it needs CORS to call the API and read responses.
