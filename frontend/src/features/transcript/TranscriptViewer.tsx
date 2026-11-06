@@ -633,7 +633,7 @@ export function TranscriptViewer({
   )
 
   if (isLoading) {
-    return <div className="p-6 text-center text-body text-text-muted">Loading transcript…</div>
+    return <TranscriptSkeleton />
   }
 
   if (!transcript || transcript.segments.length === 0) {
@@ -1024,6 +1024,30 @@ export function TranscriptViewer({
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+/** Placeholder lines shaped like the transcript (speaker header, timecode,
+ * wrapped text) that pulse while it loads. */
+function TranscriptSkeleton() {
+  const paragraphs = [
+    [100, 96, 92, 60],
+    [100, 88, 97, 74],
+    [94, 100, 45],
+  ]
+  return (
+    <div role="status" aria-label="Loading transcript" className="animate-pulse space-y-5 p-4">
+      <span className="sr-only">Loading transcript…</span>
+      <div className="h-3 w-28 rounded bg-glass-line" />
+      {paragraphs.map((lines, p) => (
+        <div key={p} className="space-y-2.5">
+          <div className="h-2.5 w-10 rounded bg-glass-line" />
+          {lines.map((width, i) => (
+            <div key={i} className="h-3.5 rounded bg-glass-line" style={{ width: `${width}%` }} />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

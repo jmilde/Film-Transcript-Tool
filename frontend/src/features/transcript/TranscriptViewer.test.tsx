@@ -230,6 +230,26 @@ describe('TranscriptViewer', () => {
     expect(screen.getByText('No transcript available yet.')).toBeInTheDocument()
   })
 
+  it('shows an animated loading placeholder while loading', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptViewer
+          transcript={undefined}
+          speakers={[]}
+          isLoading={true}
+          onSeekToken={vi.fn()}
+          onPlaySelection={vi.fn()}
+          onPlayFrom={vi.fn()}
+          canEdit={true}
+          videoId="vid-1"
+        />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole('status', { name: 'Loading transcript' })).toHaveClass('animate-pulse')
+    expect(screen.queryByText('No transcript available yet.')).not.toBeInTheDocument()
+  })
+
   it('drag-selects a token range and shows text + in/out timecodes', () => {
     renderViewer()
 
