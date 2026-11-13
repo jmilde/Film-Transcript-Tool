@@ -23,6 +23,11 @@ fi
 (cd "$ROOT/backend" && uv sync --quiet)
 export PATH="$ROOT/backend/.venv/bin:$PATH"
 
+# Same for the frontend: after a pull that adds an npm dependency, Vite would
+# otherwise fail with "Failed to resolve import ..." until someone remembers
+# `make fe-install`. npm install is a fast no-op when node_modules is current.
+(cd "$ROOT/frontend" && npm install --no-audit --no-fund --silent)
+
 # Database preflight. Without it, a stopped Postgres or an unapplied migration
 # only shows up as "Could not load projects." in the browser (plus misleading
 # CORS errors in its console). Only host:port is printed, never credentials.
